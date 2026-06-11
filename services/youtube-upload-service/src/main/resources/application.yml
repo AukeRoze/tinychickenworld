@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: youtube-upload-service
+server:
+  port: 8085
+app:
+  youtube:
+    application-name: tiny-chicken-world
+    client-secrets-path: ${YOUTUBE_CLIENT_SECRETS:./secrets/client_secret.json}
+    credentials-dir: ${YOUTUBE_CREDS_DIR:./secrets/yt-creds}
+    default-category-id: "27"
+    default-privacy: "private"
+    default-tags: ["kids","education","learning"]
+    made-for-kids: ${MADE_FOR_KIDS:true}
+    contains-synthetic-media: ${CONTAINS_SYNTHETIC_MEDIA:true}
+  tiktok:
+    access-token: ${TIKTOK_ACCESS_TOKEN:}
+  instagram:
+    access-token: ${INSTAGRAM_ACCESS_TOKEN:}
+    user-id: ${INSTAGRAM_USER_ID:}
+  facebook:
+    page-access-token: ${FACEBOOK_PAGE_ACCESS_TOKEN:}
+    page-id: ${FACEBOOK_PAGE_ID:}

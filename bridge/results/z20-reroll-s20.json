@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "costEur":  2.0,
+                 "status":  "rerolling",
+                 "seq":  20
+             },
+    "executedAt":  "2026-06-11T08:44:35.5848311+02:00"
+}

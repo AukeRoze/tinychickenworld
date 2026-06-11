@@ -1,0 +1,8 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "45e6e7b8-1afa-44c7-b3c4-8ec60cc269c1",
+                 "result":  "DELETED"
+             },
+    "executedAt":  "2026-06-11T01:28:00.3342891+02:00"
+}

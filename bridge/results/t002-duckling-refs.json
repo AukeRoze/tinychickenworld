@@ -1,0 +1,24 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "jobId":  "00000000-0000-0000-0000-00000000d0c1",
+                 "scenes":  [
+                                {
+                                    "seq":  1,
+                                    "imagePath":  "/workdir/00000000-0000-0000-0000-00000000d0c1/images/scene_01.png",
+                                    "bytes":  1142688
+                                },
+                                {
+                                    "seq":  2,
+                                    "imagePath":  "/workdir/00000000-0000-0000-0000-00000000d0c1/images/scene_02.png",
+                                    "bytes":  1320781
+                                },
+                                {
+                                    "seq":  3,
+                                    "imagePath":  "/workdir/00000000-0000-0000-0000-00000000d0c1/images/scene_03.png",
+                                    "bytes":  1381836
+                                }
+                            ]
+             },
+    "executedAt":  "2026-06-11T01:11:43.0572742+02:00"
+}

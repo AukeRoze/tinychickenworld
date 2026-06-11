@@ -1,0 +1,28 @@
+workdir/
+
+# --- Secrets / credentials (NEVER commit) ---
+.env
+.env.*
+*.env
+secrets/
+secrets/**
+*.key
+*.pem
+**/yt-creds/
+*client_secret*
+*gcp-sa*
+*-cookie*
+*_cookie*
+
+target/
+.idea/
+*.iml
+
+# Editor backups (e.g. bible/channel.yml.bak from the Cast editor)
+*.bak
+
+# LoRA training data — too big for git, upload as GitHub Release asset
+infra/lora-training/dataset.zip
+infra/lora-training/dataset/
+infra/lora-training/dataset-refs/
+infra/lora-training/dataset-archive-*/

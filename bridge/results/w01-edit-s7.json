@@ -1,0 +1,10 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "imagePath":  "/workdir/e2ec9448-2e63-45bb-8801-794d5d299723/images/scene_07.png",
+                 "seq":  7,
+                 "result":  "EDITED",
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723"
+             },
+    "executedAt":  "2026-06-11T02:26:23.6541585+02:00"
+}

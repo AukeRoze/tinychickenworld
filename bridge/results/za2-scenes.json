@@ -1,0 +1,656 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "value":  [
+                               {
+                                   "seq":  1,
+                                   "durationSeconds":  5,
+                                   "phase":  "hook",
+                                   "narration":  "Oh! Oh oh oh!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Extreme close-up of ONE single smooth pale-cream egg lying on its side in dark garden soil among tiny green carrot tops. CRITICAL: exactly ONE egg in the entire image, perfectly smooth and completely uncracked - no second egg anywhere, no cracks, no damage. Pip\u0027s round cream-white face (straw hat just visible) peeks up from the bottom edge of the frame, eyes enormous with wonder, beak parted in a gasp. Warm early-morning light, dew on the leaves, soft-blurred empty soil in the background.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Oh! Oh oh oh!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  true,
+                                   "endStillSeq":  901,
+                                   "imageVersion":  1781137597790
+                               },
+                               {
+                                   "seq":  2,
+                                   "durationSeconds":  4,
+                                   "phase":  "hook",
+                                   "narration":  "Hey explorer! Come look!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot of the vegetable garden - rows of carrots and lettuce, tall sunflowers behind. Pip crouches beside the pale-cream egg, her wing hovering over it, her expression bright with surprise, looking toward camera. CRITICAL: the egg is PERFECTLY SMOOTH and COMPLETELY UNCRACKED - absolutely NO cracks or lines on the shell. The Big Oak is visible on a distant hill. Morning light casts long soft shadows across the soil.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Hey explorer! Come look!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  true,
+                                   "endStillSeq":  902,
+                                   "imageVersion":  1781137075739
+                               },
+                               {
+                                   "seq":  3,
+                                   "durationSeconds":  5,
+                                   "phase":  "setup",
+                                   "narration":  "Hi friends! I found an egg! But whose egg IS it?",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of Pip tipping her small straw hat with one wing in greeting, her right eye giving a playful wink, the pale-cream egg visible beside her knees in the dark garden soil. CRITICAL: the egg is PERFECTLY SMOOTH and COMPLETELY UNCRACKED - absolutely NO cracks or lines on the shell. Carrot tops frame the shot. Warm golden light.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Hi friends! I found an egg!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "But whose egg IS it?"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137088390
+                               },
+                               {
+                                   "seq":  4,
+                                   "durationSeconds":  4,
+                                   "phase":  "setup",
+                                   "narration":  "A... a GARDEN-PEBBLE! A big round garden-pebble.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Low-angle shot looking up at Pip who holds both wings wide, proudly declaring her discovery. The pale-cream egg sits in the soil below her. CRITICAL: the egg is PERFECTLY SMOOTH and COMPLETELY UNCRACKED - absolutely NO cracks or lines on the shell. Tall sunflower stalks tower overhead against a soft blue morning sky. Pip\u0027s expression is bright and delighted.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "A... a GARDEN-PEBBLE!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "A big round garden-pebble."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137100254
+                               },
+                               {
+                                   "seq":  5,
+                                   "durationSeconds":  5,
+                                   "phase":  "setup",
+                                   "narration":  "Pip... that\u0027s an egg. It feels cold. Eggs need warmth.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot on the pebble path leading into the garden. Mo walks calmly toward Pip, one wing touching the pale-cream egg gently. His expression is thoughtful, head tilted. Pip watches with wide curious eyes. Small pebbles line the path edge, morning dew glistening.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Pip... that\u0027s an egg."
+                                                 },
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "It feels cold. Eggs need warmth."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136304966
+                               },
+                               {
+                                   "seq":  6,
+                                   "durationSeconds":  4,
+                                   "phase":  "setup",
+                                   "narration":  "An egg? An EGG-LEG?! Bo! Come help us!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Over-the-shoulder shot from behind Mo, looking at Bo who hops in from the right side of the pebble path, wings flapping, grinning mischievously. Pip is visible beyond, crouched by the pale-cream egg in the garden soil. A dandelion seed drifts through the bright morning air.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "An egg? An EGG-LEG?!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Bo! Come help us!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136338552
+                               },
+                               {
+                                   "seq":  7,
+                                   "durationSeconds":  4,
+                                   "phase":  "setup",
+                                   "narration":  "We need straw. A warm nest. Let\u0027s go, Mo! Let\u0027s go, Bo!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Wide shot in the vegetable garden. CRITICAL: EXACTLY THREE small chicks in the entire image - no other chickens, no birds in the background, no flock. Left: Mo, a blue-grey chick with a red knitted scarf and tall red comb. Center: Pip, a cream-white chick with a straw farmer hat and red neck bandana, crouching closest to the single pale-cream UNCRACKED egg on the path. Right: Bo, a tan sandy-brown chick with round thin wire-framed eyeglasses and a green neck scarf. The three huddle around the one egg with curious wide eyes. White picket fence and sunflowers behind, red barn far in the distance. Warm morning light.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "We need straw. A warm nest."
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Let\u0027s go, Mo! Let\u0027s go, Bo!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137583576
+                               },
+                               {
+                                   "seq":  8,
+                                   "durationSeconds":  3,
+                                   "phase":  "development",
+                                   "narration":  "Straw straw STRAW! Grab lots, Bo!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot inside the cozy coop. Bo has straw sticking out of her beak and piled on her head, giggling. Pip gathers a neat bundle under one wing. The coop\u0027s warm wooden walls and soft nest boxes are visible. A shaft of morning light through the window illuminates floating dust motes.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "Straw straw STRAW!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Grab lots, Bo!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137471962
+                               },
+                               {
+                                   "seq":  9,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "Gently, Pip. Tuck it round. Like a little blanket!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up on the porch floor. Three pairs of small wings carefully arrange golden straw into a round nest shape around the pale-cream egg. Mo\u0027s wings move slowly and precisely. Pip tucks straw tenderly. The porch railing and a small welcome mat are visible. Warm midday light.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Gently, Pip. Tuck it round."
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Like a little blanket!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135906774
+                               },
+                               {
+                                   "seq":  10,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "I\u0027ll sit on it! Like a HEN! Bo, waitâ",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot on the porch. Bo climbs onto the golden straw nest, puffing her chest out proudly, eyes squeezed shut in concentration. The pale-cream egg is beneath her. Pip reaches a wing out in alarm. Mo watches with a calm but slightly worried expression. The welcome mat is visible on the porch floor.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "I\u0027ll sit on it! Like a HEN!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Bo, waitâ"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135921481
+                               },
+                               {
+                                   "seq":  11,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "Bonk! Bo! Are you okay? ...the egg is slippery.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Low-angle shot on the porch. Bo has slid off the pale-cream egg and landed on her back in the golden straw, legs in the air, looking embarrassed but unhurt. Pip leans over her with concern. Mo stands behind, one wing covering his beak to hide a smile. Straw bits float in the warm midday air.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "Bonk!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Bo! Are you okay?"
+                                                 },
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "...the egg is slippery."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135937595
+                               },
+                               {
+                                   "seq":  12,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "Maybe I should... knock? ...hello?",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Extreme close-up of Pip\u0027s face beside the pale-cream egg in the golden straw nest on the porch. Her eyes are wide with gentle nervousness, wing raised and hesitating just above the shell. She takes a small breath, beak barely open. Warm light catches the smooth shell surface.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Maybe I should... knock?"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "...hello?"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135951426
+                               },
+                               {
+                                   "seq":  13,
+                                   "durationSeconds":  5,
+                                   "phase":  "development",
+                                   "narration":  "Tok tok! ...it knocked BACK! One crack! I see one crack, Pip!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of Pip\u0027s wing tapping the pale-cream egg in the golden straw nest. A tiny hairline crack appears on the shell. Pip\u0027s eyes go enormous, beak open in an awestruck gasp. Mo leans in beside her, pointing at the crack with quiet amazement. Midday light glows on the shell.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Tok tok!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "...it knocked BACK!"
+                                                 },
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "One crack! I see one crack, Pip!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135966033
+                               },
+                               {
+                                   "seq":  14,
+                                   "durationSeconds":  5,
+                                   "phase":  "development",
+                                   "narration":  "Can YOU do tok tok? Tap your knees! Tok tok!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot of Pip looking directly at the camera with a bright delighted smile, tapping her own knees with her wings demonstrating the tok-tok rhythm. The pale-cream egg with its tiny crack sits in the golden straw nest beside her. Bo and Mo watch from behind, smiling. Porch railing and garden visible beyond.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Can YOU do tok tok?"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Tap your knees! Tok tok!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781135982060
+                               },
+                               {
+                                   "seq":  15,
+                                   "durationSeconds":  3,
+                                   "phase":  "development",
+                                   "narration":  "I heard you! Tok tok! The egg heard it too!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Low angle from just behind the pale-cream egg in its golden straw nest, looking up at all three chicks side by side. Pip (cream-white, straw farmer hat, red bandana) gasps with surprised delight, pointing at the egg. Bo (tan sandy-brown chick) hops excitedly - CRITICAL: Bo MUST WEAR her round thin wire-framed eyeglasses on her beak AND her green neck scarf, both clearly visible. Mo (blue-grey, red knitted scarf, tall red comb) nods with a gentle smile. The eggshell is CLOSED with exactly ONE thin hairline crack and a soft warm glow through that crack only - NOT open, NOT split. Afternoon light warms the porch.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "I heard you! Tok tok!"
+                                                 },
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "The egg heard it too!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137346670
+                               },
+                               {
+                                   "seq":  16,
+                                   "durationSeconds":  5,
+                                   "phase":  "development",
+                                   "narration":  "Tok tok tok-tok-TOK! Bo! Two cracks! You did it! I meant to do that.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot at the Big Oak\u0027s base. Bo drums her wings rapidly on the golden straw nest like a drum-roll, grinning mischievously. Pip points excitedly at the egg. Mo stands beside the great trunk of the Big Oak, amused. CRITICAL: the pale-cream eggshell is CLOSED and intact except for exactly TWO thin hairline cracks; a soft warm glow shines through the cracks only - the egg is NOT split, NOT open, NOT hatching yet. Dappled afternoon light through oak leaves.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "Tok tok tok-tok-TOK!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Bo! Two cracks! You did it!"
+                                                 },
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "I meant to do that."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137134056
+                               },
+                               {
+                                   "seq":  17,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "Now we wait. Patience. How long, Mo?",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Wide shot under the Big Oak canopy. All three chicks sit in a semicircle around the golden straw nest with the two-cracked pale-cream egg. Mo sits calmly, thoughtful. Pip fidgets, looking at the egg. Bo lies on her belly, chin on wings. Dappled afternoon light filters through the great oak leaves above. Knot-face visible on the trunk.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Now we wait. Patience."
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "How long, Mo?"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136044732
+                               },
+                               {
+                                   "seq":  18,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "It\u0027s like waiting for bread to rise. Small things need time.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of Mo\u0027s calm face, a gentle smile on his beak, eyes warm and kind. Behind him the pale-cream egg in the golden straw nest is slightly out of focus. The Big Oak\u0027s knot-face pattern is visible on the trunk behind. Soft warm afternoon light. Pip listens beside him, looking up with gentle admiration.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "It\u0027s like waiting for bread to rise."
+                                                 },
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Small things need time."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136060847
+                               },
+                               {
+                                   "seq":  19,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "It stopped. Mo... it stopped. Sometimes small things just rest.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of the pale-cream egg sitting perfectly still in the golden straw nest, two cracks visible but no movement. Pip\u0027s wing hovers mid-stroke above the shell, her face worried, brow furrowed. Mo places a reassuring wing on Pip\u0027s shoulder. Late afternoon light has turned amber. The Big Oak\u0027s roots frame the shot.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "It stopped. Mo... it stopped."
+                                                 },
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Sometimes small things just rest."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136087873
+                               },
+                               {
+                                   "seq":  20,
+                                   "durationSeconds":  4,
+                                   "phase":  "development",
+                                   "narration":  "DUSK twilight scene under the Big Oak - deep purple-amber evening sky, low golden sun, long shadows, first fireflies glowing. THREE chicks frozen around a golden straw nest, holding their breath. LEFT: Mo, blue-grey chick, chunky red knitted scarf, tall red comb, motionless, wings folded. CENTER: Bo, tan sandy-brown chick - she WEARS round thin wire-framed eyeglasses on her beak (clearly visible) and a green neck scarf - both wings pressed to her cheeks in suspense. RIGHT: Pip, cream-white chick - she WEARS her straw farmer hat on her head (clearly visible, this is mandatory) and a red neck bandana - one wing hovering frozen mid-air above the egg. In the nest: ONE pale-cream egg, shell closed, two thin hairline cracks with a faint warm glow. Exactly three chicks, one egg, no other creatures. Cinematic stillness, breath-held tension.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "DUSK twilight scene under the Big Oak - deep purple-amber evening sky, low golden sun, long shadows, first fireflies glowing. THREE chicks frozen around a golden straw nest, holding their breath. LEFT: Mo, blue-grey chick, chunky red knitted scarf, tall red comb, motionless, wings folded. CENTER: Bo, tan sandy-brown chick - she WEARS round thin wire-framed eyeglasses on her beak (clearly visible) and a green neck scarf - both wings pressed to her cheeks in suspense. RIGHT: Pip, cream-white chick - she WEARS her straw farmer hat on her head (clearly visible, this is mandatory) and a red neck bandana - one wing hovering frozen mid-air above the egg. In the nest: ONE pale-cream egg, shell closed, two thin hairline cracks with a faint warm glow. Exactly three chicks, one egg, no other creatures. Cinematic stillness, breath-held tension.",
+                                   "lines":  [
+
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137702249
+                               },
+                               {
+                                   "seq":  21,
+                                   "durationSeconds":  5,
+                                   "phase":  "climax",
+                                   "narration":  "Tok... tok-tok-TOK! Three cracks! It\u0027s hatching!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of the pale-cream egg in the golden straw nest splitting open with three visible cracks, warm golden light spilling from inside. Pip leans in close, eyes shining with awe, beak open. Mo and Bo crowd in beside her, all three faces lit by the golden glow. Fireflies drift around them under the Big Oak at dusk.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Tok... tok-tok-TOK!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Three cracks! It\u0027s hatching!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  true,
+                                   "endStillSeq":  921,
+                                   "imageVersion":  1781136118851
+                               },
+                               {
+                                   "seq":  22,
+                                   "durationSeconds":  5,
+                                   "phase":  "climax",
+                                   "narration":  "Hello! Peep! ...Kwak?",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Wide golden-hour reveal under the Big Oak. The pale-cream eggshell lies in two halves in the golden straw nest. A tiny lemon-yellow duckling with a flat orange bill and a damp dark head-tuft sits blinking in the center, looking up. Pip reaches a wing toward it, mouth-open-wonder, tears glistening. Mo and Bo stand behind, awestruck. Warm golden light floods the scene. Oak leaves drift down gently.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Hello! Peep!"
+                                                 },
+                                                 {
+                                                     "speaker":  "duckling",
+                                                     "text":  "...Kwak?"
+                                                 }
+                                             ],
+                                   "hasEndStill":  true,
+                                   "endStillSeq":  922,
+                                   "imageVersion":  1781136137173
+                               },
+                               {
+                                   "seq":  23,
+                                   "durationSeconds":  4,
+                                   "phase":  "climax",
+                                   "narration":  "That\u0027s not a PEEP! That\u0027s a KWAK! Kwak!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot under the Big Oak. All three chicks have tumbled backwards into the golden straw, legs in the air, eyes wide with comic surprise. The tiny lemon-yellow duckling with flat orange bill sits calmly in the cracked eggshell halves, head tilted, unbothered. Bo points a wing at the duckling from her sprawled position. Fireflies glow in the warm dusk light.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "That\u0027s not a PEEP!"
+                                                 },
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "That\u0027s a KWAK!"
+                                                 },
+                                                 {
+                                                     "speaker":  "duckling",
+                                                     "text":  "Kwak!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136155187
+                               },
+                               {
+                                   "seq":  24,
+                                   "durationSeconds":  4,
+                                   "phase":  "climax",
+                                   "narration":  "Mama? Big sister.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Intimate close-up of TWO characters only: the tiny lemon-yellow duckling with flat orange bill looking up with round trusting eyes at PIP (the cream-white chick wearing her straw farmer hat and red neck bandana - Pip MUST be the chick in this shot). Pip looks down at the duckling with solemn tenderness, one wing gently resting on the duckling\u0027s damp head-tuft. Warm golden dusk light halos both of them. Mo and Bo are only soft blurred shapes far in the background. A single firefly glows between them.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "duckling",
+                                                     "text":  "Mama?"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Big sister."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137167769
+                               },
+                               {
+                                   "seq":  25,
+                                   "durationSeconds":  4,
+                                   "phase":  "resolution",
+                                   "narration":  "Warm straw. Warm friends. We kept it warm, Mo.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot on the coop porch at golden dusk. The tiny lemon-yellow duckling with flat orange bill is nestled in the golden straw nest, eyes drooping sleepily. Pip (straw hat, red bandana) tucks straw around the duckling tenderly. Mo (blue-grey, red knitted scarf) hums softly, eyes half-closed, content. Bo (tan, round wire-framed eyeglasses, green scarf) sits beside them, chin on her wings, smiling. CRITICAL: there is NO whole egg anywhere - the egg has hatched; only two small EMPTY broken eggshell halves lie beside the nest. The welcome mat and porch railing frame the cozy scene. Fireflies dot the warm air.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "Warm straw. Warm friends."
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "We kept it warm, Mo."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137189958
+                               },
+                               {
+                                   "seq":  26,
+                                   "durationSeconds":  4,
+                                   "phase":  "resolution",
+                                   "narration":  "Not a garden-pebble, Pip. A garden-DUCKLING! A KWAK-ling!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Over-the-shoulder shot from behind the sleeping lemon-yellow duckling in the golden straw nest, looking up at TWO clearly SEPARATE chicks standing side by side: Pip (cream-white chick wearing ONLY a straw farmer hat and a red neck bandana - NO glasses, NO green scarf) giggling with eyes crinkled in joy, giving a playful wink, and Bo (tan sandy-brown chick wearing ONLY round thin wire-framed eyeglasses and a green neck scarf - NO hat, NO bandana) grinning mischievously. Mo (blue-grey, red knitted scarf, tall red comb) shakes his head with a fond smile behind them. These are three distinct small chicks, the same size as each other. CRITICAL: NO whole egg anywhere - only empty broken eggshell halves beside the nest. Warm dusk glow on the coop porch.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "Not a garden-pebble, Pip."
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "A garden-DUCKLING!"
+                                                 },
+                                                 {
+                                                     "speaker":  "bo",
+                                                     "text":  "A KWAK-ling!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137208090
+                               },
+                               {
+                                   "seq":  27,
+                                   "durationSeconds":  5,
+                                   "phase":  "resolution",
+                                   "narration":  "What should we name our duckling? Tell me! I\u0027m listening!",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Close-up of Pip looking directly at the camera with a warm inviting smile, head tilted, one wing cupped to her ear as if listening to the viewer. The sleeping lemon-yellow duckling with flat orange bill is cradled in the golden straw nest beside her. CRITICAL: NO whole egg anywhere in the shot - the egg has hatched; at most two small EMPTY broken eggshell halves lie beside the nest. Soft dusk light glows on the porch. Pip\u0027s eyes sparkle with warmth.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "What should we name our duckling?"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "Tell me! I\u0027m listening!"
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781137225412
+                               },
+                               {
+                                   "seq":  28,
+                                   "durationSeconds":  4,
+                                   "phase":  "resolution",
+                                   "narration":  "I love that name! We were patient. We kept it warm. And every crack was worth the wait.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Medium shot of all three chicks on the porch, Pip beaming with delight toward camera. Mo nods wisely beside her. Bo gives a thumbs-up wing. The lemon-yellow duckling sleeps peacefully in the golden straw nest between them. The coop\u0027s warm wooden wall behind. Last golden dusk light.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "I love that name!"
+                                                 },
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "We were patient. We kept it warm."
+                                                 },
+                                                 {
+                                                     "speaker":  "mo",
+                                                     "text":  "And every crack was worth the wait."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136253571
+                               },
+                               {
+                                   "seq":  29,
+                                   "durationSeconds":  4,
+                                   "phase":  "closer",
+                                   "narration":  "See you tomorrow, friends! Kwak-kwakâ¦ zzz.",
+                                   "hasClip":  true,
+                                   "locked":  false,
+                                   "visualDesc":  "Slow pull-back wide shot of the coop porch at dusk. Pip sits beside the golden straw nest where the tiny lemon-yellow duckling with flat orange bill sleeps, a content smile on Pip\u0027s face as she looks toward camera. Mo and Bo lean against each other sleepily beside her. The porch, the garden, and the distant Big Oak on its hill stretch behind them. Fireflies twinkle. The world is warm and still and full.",
+                                   "lines":  [
+                                                 {
+                                                     "speaker":  "pip",
+                                                     "text":  "See you tomorrow, friends!"
+                                                 },
+                                                 {
+                                                     "speaker":  "duckling",
+                                                     "text":  "Kwak-kwakâ¦ zzz."
+                                                 }
+                                             ],
+                                   "hasEndStill":  false,
+                                   "endStillSeq":  -1,
+                                   "imageVersion":  1781136269879
+                               }
+                           ],
+                 "Count":  29
+             },
+    "executedAt":  "2026-06-11T08:53:38.9852008+02:00"
+}

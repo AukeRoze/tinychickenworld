@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Series — Tiny Chicken World</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      var sys = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (sys ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body class="ui-app">
+  <div id="topbar"></div>
+
+  <p class="sub"><a href="/ui/index.html">← all jobs</a></p>
+  <h1>Series <span class="nl">· Series</span></h1>
+  <p class="sub">The channel's predefined series (selectable in the New Job form). Add, edit or delete them right here — changes save to the bible and show at once; new <b>scripts</b> use them after a script-service restart.</p>
+
+  <div id="series-host" class="sub small">loading…</div>
+
+  <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
+
+  <script src="/assets/js/nav.js"></script>
+  <script src="/assets/js/theme.js"></script>
+  <script type="module" src="/assets/js/series-page.js"></script>
+</body>
+</html>

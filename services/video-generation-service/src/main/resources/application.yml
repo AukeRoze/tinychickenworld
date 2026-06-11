@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: video-generation-service
+
+server:
+  port: 8087
+
+gcp:
+  project-id: ${GCP_PROJECT_ID}
+  region: ${GCP_REGION:us-central1}
+  credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:/secrets/gcp-sa.json}
+  output-bucket: ${GCS_OUTPUT_BUCKET}
+  output-prefix: ${GCS_OUTPUT_PREFIX:veo-outputs}
+
+veo:
+  polling:
+    initial-delay-ms: 5000
+    max-delay-ms: 15000
+    max-wait-seconds: ${VEO_MAX_WAIT_SEC:600}
+  parallelism:
+    max-parallel: ${VEO_MAX_PARALLEL:3}
+  rates:
+    veo-3.1-lite-generate-preview: { eur-per-second: 0.05 }
+    veo-3.1-fast-generate-preview: { eur-per-second: 0.10 }
+    veo-3.1-generate-preview:      { eur-per-second: 0.40 }
+    # GA endpoints — what ModelRouter actually emits since Veo 3.1 went GA.
+    # Without these the CostCalculator fell back to a conservative €0.5/s,
+    # making the cap think a €1.20 hybrid run cost €6 and downshift too early.
+    veo-3.1-fast-generate-001:     { eur-per-second: 0.10 }
+    veo-3.1-generate-001:          { eur-per-second: 0.40 }
+    veo-3.0-fast-generate-001:     { eur-per-second: 0.20 }   # observed real cost (€1.20 / 6s)
+    # Seedance 2.0 via fal.ai — ESTIMATES, verify against your fal dashboard
+    # after the first runs and correct here (the cost cap uses these). Bracket
+    # syntax keeps the slashes literal in Spring's relaxed map binding.
+    "[bytedance/seedance-2.0/image-to-video]":      { eur-per-second: 0.25 }
+    "[bytedance/seedance-2.0/fast/image-to-video]": { eur-per-second: 0.10 }
+
+# fal.ai (Seedance) — key comes from .env; blank = provider disabled
+fal:
+  key: ${FAL_KEY:}
+  max-wait-seconds: ${FAL_MAX_WAIT_SEC:420}
+
+app:
+  bible:
+    path: ${BIBLE_PATH:/bible/channel.yml}
+  workdir:
+    root: ${WORK_ROOT:/workdir}
+
+logging:
+  level:
+    com.youtubeauto.videogen: DEBUG

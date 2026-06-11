@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job — Tiny Chicken World (new UI)</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      var sys = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (sys ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body class="ui-app">
+  <div id="topbar"></div>
+
+  <p class="sub"><a href="/ui/index.html">← all jobs</a></p>
+  <h1 id="job-topic">Job</h1>
+  <div id="status-line" class="sub small mono">loading…</div>
+
+  <div id="cast-strip" class="cast-strip"></div>
+
+  <div id="stepper-host"></div>
+  <div id="cost-host"></div>
+  <div id="gate-host"></div>
+
+  <div id="job-host"></div>
+
+  <h2>Actions</h2>
+  <div id="actions-host" class="filter-row"></div>
+
+  <h2>Scenes &amp; script
+    <a class="btn sm" id="script-pdf" target="_blank" rel="noopener" style="font-weight:500">⬇ Download NL PDF</a>
+  </h2>
+
+  <details class="help-card" open>
+    <summary>ℹ️ Waar moet je op letten bij het beoordelen van de beelden?</summary>
+    <div class="help-body">
+      <p>Loop elk scènebeeld langs dit lijstje. Klopt iets niet? Gebruik dan <b>↻ Regen</b> of <b>✎ Edit</b> hieronder, of <b>🔒 Lock</b> als het beeld goed is.</p>
+      <ul class="help-list">
+        <li><b>Personages kloppen.</b> Juiste kleuren én accessoires: <b>Pip</b> = crème-witte kip met strohoed + rode halsbandana (geen bril); <b>Mo</b> = blauwgrijze kip met rode gebreide sjaal (geen hoed/bril); <b>Bo</b> = zandkleurige kip met ronde bril + groene sjaal (geen hoed). Niets verwisseld, niets weg, niets extra.</li>
+        <li><b>Aantal klopt.</b> Precies de bedoelde kippen in beeld — géén dubbele of kloon van een personage.</li>
+        <li><b>Lichaamsvorm.</b> Plomp, rond babykuiken met grote kop — <b>niet dun, uitgerekt of een volwassen hen</b>.</li>
+        <li><b>Volledig in beeld.</b> Kop, ogen, snavel én pootjes zichtbaar en gecentreerd; niets tegen de rand of afgesneden (de video zoomt straks nog licht in, dus marge is goed).</li>
+        <li><b>Anatomie.</b> Vleugeltjes, géén mensenhanden/vingers; geen vervormde snavel/ogen, extra ledematen of "smeltende" vlekken.</li>
+        <li><b>Geen tekst.</b> Geen letters, woorden, cijfers, comic-geluidswoorden (BONK/POW), tekstballonnen of watermerk.</li>
+        <li><b>Props &amp; kleur.</b> Genoemde voorwerpen in de juiste kleur, en een terugkerend voorwerp gelijk over de scènes (geen kleur die wisselt).</li>
+        <li><b>Stijl.</b> Zachte 3D Pixar/Illumination-cartoonlook — geen fotorealisme of plat 2D.</li>
+      </ul>
+      <p class="help-actions"><b>Knoppen:</b> <b>↻ Regen</b> = opnieuw genereren · <b>✎ Edit</b> = omschrijving aanpassen + opnieuw · <b>＋ Eindbeeld</b> = tweede beeld voor geregisseerde beweging · <b>🔒 Lock</b> = beeld goedkeuren/beschermen · <b>🎬 Reroll</b> = (alleen Veo-clips) clip opnieuw, kost Veo.</p>
+    </div>
+  </details>
+
+  <div id="scenes-host" class="sub small">—</div>
+
+  <h2>Review</h2>
+  <div id="review-host" class="sub small">—</div>
+
+  <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
+
+  <script src="/assets/js/nav.js"></script>
+  <script src="/assets/js/theme.js"></script>
+  <script type="module" src="/assets/js/job-page.js"></script>
+</body>
+</html>

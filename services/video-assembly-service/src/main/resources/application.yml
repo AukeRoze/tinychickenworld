@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: video-assembly-service
+
+server:
+  port: 8082
+
+app:
+  ffmpeg:
+    binary: ${FFMPEG_BIN:ffmpeg}
+    probeBinary: ${FFPROBE_BIN:ffprobe}
+    maxConcurrentJobs: 1
+    sceneParallelism: ${SCENE_PARALLELISM:3}
+    perInvocationTimeoutMinutes: 30
+  storage:
+    workRoot: ${WORK_ROOT:./workdir}
+  output:
+    width: 1920
+    height: 1080
+    fps: 30
+    videoCrf: 19
+    audioBitrateKbps: 192
+  motion:
+    # When true, each scene gets a random MotionPreset (zoom-in/out, pan-left/right,
+    # static, zoom-pan-diagonal). When false everything reverts to slow zoom-in.
+    enabled: ${MOTION_ENABLED:true}
+  suno:
+    # Original AI music (instrumental + Song Mode vocals) via a self-hosted
+    # Suno-API wrapper (github.com/Suno-API/Suno-API). Disabled by default →
+    # pipeline falls back to the bible's royalty-free tracks.
+    #   enabled  : master switch (needs the suno-api container running)
+    #   base-url : the wrapper's address (docker service name + port)
+    #   token    : the wrapper's SECRET_TOKEN (Bearer auth)
+    #   model    : Suno model version the wrapper expects (e.g. chirp-v3-5)
+    enabled:  ${SUNO_ENABLED:false}
+    base-url: ${SUNO_BASE_URL:http://suno-api:8000}
+    token:    ${SUNO_SECRET_TOKEN:}
+    model:    ${SUNO_MODEL:chirp-v3-5}
+  assembly:
+    # Cosmetic overlays — set any to "none" to disable per environment.
+    colorGrade: ${COLOR_GRADE:warm-pixar}   # warm-pixar | none
+    titleCard:  ${TITLE_CARD:auto}          # auto | none (animated opening title)
+    endCard:    ${END_CARD:subscribe}       # subscribe | none (animated end card)

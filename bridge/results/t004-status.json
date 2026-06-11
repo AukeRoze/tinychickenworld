@@ -1,0 +1,14 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "45e6e7b8-1afa-44c7-b3c4-8ec60cc269c1",
+                 "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                 "status":  "FAILED",
+                 "step":  "submitting script",
+                 "error":  "400 Bad Request from POST http://script-service:8081/api/v1/scripts",
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null
+             },
+    "executedAt":  "2026-06-11T01:25:49.3861698+02:00"
+}

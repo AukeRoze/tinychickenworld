@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: image-service
+server:
+  port: 8084
+app:
+  openai:
+    base-url: https://api.openai.com/v1
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-image-1
+    # gpt-image-1 supported: 1024x1024, 1024x1536, 1536x1024, auto.
+    # 1536x1024 = the only 3:2-ish landscape option.
+    size: 1536x1024
+    timeout-seconds: 120
+  replicate:
+    api-token: ${REPLICATE_API_TOKEN:}
+    poll-interval-ms: 2500
+    max-poll-attempts: 120
+  gemini:
+    # Reference-conditioned image generation ("Nano Banana"). Each scene's
+    # characters are supplied as reference images (bible/refs/{id}.png) so
+    # identity + accessories come from real pixels, not averaged LoRA weights.
+    api-key: ${GEMINI_API_KEY:}
+    base-url: https://generativelanguage.googleapis.com
+    model: ${GEMINI_IMAGE_MODEL:gemini-2.5-flash-image}
+    refs-dir: ${GEMINI_REFS_DIR:/bible/refs}
+    timeout-seconds: 120
+    max-attempts: 4
+  storage:
+    work-root: ${WORK_ROOT:./workdir}
+  bible:
+    path: ${BIBLE_PATH:./bible/channel.yml}
+resilience4j:
+  retry:
+    instances:
+      openai-image:
+        max-attempts: 3
+        wait-duration: 3s
+      replicate:
+        max-attempts: 3
+        wait-duration: 3s
+        retry-exceptions:
+          - org.springframework.web.reactive.function.client.WebClientResponseException$TooManyRequests
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+          - org.springframework.web.reactive.function.client.WebClientResponseException$InternalServerError
+          - java.io.IOException

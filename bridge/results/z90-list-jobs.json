@@ -1,0 +1,19 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "value":  [
+                               {
+                                   "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                                   "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                                   "status":  "ASSEMBLING",
+                                   "createdAt":  "2026-06-10T23:28:35.087460Z",
+                                   "plannedPublishAt":  null,
+                                   "seriesId":  "little-discoveries",
+                                   "episodeNumber":  3,
+                                   "qaScore":  null
+                               }
+                           ],
+                 "Count":  1
+             },
+    "executedAt":  "2026-06-11T08:49:37.2232323+02:00"
+}

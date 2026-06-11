@@ -1,0 +1,14 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                 "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                 "status":  "ASSEMBLING",
+                 "step":  "ffmpeg assembly",
+                 "error":  "500 Internal Server Error from POST http://video-assembly-service:8082/api/v1/assemble",
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null
+             },
+    "executedAt":  "2026-06-11T08:53:55.6926286+02:00"
+}

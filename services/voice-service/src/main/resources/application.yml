@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: voice-service
+server:
+  port: 8083
+app:
+  mode: ${VOICE_MODE:silent}     # silent | elevenlabs | sounds
+  ffmpeg-bin: ${FFMPEG_BIN:ffmpeg}
+  elevenlabs:
+    enabled: ${VOICE_ENABLED:true}
+    base-url: https://api.elevenlabs.io/v1
+    api-key: ${ELEVENLABS_API_KEY:}
+    voice-id: ${ELEVENLABS_VOICE_ID:}
+    model-id: ${ELEVENLABS_MODEL_ID:eleven_multilingual_v2}
+    stability: 0.5
+    similarity-boost: 0.75
+    timeout-seconds: 90
+  sfx:
+    root-path: /bible/sfx
+    default-clip-duration: 1.5
+    max-loop-repeat: 3
+    gain-db:
+      pip: -2.0
+      mo: 0.0
+      bo: -3.0
+    fallback-emotion: content
+  narrator:
+    enabled: ${NARRATOR_ENABLED:true}
+    tts: ${NARRATOR_TTS:espeak}
+    phases:
+      - hook
+      - closer
+    phrases:
+      hook: "Welcome to Tiny Chicken World"
+      closer: "See you next time, friends"
+    voice-gain-db: -1.0
+    music-duck: -6.0
+  storage:
+    work-root: ${WORK_ROOT:./workdir}
+  bible:
+    path: ${BIBLE_PATH:./bible/channel.yml}
+resilience4j:
+  retry:
+    instances:
+      elevenlabs:
+        max-attempts: 3
+        wait-duration: 2s

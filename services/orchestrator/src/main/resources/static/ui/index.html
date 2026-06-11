@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tiny Chicken World — Jobs (new UI)</title>
+  <!-- Reuses the extracted dashboard stylesheet (single source of truth). -->
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <script>
+    /* Pre-paint theme bootstrap (avoids dark-mode white flash). Mirrors the
+       classic dashboard's behaviour; will move to theme.js in a later step. */
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      var sys = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (sys ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body class="ui-app">
+  <div id="topbar"></div>
+
+
+  <details id="new-job">
+    <summary>+ New job</summary>
+    <form id="new-job-form" class="card form-grid">
+      <div class="full form-helpers">
+        <button type="button" class="btn" id="btn-random" title="Let Claude invent a fresh on-brand idea">🎲 Random idee</button>
+        <button type="button" class="btn" id="btn-improve" title="Upgrade your rough brief into a production-ready one">✨ Verbeter brief</button>
+      </div>
+
+      <label class="field full">Topic <span class="nl">· Onderwerp</span> *
+        <input name="topic" required placeholder="Pip's First Sunrise">
+      </label>
+      <label class="field full">Brief <span class="nl">· Verhaalopzet</span>
+        <textarea name="brief" rows="6" placeholder="HOOK (0-8s, emotie + vraag) → SETUP (wie/waar) → DEVELOPMENT (de poging) → CLIMAX (het grote moment) → afronding. Per beat: welke kip, welke emotie, welke locatie."></textarea>
+      </label>
+      <label class="field full">Hook <span class="nl">· Openingshaak</span>
+        <input name="hook" placeholder="EXTREME CLOSE-UP on Pip's face mid-gasp…">
+      </label>
+      <label class="field">Lesson <span class="nl">· Les</span>
+        <input name="lesson" placeholder="What the viewer walks away knowing">
+      </label>
+      <label class="field">Mood <span class="nl">· Sfeer</span>
+        <input name="mood" placeholder="warm, cozy wonder">
+      </label>
+      <label class="field full">Angle <span class="nl">· Invalshoek</span>
+        <textarea name="angle" rows="2" placeholder="Who drives the story, what each chick does"></textarea>
+      </label>
+
+      <label class="field">Format <span class="nl">· Formaat</span>
+        <select name="format">
+          <option value="landscape">landscape</option>
+          <option value="vertical">vertical (Shorts)</option>
+        </select>
+      </label>
+      <label class="field">Motion <span class="nl">· Beweging</span>
+        <select name="motionMode">
+          <option value="ken_burns">ken_burns (goedkoop, stills + zoom)</option>
+          <option value="hybrid">hybrid (Veo op hook + climax)</option>
+          <option value="veo">veo (alle scènes bewegend)</option>
+        </select>
+      </label>
+      <label class="field">Motion model <span class="nl">· geldt voor hybrid + veo</span>
+        <select name="veoModel">
+          <option value="">auto (bible-routing per scène)</option>
+          <option value="veo3_1_lite">Veo 3.1 Lite — ~€0,05/s · 720p</option>
+          <option value="veo3_1_fast">Veo 3.1 Fast — ~€0,10/s · 720p</option>
+          <option value="veo3_1">Veo 3.1 — ~€0,40/s · 1080p</option>
+          <option value="seedance2_fast">Seedance 2.0 Fast (fal.ai) — ~€0,10/s · 720p</option>
+          <option value="seedance2">Seedance 2.0 (fal.ai) — ~€0,25/s · 1080p · beste consistentie</option>
+        </select>
+      </label>
+      <label class="field">Target seconds <span class="nl">· Doellengte (sec)</span>
+        <input name="targetSeconds" type="number" min="10" max="600" value="75">
+      </label>
+      <label class="field">Audience <span class="nl">· Doelgroep</span>
+        <input name="audience" placeholder="kids 3-6">
+      </label>
+      <label class="field">Series <span class="nl">· Serie</span>
+        <select name="seriesId" id="series-select">
+          <option value="">— none / geen —</option>
+        </select>
+      </label>
+      <label class="field">Episode <span class="nl">· Aflevering</span>
+        <input name="episodeNumber" type="number" min="1">
+      </label>
+      <label class="field">Privacy <span class="nl">· Zichtbaarheid</span>
+        <select name="privacyStatus">
+          <option value="private">private</option>
+          <option value="unlisted">unlisted</option>
+          <option value="public">public</option>
+        </select>
+      </label>
+      <label class="field full">Recurring motif <span class="nl">· Terugkerend motief</span>
+        <input name="recurringMotif" placeholder="e.g. decorated pastel eggs — leave empty for none">
+      </label>
+
+      <div class="full"><button class="btn approve" type="submit">Create job</button></div>
+    </form>
+  </details>
+
+  <div id="job-filters" class="filter-pills"></div>
+  <input id="job-search" class="job-search" type="search" placeholder="🔎 Search jobs (topic or status)…">
+  <div id="status-line" class="sub small mono">loading…</div>
+  <div id="jobs-host"></div>
+
+  <!-- Transient error/info toasts (api.js renders into this host). -->
+  <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
+
+  <script src="/assets/js/nav.js"></script>
+  <script src="/assets/js/theme.js"></script>
+  <script type="module" src="/assets/js/jobs-page.js"></script>
+</body>
+</html>

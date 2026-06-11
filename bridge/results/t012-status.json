@@ -1,0 +1,14 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                 "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                 "status":  "FAILED",
+                 "step":  "submitting script",
+                 "error":  "script-service FAILED: Failed to parse script JSON: Cannot invoke \"java.util.List.stream()\" because the return value of \"com.youtubeauto.script.anthropic.GeneratedScript.scenes()\" is null",
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null
+             },
+    "executedAt":  "2026-06-11T01:33:20.2756347+02:00"
+}

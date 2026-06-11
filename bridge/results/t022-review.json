@@ -1,0 +1,31 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "planning":  {
+                                  "plannedPublishAt":  null,
+                                  "youtubeUrl":  null,
+                                  "episodeNumber":  3,
+                                  "seriesId":  "little-discoveries"
+                              },
+                 "metadata":  {
+                                  "description":  "",
+                                  "title":  "",
+                                  "tags":  ""
+                              },
+                 "cost":  {
+                              "estimateEur":  6.15,
+                              "capEur":  45.0
+                          },
+                 "thumbnailLayout":  null,
+                 "retentionScenes":  null,
+                 "qaBoard":  null,
+                 "media":  {
+                               "hasVideo":  false,
+                               "thumbnailVariants":  [
+
+                                                     ]
+                           },
+                 "storyArc":  "mistake"
+             },
+    "executedAt":  "2026-06-11T01:43:24.2745309+02:00"
+}

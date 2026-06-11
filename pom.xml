@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aggregator pom. Lists every service as a Maven module so you can
+  build/compile/test them all with a single command at the repo root:
+
+      mvn -B compile               # compile every service
+      mvn -B -DskipTests package   # build all jars (skip tests)
+      mvn -B test                  # run tests across the repo
+
+  Build a single service from the root:
+      mvn -B -pl services/video-generation-service -am compile
+
+  Each service keeps its own spring-boot-starter-parent — this pom is
+  purely an aggregator, not a real parent. Adding/removing a service
+  only requires editing the <modules> block below.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.youtubeauto</groupId>
+    <artifactId>youtube-channel-aggregator</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>youtube-channel-aggregator</name>
+    <description>Aggregator pom for the YouTube auto-channel pipeline.</description>
+
+    <modules>
+        <module>services/orchestrator</module>
+        <module>services/script-service</module>
+        <module>services/voice-service</module>
+        <module>services/image-service</module>
+        <module>services/thumbnail-service</module>
+        <module>services/video-assembly-service</module>
+        <module>services/video-generation-service</module>
+        <module>services/youtube-upload-service</module>
+    </modules>
+
+    <!-- Coverage reporting (code-review 2026-06-10). Inherited by every module
+         even though this pom is "purely an aggregator": pluginManagement in an
+         aggregator does not flow down, but an explicit <plugins> execution on
+         the aggregator runs per-module because the agent attaches via argLine.
+         Reports land in each module's target/site/jacoco/index.html after
+         `mvn -B verify`. No thresholds (yet): first measure, then enforce. -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

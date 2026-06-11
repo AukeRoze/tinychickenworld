@@ -1,0 +1,63 @@
+# ───────────────────────────────────────────────────────────────────────
+# VOORSTEL — 4e castlid: het eendje uit "Who's in the Egg?"
+# (VIRAL-CONCEPT-WHOS-IN-THE-EGG-2026-06-11.md, gekozen concept, score 84)
+#
+# NIET nu al in channel.yml plakken! PromptBuilder injecteert ALLE characters
+# in elk script — het eendje zou dan vóór zijn geboorte in afleveringen
+# opduiken. Activeren = dit blok onder `characters:` plakken VLAK VÓÓR de
+# productie van de ei-aflevering. Naam is bewust nog "Duckling" — de echte
+# naam komt uit de community-naamvraag (pinned comment) en pas je hier aan.
+#
+# Vóór de aflevering ook: 2-3 ref-stills genereren (generate-ref-angles.py
+# of via de Cast-pagina) en goedkeuren, net als bij Pip/Mo/Bo.
+# ───────────────────────────────────────────────────────────────────────
+  - id: duckling
+    name: "Duckling"            # ← vervangen door de gekozen naam na de naamvraag
+    species: duck
+    role: "baby"                # baby van de groep — verschijnt pas vanaf de ei-aflevering
+    description: >
+      A TINY baby DUCKLING, noticeably smaller than the three chicks, with soft
+      bright LEMON-YELLOW down feathers all over, a small flat ORANGE DUCK BILL
+      (clearly wider and flatter than the chicks' pointy beaks — this is the
+      instant species-tell), a single damp-looking little tuft of down sticking
+      up on top of the head, EXTRA-LARGE round shiny dark eyes with bright
+      reflective highlights, tiny orange webbed feet (webbed — not chicken toes),
+      NO accessories at all, dense fluffy 3D-rendered soft down, Pixar/Illumination
+      cartoon proportions with an oversized head and a round tummy.
+    lifeStage: "newly hatched duckling, damp-then-fluffy lemon down, very tiny, wobbly, blinking at everything for the first time"
+    triggerWord: "duckling_duck"
+    dna:
+      coreColor: "bright lemon-yellow"
+      silhouette: "the tiniest of the four — a round yellow puffball with a FLAT WIDE BILL and one upright head-tuft; reads as 'baby duck' at a glance"
+      accessory: "none — the only cast member without an accessory (being the baby IS the identity)"
+      tic: "waddle-bounces twice on the spot and flaps both stubby wings when happy"
+      signatureSound: "a tiny squeaky 'kwak!' that surprises even himself"
+      feathers: "ultra-soft lemon-yellow down, slightly damp spiky tuft on top in his first scenes, fluffy in later episodes"
+      build: "clearly the smallest of the group — about two-thirds of Bo's height, round baby proportions, oversized head, tiny webbed feet"
+      weight: "feather-light and wobbly — tips over when he flaps too enthusiastically"
+      eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
+      scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
+      # Het eendje draagt NOOIT accessoires van de anderen — en heeft een
+      # eenden-snavel, geen kippensnavel. Geen kam (dat is een kip-kenmerk).
+      antiAccessory: "any hat, any scarf or bandana, any glasses, any pointed chicken beak, any red comb on the head"
+    personality: >
+      The baby of the group. Speaks in single words and sounds ("Kwak!", "Pip!",
+      "More!"), copies whatever the chicks do half a beat too late, and claps
+      his stubby wings when he gets something right. He imprinted on Pip at
+      hatching ("Mama?" — "Big sister.") and toddles after her everywhere.
+      He is never the problem-solver — he is the reason the others slow down,
+      explain things simply, and become gentler versions of themselves. Comedy
+      comes from his species mismatch (he KWAKs where chicks peep, he loves
+      water the chicks avoid) — always affectionate, never mocking.
+    catchphrases:
+      opener:
+        - "Kwak!"
+      closer:
+        - "Kwak-kwak… zzz."
+    voiceId: "${VOICE_ID_DUCKLING:}"
+    voiceSettings:
+      # Piepklein, zacht, hoog — kies een heel jonge zachte stem in ElevenLabs.
+      stability: 0.60
+      similarity_boost: 0.75
+      style: 0.35
+      use_speaker_boost: true

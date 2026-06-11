@@ -1,0 +1,62 @@
+{
+  "_comment": "Fixed eval set for the script stage. Keep these STABLE so scores are comparable across prompt changes. audience/targetSeconds default to kids_3_6 / 60 if omitted. Add/edit briefs freely, but changing the set resets your baseline comparability.",
+  "defaults": { "audience": "kids_3_6", "targetSeconds": 60 },
+  "briefs": [
+    {
+      "id": "pebble-discovery",
+      "topic": "Pip finds a shiny pebble",
+      "brief": "Pip spots a glittering pebble by the pond; Mo explains why it sparkles; Bo turns PEBBLE into a silly rhyme. They move coop -> pond -> big oak.",
+      "lesson": "Looking closely turns a small thing into a big wonder.",
+      "mood": "warm, cozy, gentle wonder"
+    },
+    {
+      "id": "first-rain",
+      "topic": "Pip experiences rain for the first time",
+      "brief": "Pip has never felt rain. She is unsure, then delighted. Mo shows how plants drink it; Bo makes splashy puddle jokes.",
+      "lesson": "New things can be scary at first and wonderful after.",
+      "mood": "curious, exploring, sweet build-up"
+    },
+    {
+      "id": "lost-button",
+      "topic": "A mysterious shiny button in the garden",
+      "brief": "The chicks find a shiny button and imagine where it came from. Mystery arc: clue -> theory -> truth (it fell off Mrs. Hop's shawl).",
+      "lesson": "Asking questions is the fun part of figuring things out.",
+      "mood": "thoughtful, quiet, slow discovery"
+    },
+    {
+      "id": "bo-mess",
+      "topic": "Bo tries to carry too many berries",
+      "brief": "Bo insists on carrying all the berries alone, makes a mess, pretends it's fine. Pip notices, calls Mo, they fix it together.",
+      "lesson": "Asking for help is brave, and things are more fun together.",
+      "mood": "playful, silly, lots of giggles"
+    },
+    {
+      "id": "bedtime-stars",
+      "topic": "Counting the first stars at dusk",
+      "brief": "Calm wind-down at the star meadow. The chicks watch the first stars appear and make a gentle bedtime wish.",
+      "lesson": "Quiet moments together are their own kind of magic.",
+      "mood": "calm, soft, bedtime-warm"
+    },
+    {
+      "id": "rainbow-after-rain",
+      "topic": "Where does a rainbow come from",
+      "brief": "After a rain a rainbow appears. Pip is awestruck; Mo explains sunlight through water drops with a tea-steam comparison; Bo says RAIN-BOW or BRAIN-BOW.",
+      "lesson": "Rainbows happen when sunlight passes through water droplets.",
+      "mood": "magical, twinkly, golden-hour glow"
+    },
+    {
+      "id": "first-snow",
+      "topic": "Pip's first snowflake",
+      "brief": "Pip catches her first snowflake and watches it melt. Wonder -> try -> almost-miss -> try-again -> joy as it snows properly.",
+      "lesson": "Some beautiful things are gentle and don't last long.",
+      "mood": "tender, soft, almost a whisper"
+    },
+    {
+      "id": "echo-in-the-oak",
+      "topic": "A strange echo at the big oak",
+      "brief": "A sound seems to answer back from the oak's knot-hole. The chicks investigate; it turns out to be Oliver the Owl waking up.",
+      "lesson": "A little courage turns a scary mystery into a new friend.",
+      "mood": "energetic, sunny, joyful adventure"
+    }
+  ]
+}

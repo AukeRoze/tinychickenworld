@@ -1,0 +1,147 @@
+image-service-1  | 
+image-service-1  |   .   ____          _            __ _ _
+image-service-1  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+image-service-1  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+image-service-1  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+image-service-1  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+image-service-1  |  =========|_|==============|___/=/_/_/_/
+image-service-1  | 
+image-service-1  |  :: Spring Boot ::                (v3.3.4)
+image-service-1  | 
+image-service-1  | 2026-06-05T06:50:13.579Z  INFO 1 --- [image-service] [           main] c.y.image.ImageServiceApplication        : Starting ImageServiceApplication v0.1.0 using Java 21.0.11 with PID 1 (/app/app.jar started by root in /app)
+image-service-1  | 2026-06-05T06:50:13.619Z  INFO 1 --- [image-service] [           main] c.y.image.ImageServiceApplication        : No active profile set, falling back to 1 default profile: "default"
+image-service-1  | 2026-06-05T06:50:33.485Z  INFO 1 --- [image-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8084 (http)
+image-service-1  | 2026-06-05T06:50:33.655Z  INFO 1 --- [image-service] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+image-service-1  | 2026-06-05T06:50:33.679Z  INFO 1 --- [image-service] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+image-service-1  | 2026-06-05T06:50:34.078Z  INFO 1 --- [image-service] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+image-service-1  | 2026-06-05T06:50:34.170Z  INFO 1 --- [image-service] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 20003 ms
+image-service-1  | 2026-06-05T06:50:40.147Z  INFO 1 --- [image-service] [           main] c.youtubeauto.image.bible.BibleLoader    : Loaded bible: 3 characters, 4 locations, image provider=replicate
+image-service-1  | 2026-06-05T06:50:42.997Z  INFO 1 --- [image-service] [           main] c.y.i.service.ImageGenerationService     : Image provider: replicate (wanted=replicate, available=[openai, replicate])
+image-service-1  | 2026-06-05T06:50:50.930Z  INFO 1 --- [image-service] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+image-service-1  | 2026-06-05T06:50:51.800Z  INFO 1 --- [image-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8084 (http) with context path '/'
+image-service-1  | 2026-06-05T06:50:51.951Z  INFO 1 --- [image-service] [           main] c.y.image.ImageServiceApplication        : Started ImageServiceApplication in 42.833 seconds (process running for 46.527)
+image-service-1  | 2026-06-05T06:57:36.188Z  INFO 1 --- [image-service] [nio-8084-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+image-service-1  | 2026-06-05T06:57:36.189Z  INFO 1 --- [image-service] [nio-8084-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+image-service-1  | 2026-06-05T06:57:36.194Z  INFO 1 --- [image-service] [nio-8084-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 5 ms
+image-service-1  | 2026-06-05T06:57:36.651Z  INFO 1 --- [image-service] [nio-8084-exec-2] c.y.i.service.ImageGenerationService     : job=56fb85e5-0ae8-4e9a-b737-86f0a5dd315f sharedSeed=1324973264 scenes=18
+image-service-1  | 2026-06-05T06:57:41.707Z ERROR 1 --- [image-service] [nio-8084-exec-2] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: org.springframework.web.reactive.function.client.WebClientResponseException$UnprocessableEntity: 422 Unprocessable Entity from POST https://api.replicate.com/v1/predictions] with root cause
+image-service-1  | 
+image-service-1  | org.springframework.web.reactive.function.client.WebClientResponseException$UnprocessableEntity: 422 Unprocessable Entity from POST https://api.replicate.com/v1/predictions
+image-service-1  | 	at org.springframework.web.reactive.function.client.WebClientResponseException.create(WebClientResponseException.java:331) ~[spring-webflux-6.1.13.jar!/:6.1.13]
+image-service-1  | 	Suppressed: reactor.core.publisher.FluxOnAssembly$OnAssemblyException: 
+image-service-1  | Error has been observed at the following site(s):
+image-service-1  | 	*__checkpoint ⇢ 422 UNPROCESSABLE_ENTITY from POST https://api.replicate.com/v1/predictions [DefaultWebClient]
+image-service-1  | Original Stack Trace:
+image-service-1  | 		at org.springframework.web.reactive.function.client.WebClientResponseException.create(WebClientResponseException.java:331) ~[spring-webflux-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.reactive.function.client.DefaultClientResponse.lambda$createException$1(DefaultClientResponse.java:214) ~[spring-webflux-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:106) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxOnErrorReturn$ReturnSubscriber.onNext(FluxOnErrorReturn.java:162) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxDefaultIfEmpty$DefaultIfEmptySubscriber.onNext(FluxDefaultIfEmpty.java:122) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxMapFuseable$MapFuseableSubscriber.onNext(FluxMapFuseable.java:129) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxContextWrite$ContextWriteSubscriber.onNext(FluxContextWrite.java:107) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxMapFuseable$MapFuseableConditionalSubscriber.onNext(FluxMapFuseable.java:299) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxFilterFuseable$FilterFuseableConditionalSubscriber.onNext(FluxFilterFuseable.java:337) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.Operators$BaseFluxToMonoOperator.completePossiblyEmpty(Operators.java:2097) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.MonoCollect$CollectSubscriber.onComplete(MonoCollect.java:145) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxMap$MapSubscriber.onComplete(FluxMap.java:144) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxPeek$PeekSubscriber.onComplete(FluxPeek.java:260) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.FluxMap$MapSubscriber.onComplete(FluxMap.java:144) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.netty.channel.FluxReceive.onInboundComplete(FluxReceive.java:415) ~[reactor-netty-core-1.1.22.jar!/:1.1.22]
+image-service-1  | 		at reactor.netty.channel.ChannelOperations.onInboundComplete(ChannelOperations.java:445) ~[reactor-netty-core-1.1.22.jar!/:1.1.22]
+image-service-1  | 		at reactor.netty.channel.ChannelOperations.terminate(ChannelOperations.java:499) ~[reactor-netty-core-1.1.22.jar!/:1.1.22]
+image-service-1  | 		at reactor.netty.http.client.HttpClientOperations.onInboundNext(HttpClientOperations.java:800) ~[reactor-netty-http-1.1.22.jar!/:1.1.22]
+image-service-1  | 		at reactor.netty.channel.ChannelOperationsHandler.channelRead(ChannelOperationsHandler.java:115) ~[reactor-netty-core-1.1.22.jar!/:1.1.22]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.MessageToMessageDecoder.channelRead(MessageToMessageDecoder.java:103) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.CombinedChannelDuplexHandler$DelegatingChannelHandlerContext.fireChannelRead(CombinedChannelDuplexHandler.java:436) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.ByteToMessageDecoder.fireChannelRead(ByteToMessageDecoder.java:346) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:318) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.CombinedChannelDuplexHandler.channelRead(CombinedChannelDuplexHandler.java:251) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:442) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.ssl.SslHandler.unwrap(SslHandler.java:1495) ~[netty-handler-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.ssl.SslHandler.decodeJdkCompatible(SslHandler.java:1358) ~[netty-handler-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.ssl.SslHandler.decode(SslHandler.java:1407) ~[netty-handler-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.ByteToMessageDecoder.decodeRemovalReentryProtection(ByteToMessageDecoder.java:530) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.ByteToMessageDecoder.callDecode(ByteToMessageDecoder.java:469) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.handler.codec.ByteToMessageDecoder.channelRead(ByteToMessageDecoder.java:290) ~[netty-codec-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:444) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead(AbstractChannelHandlerContext.java:412) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.DefaultChannelPipeline$HeadContext.channelRead(DefaultChannelPipeline.java:1357) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:440) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:420) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.DefaultChannelPipeline.fireChannelRead(DefaultChannelPipeline.java:868) ~[netty-transport-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.epoll.AbstractEpollStreamChannel$EpollStreamUnsafe.epollInReady(AbstractEpollStreamChannel.java:799) ~[netty-transport-classes-epoll-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.epoll.EpollEventLoop.processReady(EpollEventLoop.java:501) ~[netty-transport-classes-epoll-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.channel.epoll.EpollEventLoop.run(EpollEventLoop.java:399) ~[netty-transport-classes-epoll-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:997) ~[netty-common-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[netty-common-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[netty-common-4.1.113.Final.jar!/:4.1.113.Final]
+image-service-1  | 		at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
+image-service-1  | 	Suppressed: java.lang.Exception: #block terminated with an error
+image-service-1  | 		at reactor.core.publisher.BlockingSingleSubscriber.blockingGet(BlockingSingleSubscriber.java:104) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at reactor.core.publisher.Mono.block(Mono.java:1779) ~[reactor-core-3.6.10.jar!/:3.6.10]
+image-service-1  | 		at com.youtubeauto.image.provider.ReplicateImageProvider.post(ReplicateImageProvider.java:169) ~[!/:0.1.0]
+image-service-1  | 		at com.youtubeauto.image.provider.ReplicateImageProvider.generatePng(ReplicateImageProvider.java:141) ~[!/:0.1.0]
+image-service-1  | 		at com.youtubeauto.image.service.ImageGenerationService.generate(ImageGenerationService.java:52) ~[!/:0.1.0]
+image-service-1  | 		at com.youtubeauto.image.api.ImageController.generate(ImageController.java:20) ~[!/:0.1.0]
+image-service-1  | 		at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
+image-service-1  | 		at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+image-service-1  | 		at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:255) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:188) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:926) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:831) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:195) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:113) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.13.jar!/:6.1.13]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:483) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:344) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:384) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:905) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1741) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1190) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.30.jar!/:na]
+image-service-1  | 		at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
+image-service-1  | 

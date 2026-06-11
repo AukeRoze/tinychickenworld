@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: orchestrator
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/orchestrator}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      # Cast editor uploads character reference PNGs — raise the 1MB default.
+      max-file-size: 15MB
+      max-request-size: 16MB
+
+server:
+  port: 8080
+
+app:
+  services:
+    # Order matches OrchestratorProperties.Services record fields exactly,
+    # in case parameter names aren't preserved and binding falls back to positional.
+    script:    ${SCRIPT_URL:http://localhost:8081}
+    assembly:  ${ASSEMBLY_URL:http://localhost:8082}
+    voice:     ${VOICE_URL:http://localhost:8083}
+    image:     ${IMAGE_URL:http://localhost:8084}
+    thumbnail: ${THUMBNAIL_URL:http://localhost:8086}
+    upload:    ${UPLOAD_URL:http://localhost:8085}
+    videoGen:  ${VIDEO_GEN_URL:http://localhost:8087}
+  poll:
+    intervalMs: 2000
+    # Bumped 90 → 300 (10 min) for Opus + the large HOOK/SETUP/...
+    # episode-structure system prompt. Opus regularly takes 90-180s for
+    # 15-scene scripts; the previous 3-min cap was too tight under load.
+    maxAttempts: 300
+  anthropic:
+    base-url: https://api.anthropic.com/v1
+    api-key: ${ANTHROPIC_API_KEY:}
+    anthropic-version: "2023-06-01"
+    model: ${ANTHROPIC_MODEL:claude-haiku-4-5-20251001}
+    max-tokens: 1024
+    temperature: 0.7
+  defaults:
+    audience: kids_3_6
+    targetSeconds: ${TARGET_SECONDS:180}   # ~3 min default (landscape). Override per job or via env.
+    burnSubtitles: ${BURN_SUBTITLES:false}   # OFF by default — clean image. Opt in per request when wanted.
+    motionMode: ${MOTION_MODE_DEFAULT:ken_burns}   # ken_burns (default) | veo
+  brand:
+    introPath: ${INTRO_PATH:/bible/intro.mp4}
+    outroPath: ${OUTRO_PATH:/bible/outro.mp4}
+  bible:
+    path: ${BIBLE_PATH:/bible/channel.yml}
+
+# Manual review gates added to the pipeline. Both default ON (the human picks
+# the thumbnail before publish, and pushes other platforms after upload). Set
+# either to false to revert that step to the legacy zero-touch flow — handy for
+# a fast end-to-end smoke test.
+pipeline:
+  thumbnail-gate:
+    enabled: ${THUMBNAIL_GATE_ENABLED:true}
+  distribution-gate:
+    enabled: ${DISTRIBUTION_GATE_ENABLED:true}

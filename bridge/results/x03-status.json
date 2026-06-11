@@ -1,0 +1,14 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                 "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                 "status":  "VEO_GENERATING",
+                 "step":  "veo image-to-video",
+                 "error":  null,
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null
+             },
+    "executedAt":  "2026-06-11T02:30:05.0884319+02:00"
+}

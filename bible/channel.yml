@@ -1,0 +1,1218 @@
+# Channel Bible — the source of truth for your channel's identity.
+# Loaded by script-service, image-service and voice-service at startup.
+# Edit names, descriptions and palettes freely; the structure must remain.
+
+channel:
+  id: tiny-chicken-world
+  name: "Tiny Chicken World"
+  audience: kids_3_6
+  language: en
+
+# Writer personas — editable voices injected into the script pipeline.
+#   storyWriter      → top of the script-generation prompt (PromptBuilder).
+#   humorSpecialist  → top of the dialogue punch-up pass (DialoguePolisher).
+# Tune the tone here without recompiling. Leave blank to use the built-in
+# framing only. Keep them about WHO the writer is + HOW they think; the craft
+# rules (comedy mechanics, structure, etc.) already live in the code prompts.
+personas:
+  storyWriter: |
+    You are a beloved children's story writer with twenty years of picture books
+    and preschool TV that kids beg to watch "just one more time". You think in
+    pictures and feelings, not lessons. You trust small children to be smart: you
+    never talk down, never moralise, never explain the magic away. Every story has
+    a tiny beating heart — one small want, one small wobble, one warm resolution —
+    and a child feels it before they can name it. You write for the lap: a grown-up
+    and a 4-year-old leaning into the screen together. Warmth first, wonder always,
+    and a story so clear a three-year-old could retell it with their hands.
+  humorSpecialist: |
+    You are a comedy specialist for the very young — the one other kids'-TV writers
+    call when a script is sweet but nobody is laughing. You know preschool humour is
+    PHYSICAL and SONIC, not clever: a splat, a wobble, a silly wrong word, a sneeze
+    that knocks someone over. The biggest laugh is letting the CHILD see it coming
+    before the character does ("don't step in the puddle!"); the next is the rule of
+    three (two normal tries, the third goes gloriously wrong); the most satisfying is
+    a callback that pays off a gag planted minutes earlier, so the child feels clever
+    for remembering. You make kids feel a beat smarter than the characters. You never
+    explain a joke, never signpost it, never use sarcasm or grown-up wit — you play it
+    straight and let the silliness land. Funny, warm, always kind: the joke is never
+    on a child.
+
+# NOTE: the music library lives further down in THIS file (search for
+# "music:" near the voice section). YAML lets a duplicate top-level key win
+# by LAST occurrence — a second music block here would be silently dead
+# config. Register new tracks in that one block only (generate-music.py
+# --register does this automatically).
+
+# Pre-defined series, selectable from a dropdown in the New Job form.
+# Each job stores its seriesId + episodeNumber, which the script stage uses
+# for continuity. Add/edit/remove freely — the dashboard reads this live
+# (GET /api/v1/series), so a refresh picks up changes.
+series:
+  - id: first-times
+    name: "Pip's First Times"
+    description: "Pip experiences something for the very first time — first sunrise, first rain, first snow."
+  - id: little-discoveries
+    name: "Little Discoveries"
+    description: "The chicks find a small wonder in the barnyard and turn it into a shared game."
+  - id: helping-friends
+    name: "Helping Friends"
+    description: "One chick has a problem; the others team up to help. Gentle lessons about kindness."
+  - id: silly-bo
+    name: "Silly Bo Moments"
+    description: "Bo's clumsy, funny mishaps and the warm way the flock laughs along with her."
+  - id: bedtime-tales
+    name: "Bedtime Tales"
+    description: "Calm, cozy wind-down stories under the stars. Soft mood, sleepy pacing."
+
+# Image-generation backend.
+#   provider: openai   — gpt-image-1, prompt-only consistency (start here)
+#   provider: replicate — Flux base model + your trained cast LoRA
+# Switching to replicate requires a one-time LoRA training; see
+# infra/lora-training/README.md.
+imageGen:
+  provider: ${IMAGE_PROVIDER:openai}
+  replicate:
+    # Replicate model identifier (owner/name:version) — a Flux variant that
+    # supports an extra LoRA at inference time.
+    # Example: lucataco/flux-dev-multi-lora:abc123...
+    model: "${REPLICATE_FLUX_MODEL:}"
+    # URL of the LoRA safetensors trained on your cast. Single LoRA that
+    # contains all three characters; trigger words pick which one(s) appear.
+    castLoraUrl: "${CAST_LORA_URL:}"
+    # Scale of the LoRA effect. 0.7-1.0 typical. Higher = stronger character lock.
+    # Stronger LoRA lock when characters drift: bumped from 0.95 to 1.05.
+    # Above ~1.15 can over-cook and lose nuance.
+    # LoRA v2 (Pixar) is trained on Pixar-style refs, so the previous
+    # compromises are no longer needed: scale back up, guidance back down,
+    # steps back to default. Settings to fall back to if v2 disappoints
+    # are documented inline.
+    # v1 (watercolor LoRA) compromise was 0.90 to let Style B prompts win.
+    # v2 was trained AS Pixar — full lock is safe and gives strongest ID.
+    castLoraScale: 1.0
+    # Back to 1280x720 for the pilot — lucataco/flux-dev-multi-lora rejects
+    # 1536 in some configurations (422 Unprocessable Entity). Once the pipeline
+    # is proven we can try 1408x768 (max for most Flux Dev variants on Replicate).
+    width: 1280
+    height: 720
+    # Premium pilot: 40 steps (was 32). +25% cost, fuller detail on faces.
+    # If you want to save: drop to 32 in v2 production runs.
+    numInferenceSteps: 40
+    # Style now baked into LoRA, so prompt-following doesn't need to be
+    # cranked. 2.5 = LoRA dominates, 4.0 = prompt dominates. v2 → 2.5.
+    guidanceScale: 2.5
+
+# Video generation. Two modes:
+#   defaultMode: ken_burns  — current cheap path, image-service stills +
+#                             FFmpeg motion presets in assembly. €0 extra.
+#   defaultMode: veo        — image-to-video via Google Veo MCP. Real motion,
+#                             characters move, ~€3-5 per video. Opt-in.
+# Override per request via the orchestrator's `motionMode` field.
+videoGen:
+  defaultMode: ${VIDEO_MOTION_MODE:ken_burns}
+  veo:
+    # Model aliases (resolved in ModelRouter.normaliseModelId):
+    #   veo3_1_fast → Veo 3.1 Fast  — GA workhorse, ~€0.10/s, 720p   (current)
+    #   veo3_1      → Veo 3.1       — GA premium hero, ~€0.40/s, 1080p
+    #   veo3_1_lite → Veo 3.1 Lite  — preview, cheapest, ~€0.05/s, 720p
+    #   veo3        → Veo 3.0 fast  — legacy GA, retired ~2026-06-30
+    # Veo 3.1 Fast/Standard are now GA (no allowlist) and replace the deprecated
+    # Veo 3.0 endpoints. Everything runs on Veo 3.1 Fast (720p) — clear quality
+    # bump over 3.0-fast at the same price. For 1080p hero shots, switch
+    # heroModel + the intro/outro/hero routing to veo3_1 (≈4× the per-second cost).
+    defaultModel: veo3_1_fast
+    heroModel: veo3_1_fast      # premium 1080p hero: veo3_1
+    heroQuality: high           # basic | high | ultra
+    # Fallback when defaultModel hits quota or fails twice.
+    fallbackModel: veo3_1_fast
+    # Clip duration cap. Veo supports 4/6/8s; we default to 6 to limit
+    # face-drift between scenes.
+    maxClipSeconds: 6
+    # Audio off — voice-over comes from ElevenLabs, mixed by assembly.
+    audio: false
+    # Hard budget cap per video. Cost calculator falls back to lite once
+    # cumulative spend approaches 80% of this number.
+    # Bumped 5.00 → 7.00 for the premium pilot: Opus script + Veo intro/outro
+    # + Veo lite for the rest pushes against the old cap. €7 gives breathing
+    # room so nothing silently downgrades mid-run. Drop back to 5 for steady
+    # production.
+    # 45.00 covers a ~3-min PROD video in full Veo: ~7-9 premium hero/intro/
+    # outro @ veo3_1 (€0.40/s) + ~27 standard @ veo3_1_fast (€0.10/s) ≈ €35-45.
+    # The current TEST setup (all veo3_1_lite @ €0.05/s) is only ≈ €11/video, so
+    # it stays well under the cap. Lower the cap to throttle spend.
+    costCapEurPerVideo: 45.00
+    # Routing per scene type. Orchestrator labels scenes intro/hero/outro/standard.
+    # All on Veo 3.1 Fast (GA, 720p). For 1080p premium on the most-watched beats,
+    # set intro/outro/hero model to veo3_1 (≈4× per-second cost) + raise the cap.
+    routing:
+      - sceneType: intro
+        model: veo3_1_fast      # 1080p premium: veo3_1
+        quality: high
+        maxSeconds: 8           # full Veo max — room for 3 paced introductions
+      - sceneType: outro
+        model: veo3_1_fast      # 1080p premium: veo3_1
+        quality: high
+        maxSeconds: 6
+      - sceneType: hero
+        model: veo3_1_fast      # 1080p premium: veo3_1
+        quality: high
+        maxSeconds: 8
+      - sceneType: standard
+        # Lite for the bulk: a moving lite clip (€0.05/s) beats both a frozen
+        # Ken Burns still AND a 2x-priced fast clip for quiet dialogue beats.
+        # Hero/intro/outro keep fast (or premium) above — that's where motion
+        # quality is actually visible. Full 27-scene video ≈ €11 total.
+        model: veo3_1_lite
+        maxSeconds: 6
+
+# Human-in-the-loop review gates. Every gate is independently toggleable.
+# When a gate is enabled, the orchestrator pauses the job at that point and
+# emails a preview + approve/reject links. The pipeline only continues when
+# someone POSTs to /api/v1/videos/{id}/approve.
+#
+# Defaults err on the safe side for kids content: review the script (cheap
+# stage, prevents bad info) and the final master (catches visual mistakes
+# before upload). Veo + assets gates are off by default but easy to flip on.
+review:
+  afterScript:   ${REVIEW_AFTER_SCRIPT:true}      # gate after script-service
+  reviewImages:  ${REVIEW_IMAGES:true}            # per-scene image review + regenerate
+  afterAssets:   ${REVIEW_AFTER_ASSETS:false}     # gate after voice + image (whole batch)
+  beforeVeo:     ${REVIEW_BEFORE_VEO:false}       # only fires if motionMode=veo
+  beforeUpload:  ${REVIEW_BEFORE_UPLOAD:true}     # gate after assembly + metadata
+  notify:
+    to:   ${REVIEW_EMAIL_TO:}                     # blank = no mail, gate still pauses
+    from: ${REVIEW_EMAIL_FROM:noreply@yt-pipeline.local}
+    # Public-facing base URL used in preview links. For local dev:
+    baseUrl: ${PUBLIC_BASE_URL:http://localhost:8080}
+
+# Locked visual style. Prepended to EVERY image generation prompt.
+# Do not rotate styles — consistency is the whole point.
+visualStyle:
+  description: >
+    Stylized Pixar / Illumination 3D cartoon animation, the signature look
+    of the Tiny Chicken World YouTube channel as established by its branded
+    artwork. Soft fluffy little chick characters with EXTRA-LARGE expressive
+    shiny eyes filled with multiple bright reflective highlights — the
+    signature look, never small or simple eyes. Highly detailed fluffy down
+    feather rendering with soft volumetric shading. Set in a sun-drenched
+    pastoral countryside: rolling lush green hills, a classic deep-red
+    wooden barn with white-trimmed gabled roof and a wooden windmill
+    turning gently behind, a charming weathered red tractor, white picket
+    fences, abundant wildflowers and daisies scattered everywhere, a small
+    babbling creek with smooth pebbles, and a great old gnarled oak tree.
+    Signature lighting: warm
+    golden-hour with peachy-pink sky above and soft amber sun rays,
+    long warm shadows reaching east. Rich saturated colors — barn red,
+    warm golden orange, lush vivid green, soft cream, sky blue, peachy
+    sunset. Strong rim light defining each character's silhouette.
+    SOFT, SIMPLIFIED STORYBOOK DETAIL — smooth rounded surfaces, gentle
+    clean shapes, an uncluttered background so the characters always read
+    first. Gently stylized, NOT photorealistic: avoid fine micro-texture,
+    individual grass blades, realistic cobblestones or paving, realistic
+    water/puddle reflections, and realistic machinery detail. Shallow soft
+    depth of field, character-driven composition with a simple storytelling
+    background. Style references: Illumination shorts, Pixar "Cars"
+    countryside warmth, "Klaus" warmth, "Chicken Run" charm.
+    NEVER photorealistic, NEVER hyper-detailed, NEVER watercolor,
+    NEVER 2D flat, NEVER muted pastel-only palette.
+  palette:
+    - "#F4A35E"   # warm golden hour
+    - "#E87A4C"   # peachy sunset
+    - "#7FBB5A"   # vivid lush green
+    - "#B83A1F"   # barn red
+    - "#F0E4C2"   # cream feathers
+    - "#86C0E5"   # soft sky blue
+
+# Render-style for the VEO motion clips (Story D). The full look lives in
+# visualStyle (used for the stills); this is a CONCISE materials+look sentence the
+# Veo prompt compiler injects so the animated clip keeps the same surfaces and
+# lighting as the still it animates. Blank/absent → compiler falls back to its
+# built-in "Soft 3D Pixar look" string.
+renderStyle:
+  veoLook: >-
+    Soft 3D Pixar/Illumination cartoon look: fluffy down feathers with gentle
+    subsurface shading, a small matte beak, extra-large glossy eyes with bright
+    catch-lights, a warm rim-light defining each character's silhouette, smooth
+    rounded storybook surfaces and shallow soft depth of field. Warm rich
+    colours; never photorealistic, never flat 2D, no micro-texture.
+
+# Colour-script (Story D) — an EMOTIONAL colour progression per phase, the way
+# Pixar colour-scripts a film so the palette supports each beat's feeling. The
+# Veo compiler injects the line for the scene's phase. Edit freely; unknown
+# phases fall back to `default`.
+colorScript:
+  default:     "warm golden-hour palette, balanced gentle contrast"
+  hook:        "warm tones with a slightly cooler edge and a touch more contrast to spark curiosity"
+  setup:       "bright friendly open daylight, clear and inviting"
+  development: "warm natural daylight, steady and readable"
+  climax:      "rich saturated warm golden light — the brightest, most joyful palette with glowing highlights"
+  resolution:  "soft warm low-contrast glow, settling and cosy"
+  closer:      "warm dusky golden wind-down, gentle and content"
+
+# Hard episode structure — every video follows this template regardless of
+# topic or chosen story arc. Phases are time-boxed and Claude MUST produce
+# scenes that fit. The first 8 seconds (HOOK) is what protects retention on
+# the YT kids algorithm — never let it slip to "and then Pip woke up...".
+#
+# Each phase has a sceneType so the orchestrator can route hook/climax
+# scenes to higher-quality Veo (veo3_1) and the bulk to lite.
+# Camera Bible — canonical camera language per phase. The Veo prompt compiler
+# injects this into every shot so the "direction" is consistent instead of
+# guessed (a 50mm slow push-in feels very different from a 24mm top-down).
+# Edit freely; the compiler falls back to `default` for unknown phases.
+cameraBible:
+  default:     { angle: "eye-level", lens: "50mm normal", movement: "subtle slow camera move", focus: "lock focus on the main character", depthOfField: "medium depth, gently soft background" }
+  hook:        { angle: "eye-level", lens: "50mm normal", movement: "slow gentle push-in toward the face", focus: "lock focus on the main character's eyes", depthOfField: "shallow, soft creamy background bokeh" }
+  setup:       { angle: "eye-level", lens: "35mm", movement: "slow drift", focus: "main character sharp, the world readable behind", depthOfField: "medium depth" }
+  development: { angle: "eye-level", lens: "50mm", movement: "subtle slow move", focus: "lock focus on whoever is speaking", depthOfField: "medium depth, soft background" }
+  climax:      { angle: "slightly low angle", lens: "35mm wide", movement: "slow cinematic pull-back revealing the whole scene", focus: "keep the whole flock and setting sharp", depthOfField: "deep focus, everything crisp" }
+  resolution:  { angle: "eye-level", lens: "50mm", movement: "very slow, calm drift", focus: "soft focus on the flock together", depthOfField: "medium-shallow, warm soft background" }
+  closer:      { angle: "eye-level", lens: "85mm", movement: "very slow, warm push-in", focus: "lock focus on the main character, world melting soft behind", depthOfField: "shallow, dreamy soft background" }
+
+episodeStructure:
+  totalSecondsTarget: 180
+  phases:
+    - id: hook
+      label: "HOOK"
+      seconds: 10
+      minScenes: 2
+      maxScenes: 2
+      sceneType: hero
+      requirements:
+        - "Open on EXTREME CLOSE-UP of the main character's face in a strong emotion (wide eyes, open beak gasping, surprised expression)."
+        - "Dialogue: max 1 short line OR just a sound effect. NO setup, NO exposition, NO 'once upon a time'-style intro."
+        - "Establish a clear question or mystery the viewer wants resolved (sound, light, movement, missing object)."
+        - "Emotional beat: WONDER, CURIOSITY, or SURPRISE — never calm exposition."
+        - "Scene 2 pulls back slightly OR shows what the character is reacting to."
+
+    - id: setup
+      label: "SETUP"
+      seconds: 30
+      minScenes: 3
+      maxScenes: 5
+      sceneType: standard
+      requirements:
+        - "Establish the location and what the main character is doing."
+        - "Bring in side characters (Mo, Bo) only if they appear in the brief — otherwise stay solo."
+        - "Mini-question or mini-decision that drives the next phase."
+        - "Pace stays brisk — never linger more than 4 seconds per scene."
+
+    - id: development
+      label: "DEVELOPMENT"
+      seconds: 80
+      minScenes: 14
+      maxScenes: 20
+      sceneType: standard
+      requirements:
+        - "Follow the BEATS of the chosen story arc."
+        - "Multiple short scenes, each with a fresh emotion or visual change."
+        - "Re-hook every 10-15 seconds — a joke, sound effect, or unexpected visual."
+        - "Build toward the climax with rising stakes or curiosity."
+
+    - id: climax
+      label: "CLIMAX"
+      seconds: 32
+      minScenes: 4
+      maxScenes: 6
+      sceneType: hero
+      requirements:
+        - "The discovery / aha / joy moment — the emotional peak of the video."
+        - "Visual reveal: wide shot showing the full setting in its best light."
+        - "All characters together if they're in the brief."
+        - "Maximum emotion: shared joy, awe, laughter."
+
+    - id: resolution
+      label: "RESOLUTION"
+      seconds: 22
+      minScenes: 3
+      maxScenes: 5
+      sceneType: standard
+      requirements:
+        - "Main character restates the lesson in their own kid-words (NOT adult exposition)."
+        - "Side characters react warmly."
+        - "Calm down from the climax to a warm settled feeling."
+
+    - id: closer
+      label: "CLOSER"
+      seconds: 6
+      minScenes: 1
+      maxScenes: 1
+      sceneType: outro
+      requirements:
+        - "Main character says a closer line from their catchphrases.closer list."
+        - "Optionally tease the next adventure with one sentence."
+        - "Ends on a warm character expression looking into camera."
+
+  rules:
+    rehookEverySeconds: 12
+    minScenesTotal: 27
+    maxScenesTotal: 39
+
+# Story arcs — explicit narrative structures, one rotated per script.
+# Claude must follow the beats in order. Gives every video a real arc instead
+# of "things happen and then it ends".
+storyArcs:
+  - id: discovery
+    label: "Curiosity → Discovery → Joy"
+    beats:
+      - "Setup (2 scenes): Pip notices something unusual or surprising."
+      - "Question (2 scenes): she asks Mo + Bo what it is."
+      - "Investigation (3 scenes): they explore together, find clues."
+      - "Reveal (2 scenes): Mo connects it to something kids already know."
+      - "Joy (2 scenes): Pip mimics or recreates it, all three laugh."
+      - "Closer (1 scene): Pip shares the lesson in her own words."
+
+  - id: mistake
+    label: "Mistake → Help → Together"
+    beats:
+      - "Setup (2 scenes): Bo tries to do something alone, makes a small mess."
+      - "Trouble (2 scenes): she pretends it's fine but it isn't."
+      - "Help (2 scenes): Pip notices, calls Mo over."
+      - "Together (3 scenes): they fix it as a team, taking turns."
+      - "Reflection (2 scenes): 'more fun together' realization."
+      - "Closer (1 scene): Bo admits her favorite part was the help."
+
+  - id: first_time
+    label: "Wonder → Try → Almost-fail → Try-again → Win"
+    beats:
+      - "Wonder (2 scenes): Pip sees something she's never seen before."
+      - "Try (2 scenes): she attempts it, with Mo coaching."
+      - "Almost-fail (2 scenes): something goes wrong, Bo makes a silly remark."
+      - "Try-again (3 scenes): Mo gives one piece of wisdom, she retries."
+      - "Win (2 scenes): she succeeds, joyful celebration."
+      - "Closer (1 scene): Pip says what she learned about trying again."
+
+  - id: mystery
+    label: "Question → Clue → Theory → Test → Truth"
+    beats:
+      - "Question (2 scenes): something mysterious appears (sound, shadow, marks)."
+      - "Clue (2 scenes): they find evidence, Pip imagines wild theories."
+      - "Theory (2 scenes): Bo's silly theory vs Mo's calm guess."
+      - "Test (2 scenes): they investigate to find out who's right."
+      - "Truth (2 scenes): the real answer, simpler than they thought."
+      - "Closer (1 scene): Pip realizes asking questions IS the fun part."
+
+  - id: comparison
+    label: "Notice → Compare → Wonder → Connect"
+    beats:
+      - "Notice (2 scenes): Pip sees two things that seem unrelated."
+      - "Compare (3 scenes): they look at both side by side."
+      - "Wonder (2 scenes): 'are they the same?' debate, Bo confused."
+      - "Connect (3 scenes): Mo shows the hidden connection."
+      - "Closer (1 scene): Pip looks for connections in other things now."
+
+# Cast. Three chickens. Each character description is ULTRA SPECIFIC because
+# OpenAI's image gen has weak character consistency between calls — concrete
+# colors, accessories and features are what give it the best chance.
+characters:
+  - id: pip
+    name: "Pip"
+    species: chicken
+    role: "main"
+    description: >
+      A small fluffy young chick with soft CREAM-WHITE down feathers all over the
+      body, a bright red pointy chicken comb on top of the head, EXTRA-LARGE round
+      shiny brown eyes with multiple bright reflective highlights and clearly visible
+      iris detail, thick dark eyelashes, wears a tiny STRAW FARMER'S HAT on the head
+      (the straw hat is the signature accessory and must always be clearly visible)
+      and a small RED bandana / kerchief around the neck, small orange beak, two thin
+      orange legs, dense fluffy 3D-rendered soft down feathers, Pixar/Illumination
+      cartoon character proportions with oversized head relative to body.
+    # LoRA trigger token. Used in image prompts when imageGen.provider=replicate.
+    # Must match the trigger_word the LoRA was trained with.
+    # Life stage — controls how old the character looks in every image.
+    # Changes only across episodes (not within one). When you want the cast to
+    # grow up, edit this field. Suggested stages:
+    #   "newly hatched chick, soft fluffy down feathers, very tiny, large head relative to body, wobbly legs"
+    #   "young chick, downy feathers mixed with small adult feathers, small body, still cute and round"
+    #   "juvenile chicken, mostly grown feathers, medium size, slim body"
+    #   "young adult chicken, full adult feathers, normal size, confident pose"
+    lifeStage: "young chick, soft fluffy down feathers, very tiny, large head relative to body, wobbly legs, cute round proportions"
+    triggerWord: "pip_chicken"
+    # Character DNA — the canonical iconic identity, injected into EVERY prompt
+    # (image, Veo motion, thumbnail). Keep each line SHORT and unmistakable so a
+    # child recognises the character by silhouette + tic, not just colour.
+    dna:
+      coreColor: "cream-white"
+      silhouette: "round chick topped by a tall straw farmer hat — a pointed-hat silhouette you read instantly"
+      accessory: "straw farmer hat and a red neck bandana"
+      # Herformuleerd (feedback ep 3): "tips her straw hat back" liet Veo de
+      # hoed AFNEMEN en op de grond leggen — volgende scène had ze hem weer op.
+      # De tic raakt nu alleen de rand aan en verbiedt het afnemen expliciet.
+      tic: "leans in close with bright wide eyes when curious, one wingtip briefly touching the BRIM of her straw hat — the hat NEVER comes off her head, never in her wing, never on the ground"
+      signatureSound: "a bright rising curious chirp"
+      # Extended cross-shot identity fields — keep the look stable across
+      # different stills/shots WITHOUT needing an identical reference frame.
+      feathers: "dense ultra-soft cream-white down with a faint warm-yellow tint, fluffy and a little wispy at the cheeks"
+      build: "the middle of the three — small and round with an oversized head and a soft little pot-belly, soft round chick proportions; only slightly between Mo and Bo in size"
+      weight: "light and bouncy, as if a gentle breeze could lift her"
+      eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
+      # Scale lock — the three chicks have DISTINCT but FIXED proportions so each
+      # has its own silhouette: Mo is the tallest + sturdiest, Pip is the medium
+      # round one, Bo is the smallest + slimmest. Keep this Mo > Pip > Bo size
+      # order identical in every shot; only the world dwarfs them all.
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the middle of the trio, only slightly between Mo and Bo. Keep the size difference subtle — all three are clearly the same kind of small chick."
+      # Accessories this character must NEVER wear (anti-swap lock). Pip is the
+      # only one with a straw hat; she must never get Bo's glasses or Mo's scarf.
+      antiAccessory: "any eyeglasses or glasses, any knitted scarf, any green scarf"
+    personality: >
+      Pip is curious to the point of distraction. She gets sidetracked by every new
+      thing she sees. She speaks in short, excited bursts with frequent questions
+      ("What's that?", "Why?", "Can we try?"). She makes small mistakes often and
+      laughs at herself. When she learns something new, she repeats it back in her own
+      words to remember it. She uses sound effects in dialogue ("Whoosh!", "Plop!",
+      "Bzzz!"). She would rather DO than be told. Her catchphrase is "Oh! Oh oh oh!"
+      used when something surprises her. Dialogue must feel like a real 4-year-old's
+      natural curiosity, never adult exposition disguised as a child voice. She
+      frequently gives a playful wink with her right eye whenever she feels excited,
+      curious, proud, or has just discovered something new.
+    catchphrases:
+      opener:
+        - "Hi friends!"
+        - "Let's go exploring!"
+        - "Are you ready for an adventure?"
+      closer:
+        - "See you tomorrow!"
+        - "Until next time, friends!"
+        - "What a wonderful day!"
+    # ElevenLabs voice ID — fill in from your library.
+    # Resolved from env at startup: VOICE_ID_PIP
+    voiceId: "${VOICE_ID_PIP:}"
+    voiceSettings:
+      # Pip is young, excited, curious — pick a high-pitched cheerful voice.
+      # Recommended ElevenLabs voices: Brittney (high young), Charlotte, Lily.
+      stability: 0.45        # lower = more emotional swing
+      similarity_boost: 0.80 # higher = sticks to voice clone
+      style: 0.40            # adds expressiveness
+      use_speaker_boost: true
+
+  - id: mo
+    name: "Mo"
+    species: chicken
+    role: "sidekick"
+    description: >
+      A round fluffy chick with soft BLUE-GREY down feathers all over the body, a
+      bright red pointy chicken comb on top of the head, EXTRA-LARGE round shining
+      brown eyes with multiple bright reflective highlights, thick dark eyelashes,
+      warm friendly expression, wears a small RED knitted scarf / kerchief around the
+      neck (always clearly visible — the signature accessory), small orange beak, two
+      thin orange legs, dense fluffy 3D-rendered soft down feathers,
+      Pixar/Illumination cartoon proportions with oversized head.
+    lifeStage: "young chick, soft fluffy down feathers, very tiny, large head relative to body, wobbly legs, cute round proportions"
+    triggerWord: "mo_chicken"
+    dna:
+      coreColor: "blue-grey"
+      silhouette: "a gently rounder, slightly sturdier chick (only a touch the biggest), with a TALL BRIGHT-RED COMB on top of his head and a thick knitted scarf bunched at the neck"
+      accessory: "a red knitted neck scarf"
+      tic: "tilts his head slowly and gives one calm, slow blink while thinking"
+      signatureSound: "a soft low thoughtful hum"
+      feathers: "smooth even blue-grey down with a soft dusty sheen, neat and tidy, no stray tufts"
+      build: "very slightly the largest of the three — a gently rounder, solid little body, only a TOUCH taller and sturdier than the others (NOT much bigger), calm balanced posture and oversized head; still clearly the same kind of small chick"
+      weight: "solid and settled — plants both feet when he stops to think"
+      eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); only SLIGHTLY the largest of the trio — just a touch taller and rounder than Pip, with Bo a touch the smallest. Keep the size difference SUBTLE — all three are clearly the same kind of small chick, NEVER one much bigger than the rest."
+      # Mo wears ONLY a chunky red KNITTED scarf — never a thin bandana/kerchief
+      # (that's Pip's), never glasses (Bo's), never a hat (Pip's).
+      antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any wattles or red flaps under the beak, any eyelashes or feminine eye makeup"
+    personality: >
+      Mo is the quiet thinker of the group. He speaks slowly, in complete sentences,
+      often pausing to find the right word. He notices things the others miss — a
+      small detail, a pattern, a clue. He never lectures; he asks gentle questions
+      that lead Pip and Bo to figure things out for themselves ("What do you think is
+      making the sound?"). He hums softly when he's thinking. He uses comparisons
+      grounded in everyday things ("It's like when water gets warm and steam comes off
+      the tea"). He's patient with Pip's hyperactivity but allows himself a small sigh
+      when she runs off. His voice should feel reassuring, never preachy. He
+      frequently gives a playful wink with his left eye whenever he feels excited,
+      curious, proud, or has just discovered something new.
+      Mo is a boy — always "he/him" in scripts and visual descriptions.
+    voiceId: "${VOICE_ID_MO:}"
+    voiceSettings:
+      # Mo is calm, thoughtful, gentle — pick a warm soft voice.
+      # Recommended ElevenLabs voices: Adam (low warm), Glinda, Patrick.
+      stability: 0.65        # higher = more controlled, calm
+      similarity_boost: 0.80
+      style: 0.25            # less expressive, more steady
+      use_speaker_boost: true
+
+  - id: bo
+    name: Bo
+    species: chicken
+    role: sidekick
+    description: >
+      A small fluffy chick with soft warm TAN and sandy-brown down
+      feathers, a tiny tuft of feathers sticking up on top of the head,
+      wears ROUND THIN-FRAMED EYEGLASSES perched on the beak (these glasses
+      are a signature accessory and must always be present and clearly
+      visible) and a small GREEN knitted scarf around the neck (also
+      clearly visible), EXTRA-LARGE round shiny eyes visible behind the
+      lenses with multiple bright highlights, thick dark eyelashes,
+      slightly curious head tilt, small orange beak, two thin orange legs,
+      dense fluffy 3D-rendered soft down feathers, Pixar/Illumination cartoon
+      proportions with oversized head.
+    lifeStage: "young chick, soft fluffy down feathers, very tiny, large head relative to body, wobbly legs, cute round proportions"
+    triggerWord: "bo_chicken"
+    dna:
+      coreColor: "tan and sandy-brown"
+      silhouette: "a slightly smaller, slimmer chick, with big round eyeglasses dominating the face"
+      accessory: "round thin-framed eyeglasses and a green neck scarf"
+      tic: "pushes her glasses up the beak with a wingtip before a joke"
+      signatureSound: "a goofy hiccup-giggle"
+      feathers: "warm tan and sandy-brown down, slightly ruffled, with a comic cowlick tuft sticking up on top"
+      build: "very slightly the smallest of the three — a slightly slimmer, springy little body, just a TOUCH shorter and lighter than Pip and Mo (NOT much smaller), with an oversized head; still clearly the same kind of small chick"
+      weight: "light and twitchy, looks caught half-way through a hop"
+      eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
+      scaleAnchor: "a small chick against the world; only SLIGHTLY the smallest of the trio — just a touch shorter and slimmer than the others. Keep the size difference SUBTLE — all three are clearly the same kind of small chick, NEVER one much smaller than the rest."
+      # Bo's glasses are ALWAYS thin round wire frames (never thick/black). Never a
+      # hat (Pip's), never a bandana or red scarf (Pip/Mo's) — Bo's scarf is green.
+      antiAccessory: "any hat, any bandana, any red scarf or red kerchief, thick or black-framed glasses"
+    personality: >
+      Bo is the joker. She makes silly noises ("Bonk!", "Bok-bok!", "Pffft!"),
+      strikes dramatic poses, and gets carried away with her own ideas. She
+      mishears things on purpose for laughs ("Did you say RAINBOW or BRAIN-BOW?")
+      and turns simple actions into bits — falling over for effect, miming a
+      whole story without words. She loves wordplay and rhymes. When she gets
+      overexcited she starts hopping in place. She's never mean — her humour
+      is at her own expense or at the absurdity of the situation. She's the
+      heart of every funny moment but never derails a lesson; she punctuates
+      it. Dialogue should land like physical comedy that you can read.
+      Bo is a girl — always "she/her" in scripts and visual descriptions.
+    voiceId: "${VOICE_ID_BO:}"
+    voiceSettings:
+      # Bo is silly, dramatic, playful — pick a varied expressive voice.
+      # Recommended ElevenLabs voices: Domi (varied young), Sammy, Mason.
+      stability: 0.55        # was 0.35 — tamer delivery: theatrical Bo sounded harsh/un-kid-friendly; 0.55 keeps her playful but gentle
+      similarity_boost: 0.75
+      style: 0.65            # high = very expressive, theatrical
+      use_speaker_boost: true
+
+  # ── 4e castlid (geactiveerd 2026-06-11 voor "Who's in the Egg?") ──
+  # Bron: bible/duckling.proposed.yml + VIRAL-CONCEPT-WHOS-IN-THE-EGG.
+  # Naam volgt uit de community-naamvraag; tot die tijd "Duckling".
+  - id: duckling
+    name: "Duckling"
+    species: duck
+    role: "baby"
+    description: >
+      A TINY baby DUCKLING, noticeably smaller than the three chicks, with soft
+      bright LEMON-YELLOW down feathers all over, a small flat ORANGE DUCK BILL
+      (clearly wider and flatter than the chicks' pointy beaks — this is the
+      instant species-tell), a single damp-looking little tuft of down sticking
+      up on top of the head, EXTRA-LARGE round shiny dark eyes with bright
+      reflective highlights, tiny orange webbed feet (webbed — not chicken toes),
+      NO accessories at all, dense fluffy 3D-rendered soft down, Pixar/Illumination
+      cartoon proportions with an oversized head and a round tummy.
+    lifeStage: "newly hatched duckling, damp-then-fluffy lemon down, very tiny, wobbly, blinking at everything for the first time"
+    triggerWord: "duckling_duck"
+    dna:
+      coreColor: "bright lemon-yellow"
+      silhouette: "the tiniest of the four — a round yellow puffball with a FLAT WIDE BILL and one upright head-tuft; reads as 'baby duck' at a glance"
+      accessory: "none — the only cast member without an accessory (being the baby IS the identity)"
+      tic: "waddle-bounces twice on the spot and flaps both stubby wings when happy"
+      signatureSound: "a tiny squeaky 'kwak!' that surprises even himself"
+      feathers: "ultra-soft lemon-yellow down, slightly damp spiky tuft on top in his first scenes, fluffy in later episodes"
+      build: "clearly the smallest of the group — about two-thirds of Bo's height, round baby proportions, oversized head, tiny webbed feet"
+      weight: "feather-light and wobbly — tips over when he flaps too enthusiastically"
+      eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
+      scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
+      antiAccessory: "any hat, any scarf or bandana, any glasses, any pointed chicken beak, any red comb on the head"
+    personality: >
+      The baby of the group. Speaks in single words and sounds ("Kwak!", "Pip!",
+      "More!"), copies whatever the chicks do half a beat too late, and claps
+      his stubby wings when he gets something right. He imprinted on Pip at
+      hatching ("Mama?" — "Big sister.") and toddles after her everywhere.
+      He is never the problem-solver — he is the reason the others slow down,
+      explain things simply, and become gentler versions of themselves. Comedy
+      comes from his species mismatch (he KWAKs where chicks peep, he loves
+      water the chicks avoid) — always affectionate, never mocking.
+    catchphrases:
+      opener:
+        - "Kwak!"
+      closer:
+        - "Kwak-kwak… zzz."
+    # TIJDELIJK: hergebruikt Pip's stem tot er een echte babystem is gekozen
+    # (VOICE_ID_DUCKLING in .env zetten en dit terugdraaien). Het eendje heeft
+    # maar 1-2-woord-regeltjes ("Kwak?", "Mama?") — hoog en jong werkt prima.
+    voiceId: "${VOICE_ID_PIP:}"
+    voiceSettings:
+      # Piepklein, zacht, hoog — t.z.t. een heel jonge zachte stem in ElevenLabs.
+      stability: 0.60
+      similarity_boost: 0.75
+      style: 0.35
+      use_speaker_boost: true
+
+# ───────────────────────────────────────────────────────────────────────
+# THE WORLD
+# ───────────────────────────────────────────────────────────────────────
+# A connected living universe — locations, lighting moods, weather,
+# recurring inhabitants and landmarks. Every scene gets injected with:
+#   • the location's base description
+#   • the time-of-day mood applied
+#   • optional weather overlay
+#   • a glimpse of a relevant landmark in the background
+# This is what turns "static decor" into a felt world.
+
+world:
+  # Overall sense of place — used as a wrap around every scene prompt so
+  # the audience feels they're somewhere specific.
+  overview: >
+    A small, hidden valley in the gentle countryside. Rolling green hills
+    surround a tiny chicken homestead — the cozy coop and its garden sit
+    at the center, with winding paths leading out to a pond, a berry patch,
+    a great oak tree on the hill, and an old abandoned wooden cart at the
+    far meadow. Recurring landmarks anchor every adventure. Soft
+    Pixar-cartoon proportions everywhere, painterly color palette, golden
+    afternoon light is the channel's signature mood. Keep the focus on the
+    chicks; do NOT add a random background animal (rabbit, frog, etc.) to a
+    scene unless the story specifically calls for it.
+
+# ───────────────────────────────────────────────────────────────────────
+# TIME-OF-DAY LIGHTING MOODS
+# ───────────────────────────────────────────────────────────────────────
+# Applied as a post-modifier to the location prompt. Script picks one
+# based on the story beat (HOOK at dawn, CLIMAX at golden hour, etc).
+timeOfDay:
+  - id: dawn
+    label: "Dawn"
+    description: >
+      Pre-sunrise blue light, gentle pink and lavender pieces in the sky,
+      everything quiet and soft, mist curling low along the ground,
+      dewdrops on grass blades catching the first hint of pink.
+  - id: morning
+    label: "Morning"
+    description: >
+      Warm honey-yellow morning light, long soft shadows reaching west,
+      crisp cool air, dew sparkling on flowers, early birds barely visible
+      in the warm sky.
+  - id: midday
+    label: "Midday"
+    description: >
+      Bright clear daylight, short shadows directly under objects, vivid
+      colors fully saturated, a few rounded white clouds drifting in a
+      pale blue sky.
+  - id: goldenHour
+    label: "Golden Hour"
+    description: >
+      Warm orange-amber late afternoon light, long shadows reaching east,
+      everything glowing with honey warmth, sky soft peach above and pink
+      below, a feeling of cozy magic and quiet wonder. CHANNEL'S SIGNATURE
+      MOOD — use this for emotional climaxes and resolution beats.
+  - id: dusk
+    label: "Dusk"
+    description: >
+      Soft purple-and-amber gradient sky, first stars peeking through,
+      lanterns starting to glow warm yellow, fireflies appearing, world
+      settling toward quiet.
+  - id: night
+    label: "Night"
+    description: >
+      Deep blue-black sky with tiny twinkling stars, a soft glowing crescent
+      moon, fireflies drifting like floating stars, lantern pools of warm
+      light, everything wrapped in cozy quiet.
+
+# ───────────────────────────────────────────────────────────────────────
+# WEATHER OVERLAYS
+# ───────────────────────────────────────────────────────────────────────
+# Applied per episode (rarely per scene). Gives seasonal variety.
+weather:
+  - id: sunny
+    label: "Sunny"
+    description: "Clear sky, warm bright sun, soft rounded clouds."
+  - id: cloudy
+    label: "Cloudy"
+    description: >
+      Overcast soft diffuse light, gray-white sky with painterly cloud
+      texture, world feels muted and gentle.
+  - id: lightRain
+    label: "Light Rain"
+    description: >
+      Tiny raindrops falling, small puddles reflecting the sky, soft
+      patter feeling, characters might hold leaf umbrellas, drops glistening
+      on flowers and feathers.
+  - id: afterRain
+    label: "After Rain"
+    description: >
+      A faint rainbow arching in the distance, wet glistening leaves and
+      grass, fresh-washed colors fully saturated, puddles reflecting sky,
+      lingering droplets on petals.
+  - id: windy
+    label: "Windy"
+    description: >
+      Leaves drifting through the air, grasses bending in long waves, soft
+      hair-feathers ruffled gently, banners and lanterns swaying.
+  - id: snowy
+    label: "Snowy"
+    description: >
+      Big soft snowflakes drifting down, white blanket settling on rooftops
+      and branches, breath visible as small puffs, world quiet and muffled,
+      cozy warm lanterns glowing through the white.
+
+# ───────────────────────────────────────────────────────────────────────
+# LOCATIONS — the world's geography
+# ───────────────────────────────────────────────────────────────────────
+locations:
+  # ─── Barn farm (signature establishing location) ───────────────────
+  - id: barnyard
+    name: "The Red Barn Farm"
+    kind: outdoor
+    connectedTo: [coop, garden, hills, pebblePath]
+    description: >
+      A classic deep-red wooden barn with white-trimmed windows and
+      a gabled roof, a wooden windmill turning gently in the warm
+      breeze behind the barn, an old weathered red tractor parked
+      to one side, a white picket fence with a wooden gate, scattered
+      hay bales, wildflower patches and tall grasses. THE SIGNATURE
+      ESTABLISHING LOCATION —
+      use this for HOOK wide shots to instantly say "Tiny Chicken World".
+
+  # ─── Coop complex (the chicks' home) ───────────────────────────────
+  - id: coop
+    name: "The Cozy Coop"
+    kind: interior
+    connectedTo: [porch, kitchen, garden]
+    description: >
+      Inside the chickens' wooden coop. Three soft hay nests against the
+      back wall, a small round window with checkered yellow curtains
+      letting filtered light in, hanging paper lantern softly glowing,
+      cream-coloured wooden walls weathered by sun, a tiny shelf with
+      acorn-cup decorations, a wooden ladder leaning against the wall,
+      framed leaf-paintings hanging crooked, a basket of feathers in
+      the corner. Cozy and intimate, the smallest scale in the world.
+
+  - id: kitchen
+    name: "The Coop Kitchen"
+    kind: interior
+    connectedTo: [coop, porch]
+    description: >
+      A cosy wooden kitchen nook inside the coop. A small round wooden
+      table with three carved stools, glass jars filled with grains and
+      seeds on open shelves, a striped red-and-white rug, copper pots
+      hanging from a beam, a vase with wildflowers, a cast-iron stove
+      with a steaming kettle, hand-painted plates on the wall, a window
+      with chequered curtains, a small framed painting of The Big Oak.
+
+  - id: porch
+    name: "The Coop Porch"
+    kind: transition
+    connectedTo: [coop, kitchen, garden, pebblePath]
+    description: >
+      Small wooden porch in front of the coop, a single carved bench, a
+      welcome mat woven from straw, terracotta flowerpots overflowing
+      with red geraniums and trailing nasturtiums, hanging garlic braids,
+      a tin watering can, scattered straw, hanging wind-chime made of
+      seashells. View opens onto the garden path. THE TRANSITION ZONE —
+      use whenever characters move from inside to outside.
+
+  # ─── Garden & outdoor everyday ─────────────────────────────────────
+  - id: garden
+    name: "The Sunflower Garden"
+    kind: outdoor
+    connectedTo: [porch, berryPatch, pebblePath]
+    description: >
+      A sun-dappled garden bursting with tall yellow sunflowers, white
+      picket fence draped with pink climbing roses, blue butterflies and
+      orange ladybugs, winding stone path lined with daisies and blue
+      forget-me-nots, a wheelbarrow with vegetables, gardening tools
+      leaning against the fence, an old broken pot turned into a snail
+      home, distant rolling hills, dragonflies skimming the air.
+
+  - id: berryPatch
+    name: "The Berry Patch"
+    kind: outdoor
+    connectedTo: [garden, pebblePath]
+    description: >
+      A wild tangle of blackberry and raspberry vines, tiny purple-blue
+      berries and ruby-red ones glistening, fat bumblebees lazily
+      visiting, soft moss-covered earth beneath, a small wicker basket
+      half-full of berries, a tiny carved sign reading "BERRIES" in
+      child-like letters.
+
+  # ─── Pond area ─────────────────────────────────────────────────────
+  - id: pond
+    name: "The Frog Pond"
+    kind: outdoor
+    connectedTo: [pebblePath, willowGrove]
+    description: >
+      A calm reflective pond ringed with green lily pads and pink lotus
+      flowers, tall cattail reeds and bulrushes at the edges, a wooden
+      footbridge with rope railing arching over one corner, smooth grey
+      pebbles, friendly frogs on lily pads, dragonflies skimming the
+      surface, the reflection of clouds (or stars at night) wavering on
+      the water. Timmy the Frog sometimes sits on the bridge.
+
+  - id: willowGrove
+    name: "The Willow Grove"
+    kind: outdoor
+    connectedTo: [pond, hills]
+    description: >
+      Soft hanging willow tree branches forming a green curtain you can
+      walk through, dappled green light filtering down, a hollow log
+      perfect for sitting on, soft mossy carpet, a single white owl
+      feather lying on the moss. Feels secret and gentle.
+
+  # ─── Hills, landmarks, far edges ───────────────────────────────────
+  - id: bigOak
+    name: "The Big Oak Tree"
+    kind: landmark
+    connectedTo: [hills, garden, pebblePath]
+    description: >
+      An enormous ancient oak tree on a low hill, its huge gnarled trunk
+      wider than three chicks tall, sweeping branches forming a leafy
+      green canopy, a wooden swing hanging from a low branch with a
+      braided rope, a knot-hole partway up that looks like a kind face,
+      acorns scattered around its roots, a small carved wooden sign
+      tacked to the trunk reading "MEET HERE!". THE WORLD'S CENTERPIECE
+      LANDMARK — featured in roughly half of all videos.
+
+  - id: hills
+    name: "The Rolling Hills"
+    kind: outdoor
+    connectedTo: [garden, bigOak, oldCart, starMeadow]
+    description: >
+      Soft rolling green hills receding into the distance, scattered
+      dandelions and clover, occasional wildflowers, a sky filled with
+      rounded cumulus clouds, the Big Oak visible on a far hilltop. USE
+      FOR WIDE ESTABLISHING SHOTS — instantly tells the audience "we're
+      in the Tiny Chicken World".
+
+  - id: oldCart
+    name: "The Old Wooden Cart"
+    kind: landmark
+    connectedTo: [hills, pebblePath]
+    description: >
+      A weathered wooden cart at the far edge of the meadow, leaning
+      slightly to one side, two large wooden wheels with cracks, ivy
+      growing up its sides, an old straw mat on the cart's bed, perfect
+      for climbing or hiding behind. A small bird's nest sits on top.
+
+  - id: starMeadow
+    name: "The Star Meadow"
+    kind: outdoor-night
+    connectedTo: [hills, bigOak]
+    description: >
+      A wide grassy meadow at night, fireflies floating like tiny stars,
+      the sky packed with twinkling stars and a soft crescent moon, a
+      stone circle in the center perfect for sitting, the silhouette of
+      the Big Oak in the distance. USE FOR ANY NIGHT OR BEDTIME-THEMED
+      EPISODE.
+
+  # ─── Connectors ─────────────────────────────────────────────────────
+  - id: pebblePath
+    name: "The Pebble Path"
+    kind: transition
+    connectedTo: [porch, garden, pond, bigOak, berryPatch]
+    description: >
+      A winding earth path scattered with smooth grey pebbles, edged by
+      tufts of moss, occasional small mushrooms, the path curves gently
+      out of sight. THE MAIN ARTERY connecting every outdoor location.
+
+# ───────────────────────────────────────────────────────────────────────
+# SURFACE / GROUND PHYSICS PER LOCATION — how the ground reacts to contact
+# (digging, hopping, splashing). The Veo compiler emits this ONLY on contact
+# beats, so calm talking shots stay clean. Keyed by location id.
+# ───────────────────────────────────────────────────────────────────────
+locationSurfaces:
+  barnyard: "packed dirt and dry hay — firm, with loose straw that scatters underfoot"
+  coop: "worn wooden floorboards strewn with soft hay"
+  kitchen: "a wooden plank floor with a woven rug"
+  porch: "wooden porch boards with scattered straw"
+  garden: "soft tilled garden soil — easy to dig, with a winding stone path"
+  berryPatch: "soft moss-covered earth, springy and a little damp"
+  pond: "shallow water over wet smooth pebbles at a soft muddy edge"
+  willowGrove: "a soft mossy carpet over earth, springy underfoot"
+  bigOak: "packed earth and gnarled roots scattered with acorns"
+  hills: "soft springy grass over rolling earth"
+  oldCart: "dry grass and weathered, slightly creaky wood"
+  starMeadow: "cool soft meadow grass, lightly dewy at night"
+  pebblePath: "loose smooth pebbles over packed earth that shift and click underfoot"
+
+# ───────────────────────────────────────────────────────────────────────
+# AMBIENT SOUND PER LOCATION — sonic identity for each place
+# ───────────────────────────────────────────────────────────────────────
+# Voice-service mixes these in at low volume underneath the main scene
+# audio (chick sounds, music, narration). Gives an "actually being there"
+# feeling. File paths are relative to the SFX root mount (/bible/sfx).
+# Skip silently if a file doesn't exist.
+ambientByLocation:
+  coop:        ambient/coop.mp3            # soft wood creaks, distant breeze through gaps
+  kitchen:     ambient/kitchen.mp3         # kettle hum, soft fire crackle
+  porch:       ambient/porch.mp3           # birds calling, gentle breeze
+  garden:      ambient/garden.mp3          # bees buzzing, leaves rustling, birds far away
+  berryPatch:  ambient/garden.mp3          # reuse garden
+  pond:        ambient/pond.mp3            # water lapping, frogs ribbiting, dragonfly buzz
+  willowGrove: ambient/willowGrove.mp3     # leaves whispering, distant water
+  bigOak:      ambient/oak.mp3             # creaking branches, wind through leaves, far birds
+  hills:       ambient/hills.mp3           # open wind, faint bird calls
+  oldCart:     ambient/oak.mp3             # reuse oak
+  starMeadow:  ambient/night.mp3           # cricket chirps, owl hoot far, soft wind
+  pebblePath:  ambient/garden.mp3          # reuse garden
+
+ambientMixDb: -16        # dB to mix the ambient layer under main audio
+ambientFadeMs: 800       # fade-in/out at scene boundaries (smooth transitions)
+
+# ───────────────────────────────────────────────────────────────────────
+# WORLD INHABITANTS — recurring NPC neighbors
+# ───────────────────────────────────────────────────────────────────────
+# Not main characters — these appear in the BACKGROUND or as one-line
+# moments in other scenes. Builds continuity: kids who watch many
+# episodes start to recognize them.
+worldInhabitants:
+  - id: mrs-hop
+    name: "Mrs. Hop the Rabbit"
+    role: wise-neighbor
+    appearsIn: [garden, hills, berryPatch]
+    description: >
+      A grey rabbit with soft white belly, long ears, kind eyes, wears a
+      tiny knitted shawl. Often seen tending her vegetable patch or
+      passing by carrying a basket. Smiles warmly at the chicks.
+
+  - id: timmy-frog
+    name: "Timmy the Frog"
+    role: pond-philosopher
+    appearsIn: [pond, willowGrove]
+    description: >
+      A small bright green frog with big round eyes, a tiny acorn-cup
+      hat. Sits on lily pads or the bridge. Slow, philosophical, says
+      single short sentences. Often appears as a background detail.
+
+  - id: buzz-bee
+    name: "Buzz the Bumblebee"
+    role: silly-bystander
+    appearsIn: [garden, berryPatch, hills, bigOak]
+    description: >
+      A round fuzzy bumblebee with stripey body, comically large eyes,
+      bumbles around flowers, sometimes mid-air paused as if confused.
+      Pure background flavor; never speaks.
+
+  - id: oliver-owl
+    name: "Oliver the Owl"
+    role: night-guardian
+    appearsIn: [starMeadow, bigOak, willowGrove]
+    description: >
+      A small fluffy brown owl with huge round amber eyes, perches on
+      the Big Oak at night. Hoots softly. Wise and gentle.
+
+# ───────────────────────────────────────────────────────────────────────
+# CREATIVE BRIEF OPTIONS — pre-filled choices shown in the dashboard form
+# ───────────────────────────────────────────────────────────────────────
+# These power the dropdowns on the "+ New Job" form. Append freely — the
+# dashboard pulls the list fresh every page load. Each entry can have
+# {label, value} — label is what the user sees, value is what gets sent.
+briefOptions:
+  lessons:
+    - "Friends help each other when something is hard"
+    - "Small discoveries can become big shared joys"
+    - "It's okay to ask questions when you don't know"
+    - "Mornings are best when you share them"
+    - "Mistakes are part of learning together"
+    - "Patience helps you notice the beautiful things"
+    - "Asking for help is being brave, not weak"
+    - "Sharing makes a good day even better"
+    - "Different ideas make a stronger team"
+    - "Trying again is more fun than giving up"
+    - "Listening to your friends shows you care"
+    - "There's wonder everywhere if you look closely"
+
+  moods:
+    - "warm, cozy, gentle wonder"
+    - "playful, silly, lots of giggles"
+    - "calm, soft, bedtime-warm"
+    - "energetic, sunny, joyful adventure"
+    - "thoughtful, quiet, slow discovery"
+    - "magical, twinkly, golden-hour glow"
+    - "curious, exploring, sweet build-up"
+    - "tender, soft, almost a whisper"
+    - "celebratory, bright, sparkly fun"
+
+  hooks:
+    - "EXTREME CLOSE-UP on Pip's face, EXTRA-LARGE eyes wide open as she gasps softly: 'Oh? What IS that?'"
+    - "EXTREME CLOSE-UP on Mo behind round green glasses, slowly tilting his head — 'Friends... look.'"
+    - "EXTREME CLOSE-UP on Bo bonking herself with a leaf, then bursting into a tiny giggle"
+    - "Pip's wing-tip reaches into frame toward something glistening — her face follows with awe"
+    - "The Big Oak's silhouette at dawn, then Pip's tiny silhouette running up the hill toward it"
+    - "A SOUND in the dim coop — Pip's eyes snap open from the darkness, frightened then curious"
+    - "All three chicks asleep in their nests. ONE eye opens — Pip's. Soft 'oh?'"
+    - "Pip stares at her own reflection in a puddle, then her reflection smiles before she does"
+
+# ───────────────────────────────────────────────────────────────────────
+# LANDMARKS — recurring world elements that anchor stories
+# ───────────────────────────────────────────────────────────────────────
+landmarks:
+  # NOTE: decorated eggs are NO LONGER a channel-wide default (they confused the
+  # 3-6 audience on non-egg episodes). Use the per-video `recurringMotif` field
+  # if you want eggs (or any prop) in a specific episode.
+  - id: the-red-barn
+    description: "The deep-red wooden barn with the white-trimmed windows — visible in many wide shots, often in the background."
+  - id: the-windmill
+    description: "The wooden windmill turning gently behind the barn — silhouetted against the golden-hour sky in establishing shots."
+  - id: the-red-tractor
+    description: "The old weathered red tractor with cracked paint — perfect for climbing and hiding behind."
+  - id: the-swing
+    description: "The wooden swing on The Big Oak — soft braided rope, sun-bleached plank."
+  - id: the-welcome-mat
+    description: "The straw welcome mat at the coop porch — slightly worn from many feet."
+  - id: the-lantern
+    description: "The hanging paper lantern on the porch — softly glowing at dusk."
+  - id: the-knot-face
+    description: "The friendly knot-face on The Big Oak's trunk — looks like a sleeping face."
+  - id: the-broken-pot
+    description: "The cracked terracotta pot in the garden — now a snail's home, with a tiny door painted on."
+
+# Pre-rendered intro/outro clips. Provide as MP4 files in this folder.
+# If a file is missing, the assembly service skips that step silently.
+brand:
+  intro:
+    path: "/bible/intro.mp4"
+    durationSeconds: 3
+  outro:
+    path: "/bible/outro.mp4"
+    durationSeconds: 3
+  # Branded audio sting played UNDER the opening title card (first ~1.5s).
+  # A short signature chime/jingle that becomes the channel's sonic logo.
+  # File should be a soft cheerful sound (chime, sparkle, glockenspiel hit)
+  # ~1.5s long. Skipped silently if missing.
+  audioSting:
+    path: "/bible/sting.mp3"
+    volumeDb: -3
+    durationSec: 1.5
+  # Watermark logo overlaid on every scene. Drop a PNG with transparency
+  # (preferably 1500×500 or similar, 200-400px wide on screen looks good).
+  # Skipped silently if the file doesn't exist.
+  logo:
+    path: "/bible/logo.png"
+    # Position on screen: top-left | top-right | bottom-left | bottom-right
+    position: top-left
+    # Margin from the edge in pixels.
+    marginPx: 40
+    # Width of the logo on the rendered video (height auto-scaled).
+    # Pick something around 8-15% of video width for kids content.
+    widthPx: 240
+    # Opacity 0-1. 0.85 is a good "visible but not intrusive" default.
+    opacity: 0.85
+
+# Background music identity. 3-5 tracks max; orchestrator picks one per
+# video based on the script's overall mood.
+music:
+  tracks:
+    - id: rolling_hills_romp
+      path: /bible/music/rolling_hills_romp.mp3
+      mood: energetic
+    - id: bumblebee_boogie
+      path: /bible/music/bumblebee_boogie.mp3
+      mood: energetic
+    - id: puddle_jump_parade
+      path: /bible/music/puddle_jump_parade.mp3
+      mood: energetic
+    - id: tiny_mystery
+      path: /bible/music/tiny_mystery.mp3
+      mood: thoughtful
+    - id: cloud_watching
+      path: /bible/music/cloud_watching.mp3
+      mood: thoughtful
+    - id: what_is_that_glow
+      path: /bible/music/what_is_that_glow.mp3
+      mood: thoughtful
+    - id: starlight_nest
+      path: /bible/music/starlight_nest.mp3
+      mood: calm
+    - id: warm_straw_sunset
+      path: /bible/music/warm_straw_sunset.mp3
+      mood: calm
+    - id: drowsy_dandelions
+      path: /bible/music/drowsy_dandelions.mp3
+      mood: calm
+    - id: gentle_morning
+      path: "/bible/music/gentle_morning.mp3"
+      mood: calm
+    - id: sunny_adventure
+      path: "/bible/music/sunny_adventure.mp3"
+      mood: energetic
+    - id: curious_clouds
+      path: "/bible/music/curious_clouds.mp3"
+      mood: thoughtful
+
+# Voice handling. Three modes:
+#   silent     — generate silent MP3 of estimated duration (no characters speak)
+#   elevenlabs — full TTS via ElevenLabs (one voice per character)
+#   sounds     — character-specific chicken sound effects from bible/sfx/
+#                + optional narrator TTS for intro/outro lines
+#
+# `sounds` mode is the Shaun-the-Sheep / Pingu approach — chickens
+# communicate via sound + emotion + expression, no spoken words. Massively
+# scalable globally (no language barrier), authentic to the characters,
+# zero per-video TTS cost. Recommended default.
+voice:
+  mode: ${VOICE_MODE:silent}      # silent | elevenlabs | sounds
+  # ──────────────────────────────────────────────────────────────────
+  # Sounds-mode configuration
+  # ──────────────────────────────────────────────────────────────────
+  sfx:
+    rootPath: "/bible/sfx"        # mounted readonly into voice-service
+    # How long each SFX clip plays per script line, in seconds. Sounds get
+    # naturally repeated/stretched if the line was longer in dialogue mode.
+    defaultClipDuration: 1.5
+    # If a clip is too short for the scene's narration target, we loop it
+    # this many extra times (with small pitch variation) to fill the gap.
+    maxLoopRepeat: 3
+    # Per-character SFX volume gain (dB). Pip's high peeps need less, Bo's
+    # dramatic squawks get pulled down a bit so they don't dominate.
+    gainDb:
+      pip: -2.0
+      mo:  0.0
+      bo:  -3.0
+    # When a scene's character + emotion has no matching file, fall back
+    # to this generic per-character "talking" sound. Last-resort safety net.
+    fallbackEmotion: "content"
+  # ──────────────────────────────────────────────────────────────────
+  # Narrator (optional 2-3 spoken lines per video)
+  # ──────────────────────────────────────────────────────────────────
+  narrator:
+    enabled: ${NARRATOR_ENABLED:false}   # OFF by default — robotic espeak narration clashes with the chicken-sounds (Pingu-style) aesthetic. Flip to true if you want spoken hook/closer lines.
+    # Free local TTS via Java's built-in voice synth (espeak-ng inside the
+    # voice-service container — no external API cost, no language lock-in).
+    # Switch to "elevenlabs" if you want a polished narrator voice (€0.05
+    # per video, single line ≈ 100 chars).
+    tts: ${NARRATOR_TTS:espeak}   # espeak | elevenlabs
+    # When narrator runs, these scene phases get narrator lines automatically
+    # mixed in over the sounds (low volume, warm).
+    phases:
+      - hook        # opening branding: "Welcome to Tiny Chicken World"
+      - closer      # closing CTA + lesson recap
+    # Templates — use {topic}, {lesson}, {channel} placeholders.
+    phrases:
+      hook: "Welcome to Tiny Chicken World — today, {topic}."
+      closer: "Today's lesson: {lesson}. See you next time, friends!"
+    voiceGainDb: -1.0
+    musicDuck: -6.0               # background music dips this many dB during narrator
+
+# ──────────────────────────────────────────────────────────────────────
+# Scene-transition styling (video-assembly-service, hot-reloaded ≤1 min —
+# edit, save, re-assemble; geen rebuild nodig).
+#
+# Per episode-fase: het ffmpeg xfade-type van de overgang NAAR scènes in
+# die fase + de duur in seconden (0.05–1.5; korter = energieker).
+# Ongeldige types worden geweigerd (luide log) en vallen terug op de
+# ingebouwde defaults — een typefout kan een render nooit breken.
+#
+# Beschikbare types (stock ffmpeg xfade):
+#   fades:    fade fadeblack fadewhite fadegrays dissolve distance
+#   wipes:    wipeleft wiperight wipeup wipedown wipetl wipetr wipebl wipebr
+#             radial circleopen circleclose circlecrop rectcrop
+#             horzopen horzclose vertopen vertclose
+#             diagtl diagtr diagbl diagbr hlslice hrslice vuslice vdslice
+#   slides:   slideleft slideright slideup slidedown
+#             smoothleft smoothright smoothup smoothdown
+#             coverleft coverright coverup coverdown
+#             revealleft revealright revealup revealdown
+#   stylized: pixelize hblur zoomin squeezev squeezeh
+# ──────────────────────────────────────────────────────────────────────
+assembly:
+  transitions:
+    hook:        { type: fade,        seconds: 0.10 }  # bijna-cut — tempo vasthouden
+    setup:       { type: fade,        seconds: 0.15 }
+    development: { type: fade,        seconds: 0.15 }
+    climax:      { type: fadewhite,   seconds: 0.35 }  # witflits het wonder in (audit-tip: leest als magie)
+    # Einde ruimer aangezet (feedback 2026-06-11: "op het laatste nog wat
+    # hakkerig") — het rustige slot verdraagt en verdient langere overgangen.
+    resolution:  { type: dissolve,    seconds: 0.60 }  # zacht landen
+    closer:      { type: circleclose, seconds: 0.80 }  # iris-uit — het klassieke kindertv-einde
+    default:     { type: fade,        seconds: 0.20 }

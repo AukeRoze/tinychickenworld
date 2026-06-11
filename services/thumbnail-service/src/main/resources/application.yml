@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: thumbnail-service
+  main:
+    headless: true
+
+server:
+  port: 8086
+
+app:
+  openai:
+    base-url: https://api.openai.com/v1
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-image-1
+    size: 1536x1024
+    timeout-seconds: 120
+  storage:
+    work-root: ${WORK_ROOT:./workdir}
+  thumbnail:
+    width: 1280
+    height: 720
+    font-path: ${FONT_PATH:/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}
+  image:
+    # image-service — renders anchor-based thumbnail bases (real cast chicks).
+    base-url: ${IMAGE_URL:http://image-service:8084}
+
+resilience4j:
+  retry:
+    instances:
+      openai-image:
+        max-attempts: 3
+        wait-duration: 3s

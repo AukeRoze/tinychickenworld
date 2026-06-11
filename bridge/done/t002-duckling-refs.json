@@ -1,0 +1,32 @@
+{
+  "method": "POST",
+  "path": "/api/v1/images/generate",
+  "service": "image",
+  "body": {
+    "jobId": "00000000-0000-0000-0000-00000000d0c1",
+    "format": "landscape",
+    "scenes": [
+      {
+        "seq": 1,
+        "visualDesc": "CHARACTER REFERENCE SHEET, FRONT VIEW, full body: a TINY newly-hatched baby DUCKLING standing on a plain warm cream studio background (no scenery, no props, soft even lighting). Soft bright LEMON-YELLOW down feathers all over, a small flat ORANGE DUCK BILL (wide and flat, clearly NOT a pointy chicken beak), one slightly damp little tuft of down sticking straight up on top of the head, EXTRA-LARGE round shiny very dark brown eyes with big bright reflective baby catch-lights, tiny orange WEBBED feet, NO accessories of any kind (no hat, no scarf, no glasses, no red comb), round baby tummy, oversized head, Pixar/Illumination 3D cartoon proportions, dense ultra-soft fluffy down. Facing the camera directly, wings slightly out for balance, wobbly happy stance.",
+        "characters": ["duckling"],
+        "locationId": "",
+        "cameraFraming": "full-body character reference, front view, eye level, plain background"
+      },
+      {
+        "seq": 2,
+        "visualDesc": "CHARACTER REFERENCE SHEET, THREE-QUARTER VIEW, full body: the EXACT SAME tiny newly-hatched baby DUCKLING as the front view, identical in every detail, on the same plain warm cream studio background (no scenery, no props, soft even lighting). Soft bright LEMON-YELLOW down, small flat ORANGE DUCK BILL (wide and flat, not pointy), one upright damp head-tuft, EXTRA-LARGE round very dark brown eyes with big baby catch-lights, tiny orange WEBBED feet, NO accessories (no hat, no scarf, no glasses, no red comb), round baby tummy, oversized head, Pixar/Illumination 3D cartoon proportions. Body turned three-quarters to the left, head turned toward camera with a curious blink.",
+        "characters": ["duckling"],
+        "locationId": "",
+        "cameraFraming": "full-body character reference, three-quarter view, eye level, plain background"
+      },
+      {
+        "seq": 3,
+        "visualDesc": "CHARACTER REFERENCE SHEET, SIDE PROFILE VIEW, full body: the EXACT SAME tiny newly-hatched baby DUCKLING as the front view, identical in every detail, on the same plain warm cream studio background (no scenery, no props, soft even lighting). Soft bright LEMON-YELLOW down, small flat ORANGE DUCK BILL in clear profile (wide flat duck bill silhouette), one upright damp head-tuft, EXTRA-LARGE round very dark brown eye with big baby catch-light, tiny orange WEBBED feet, NO accessories (no hat, no scarf, no glasses, no red comb), round baby tummy, oversized head, Pixar/Illumination 3D cartoon proportions. Full side profile facing left, mid-waddle with one webbed foot lifted.",
+        "characters": ["duckling"],
+        "locationId": "",
+        "cameraFraming": "full-body character reference, side profile, eye level, plain background"
+      }
+    ]
+  }
+}

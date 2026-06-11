@@ -1,0 +1,20 @@
+{
+  "method": "POST",
+  "path": "/api/v1/videos",
+  "body": {
+    "topic": "Who's in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+    "brief": "Pip discovers a lone egg in the vegetable garden. Nobody knows whose it is. The three chicks learn to keep it warm and be patient: they build a straw nest, gently knock on the shell (tok tok - and the egg knocks BACK, a magical moment), and count each crack out loud with the viewer (one... two...). Bo tries to sit on the egg like a real hen and slides off ('Bonk.'); later her straw drum-roll accidentally triggers crack number two. Then the egg goes completely STILL and silent - the emotional dip and the SILENT VISUAL BEAT: three chicks frozen around the egg, Pip's wing hovering mid-stroke, breath held. Mo whispers that small things sometimes just need to rest, and that Mama Duck from the pond is on her way - they are just looking after it. Then: tok... tok-tok-TOK - crack THREE, and the egg hatches in warm golden light: a tiny LEMON-YELLOW DUCKLING (the new cast member 'duckling') with a flat orange bill and a damp head-tuft. Pip greets it: 'Hello! Peep!' The duckling answers '...KWAK?' - all three chicks fall over backwards in surprise. Bo: 'That's not a PEEP, that's a KWAK!' The duckling looks at Pip and says 'Mama?' - Pip, solemnly: 'Big sister.' (the parent wink). They tuck the baby into the straw nest at golden hour; Mo hums, the duckling falls asleep. Pip asks the viewers what the duckling's name should be. Use the target word 'crack' at least five times, and 'tok tok' as the join-in sound the viewer copies. The duckling must NOT appear in any scene before the hatch - before that moment we only ever see the egg.",
+    "lesson": "Patience and gentleness: small things need warmth, quiet and time - and someone different (kwak instead of peep) is welcome",
+    "mood": "warm wonder, gentle suspense, cozy",
+    "angle": "Pip the devoted big-sister-to-be drives the story; Mo the calm caretaker explains warmth and patience; Bo delivers the physical comedy (sitting on the egg, the drum-roll, the KWAK reaction)",
+    "hook": "Extreme close-up of the egg sitting dead still in the garden soil. One beat of nothing. Then it WOBBLES twice and tips over. Pip's head slides into frame from below, eyes huge: 'Oh! Oh oh oh!'",
+    "audience": "kids 3-6",
+    "targetSeconds": 100,
+    "privacyStatus": "private",
+    "format": "landscape",
+    "motionMode": "veo",
+    "seriesId": "little-discoveries",
+    "episodeNumber": 3,
+    "recurringMotif": "a single cream-white egg with three thin golden cracks"
+  }
+}

@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: script-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/scripts}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: 8081
+
+app:
+  anthropic:
+    base-url: https://api.anthropic.com/v1
+    api-key: ${ANTHROPIC_API_KEY:}
+    anthropic-version: "2023-06-01"
+    model: ${ANTHROPIC_MODEL:claude-haiku-4-5-20251001}
+    max-tokens: 8192
+    temperature: 0.8
+    # Bumped 90 → 240 seconds. Opus with the full HOOK/SETUP/...episode
+    # structure prompt + brief + hook runs ~120-180s typical, occasionally
+    # longer. 90s was timing out before Opus could finish.
+    timeout-seconds: 240
+  dedupe:
+    # 0.80 was too strict during pilot iteration (same topic = naturally
+    # high similarity). 0.92 still catches true clones but lets us regen
+    # the same topic when polishing. Tighten back to 0.85 for production.
+    similarity-threshold: 0.92
+    lookback-window: 1000
+    max-retries: 2
+  # Cheap qualitative story-critic pass BEFORE the render. Scores arc /
+  # re-hook / ending / age-language and triggers at most `max-rewrites`
+  # targeted regenerations when overall < `min-score`. Uses the (cheap)
+  # script model. Set enabled=false to skip entirely.
+  critic:
+    enabled: ${SCRIPT_CRITIC_ENABLED:true}
+    min-score: ${SCRIPT_CRITIC_MIN_SCORE:70}
+    max-rewrites: ${SCRIPT_CRITIC_MAX_REWRITES:1}
+  # Optional dialogue punch-up. After the cheap (Haiku) generation + critic
+  # gates settle the final script, ONE call on a STRONGER model rewrites ONLY
+  # the spoken lines — sharper humour + callback/payoff — leaving structure,
+  # visuals, durations and cast untouched. OFF by default (pricier call per
+  # video). Flip SCRIPT_POLISH_ENABLED=true to use it.
+  polish:
+    enabled: ${SCRIPT_POLISH_ENABLED:false}
+    model: ${SCRIPT_POLISH_MODEL:claude-sonnet-4-6}
+    temperature: ${SCRIPT_POLISH_TEMPERATURE:0.9}
+  bible:
+    path: ${BIBLE_PATH:./bible/channel.yml}
+
+resilience4j:
+  retry:
+    instances:
+      anthropic:
+        max-attempts: 3
+        wait-duration: 2s
+        retry-exceptions:
+          - org.springframework.web.reactive.function.client.WebClientResponseException$TooManyRequests
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+          - org.springframework.web.reactive.function.client.WebClientResponseException$InternalServerError
+          - java.io.IOException

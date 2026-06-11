@@ -1,0 +1,57 @@
+orchestrator-1  | 
+orchestrator-1  |   .   ____          _            __ _ _
+orchestrator-1  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+orchestrator-1  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+orchestrator-1  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+orchestrator-1  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+orchestrator-1  |  =========|_|==============|___/=/_/_/_/
+orchestrator-1  | 
+orchestrator-1  |  :: Spring Boot ::                (v3.3.4)
+orchestrator-1  | 
+orchestrator-1  | 2026-06-05T07:25:33.949Z  INFO 1 --- [orchestrator] [           main] c.y.o.OrchestratorApplication            : Starting OrchestratorApplication v0.1.0 using Java 21.0.11 with PID 1 (/app/app.jar started by root in /app)
+orchestrator-1  | 2026-06-05T07:25:33.956Z  INFO 1 --- [orchestrator] [           main] c.y.o.OrchestratorApplication            : No active profile set, falling back to 1 default profile: "default"
+orchestrator-1  | 2026-06-05T07:25:50.664Z  INFO 1 --- [orchestrator] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+orchestrator-1  | 2026-06-05T07:25:52.517Z  INFO 1 --- [orchestrator] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 1666 ms. Found 1 JPA repository interface.
+orchestrator-1  | 2026-06-05T07:26:03.939Z  INFO 1 --- [orchestrator] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+orchestrator-1  | 2026-06-05T07:26:04.062Z  INFO 1 --- [orchestrator] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+orchestrator-1  | 2026-06-05T07:26:04.063Z  INFO 1 --- [orchestrator] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+orchestrator-1  | 2026-06-05T07:26:04.388Z  INFO 1 --- [orchestrator] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+orchestrator-1  | 2026-06-05T07:26:04.400Z  INFO 1 --- [orchestrator] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 29734 ms
+orchestrator-1  | 2026-06-05T07:26:07.665Z  INFO 1 --- [orchestrator] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+orchestrator-1  | 2026-06-05T07:26:08.976Z  INFO 1 --- [orchestrator] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@646e6d07
+orchestrator-1  | 2026-06-05T07:26:08.996Z  INFO 1 --- [orchestrator] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+orchestrator-1  | 2026-06-05T07:26:09.102Z  INFO 1 --- [orchestrator] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://postgres:5432/orchestrator (PostgreSQL 16.14)
+orchestrator-1  | 2026-06-05T07:26:09.388Z  INFO 1 --- [orchestrator] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 5 migrations (execution time 00:00.222s)
+orchestrator-1  | 2026-06-05T07:26:09.451Z  INFO 1 --- [orchestrator] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 5
+orchestrator-1  | 2026-06-05T07:26:09.460Z  INFO 1 --- [orchestrator] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+orchestrator-1  | 2026-06-05T07:26:09.973Z  INFO 1 --- [orchestrator] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+orchestrator-1  | 2026-06-05T07:26:10.195Z  INFO 1 --- [orchestrator] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.3.Final
+orchestrator-1  | 2026-06-05T07:26:10.312Z  INFO 1 --- [orchestrator] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+orchestrator-1  | 2026-06-05T07:26:11.487Z  INFO 1 --- [orchestrator] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+orchestrator-1  | 2026-06-05T07:26:17.037Z  INFO 1 --- [orchestrator] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+orchestrator-1  | 2026-06-05T07:26:17.103Z  INFO 1 --- [orchestrator] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+orchestrator-1  | 2026-06-05T07:26:18.516Z  INFO 1 --- [orchestrator] [           main] c.y.o.review.ReviewConfigLoader          : Review gates: script=true images=true assets=false veo=false upload=true mailTo=test@local
+orchestrator-1  | 2026-06-05T07:26:19.057Z  WARN 1 --- [orchestrator] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+orchestrator-1  | 2026-06-05T07:26:21.664Z  INFO 1 --- [orchestrator] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+orchestrator-1  | 2026-06-05T07:26:22.066Z  INFO 1 --- [orchestrator] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+orchestrator-1  | 2026-06-05T07:26:22.109Z  INFO 1 --- [orchestrator] [           main] c.y.o.OrchestratorApplication            : Started OrchestratorApplication in 51.898 seconds (process running for 52.516)
+orchestrator-1  | 2026-06-05T07:26:44.521Z  INFO 1 --- [orchestrator] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+orchestrator-1  | 2026-06-05T07:26:44.521Z  INFO 1 --- [orchestrator] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+orchestrator-1  | 2026-06-05T07:26:44.524Z  INFO 1 --- [orchestrator] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+orchestrator-1  | 2026-06-05T07:30:24.313Z ERROR 1 --- [orchestrator] [     pipeline-1] c.y.o.service.PipelineOrchestrator       : Job ce09404c-4a4f-4bed-a834-21a35dadd834 script stage FAILED
+orchestrator-1  | 
+orchestrator-1  | java.lang.IllegalStateException: script-service FAILED: DUPLICATE: Generated script is a near-duplicate of script 0a1adfbd-a936-40a4-b21a-536a81af28be (Hamming=9, similarity=0.859, exact=false)
+orchestrator-1  | 	at com.youtubeauto.orchestrator.service.PipelineOrchestrator.pollScript(PipelineOrchestrator.java:509) ~[!/:0.1.0]
+orchestrator-1  | 	at com.youtubeauto.orchestrator.service.PipelineOrchestrator.runScriptStage(PipelineOrchestrator.java:278) ~[!/:0.1.0]
+orchestrator-1  | 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
+orchestrator-1  | 	at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+orchestrator-1  | 	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:355) ~[spring-aop-6.1.13.jar!/:6.1.13]
+orchestrator-1  | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.1.13.jar!/:6.1.13]
+orchestrator-1  | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163) ~[spring-aop-6.1.13.jar!/:6.1.13]
+orchestrator-1  | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768) ~[spring-aop-6.1.13.jar!/:6.1.13]
+orchestrator-1  | 	at org.springframework.aop.interceptor.AsyncExecutionInterceptor.lambda$invoke$0(AsyncExecutionInterceptor.java:113) ~[spring-aop-6.1.13.jar!/:6.1.13]
+orchestrator-1  | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source) ~[na:na]
+orchestrator-1  | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source) ~[na:na]
+orchestrator-1  | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source) ~[na:na]
+orchestrator-1  | 	at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
+orchestrator-1  | 

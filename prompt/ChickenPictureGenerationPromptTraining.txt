@@ -1,0 +1,134 @@
+Vervang vervolgens alleen dit stukje per generatie:
+
+Pose: Running
+Expression: Excited
+Camera: Side view
+
+of
+
+Pose: Digging
+Expression: Curious
+Camera: Front view
+
+of
+
+Pose: Holding a coin
+Expression: Proud
+Camera: 3/4 view
+
+
+Expressions
+--------------------------------------------
+Positive expressions
+Happy
+Joyful
+Excited
+Cheerful
+Playful
+Smiling gently
+Grinning
+Overjoyed
+Laughing
+Curious and happy
+--------------------------------------------
+?? Neutral expressions
+Neutral
+Calm
+Relaxed
+Blank expression
+Thoughtful
+Focused
+Observing
+Mild expression
+Serious but calm
+--------------------------------------------
+?? Surprised / shocked
+Surprised
+Shocked
+Astonished
+Wide-eyed surprise
+Confused surprise
+Amazed
+Jaw slightly open
+Taken aback
+--------------------------------------------
+?? Sad / emotional
+Sad
+Upset
+Crying
+Tearful eyes
+Disappointed
+Lonely
+Worried
+Heartbroken
+Melancholic
+--------------------------------------------
+?? Angry / intense
+Angry
+Frustrated
+Annoyed
+Furious
+Stern look
+Frowning deeply
+Determined anger
+Scowling
+--------------------------------------------
+?? Other useful character expressions
+Mischievous smile
+Smirking
+Suspicious look
+Excited curiosity
+Fearful
+Nervous smile
+Awkward expression
+Confident smile
+Determined gaze
+
+==========================================
+Prompt
+=========================================
+Single Character Variation Prompt
+
+Using the uploaded white chicken as the master reference character.
+
+Generate one single image only.
+
+The chicken must remain visually identical to the reference:
+
+Same face
+Same eyes
+Same beak
+Same feather color
+Same body proportions
+Same personality
+Same Pixar-style 3D appearance
+
+Variation for this image:
+
+Pose: Sitting 
+Expression: Curious and happy
+Camera: Front view
+
+Requirements:
+
+One image only
+One chicken only
+Full body visible
+White studio background
+Character centered
+High detail
+Pixar-quality 3D animation
+Soft lighting
+No text
+No watermark
+No additional characters
+
+Important:
+
+Do NOT create multiple variations.
+Do NOT create a character sheet.
+Do NOT create a collage.
+Do NOT create a grid.
+Do NOT show multiple poses.
+Do NOT show multiple camera angles.
+Output exactly one image containing one chicken.

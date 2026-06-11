@@ -1,0 +1,39 @@
+# CI for the Tiny Chicken World pipeline (code-review 2026-06-10).
+#
+# Why this exists: the repo had 6 unit tests but nothing ever ran them —
+# Docker builds use -DskipTests, so a broken CostCalculator or ModelRouter
+# would only be discovered when a video silently cost 5x too much. This
+# workflow makes every push prove that all 8 services still compile and
+# every test still passes.
+#
+# Deliberately minimal: no deploy, no docker push, no secrets needed.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # verify = compile + unit tests + jacoco coverage report per module.
+      - name: Build & test all services
+        run: mvn -B verify
+
+      # Make coverage visible without leaving GitHub.
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: "services/*/target/site/jacoco/"
+          if-no-files-found: ignore

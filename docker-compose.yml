@@ -1,0 +1,250 @@
+# Restart-policies + healthchecks (code-review 2026-06-10): every service comes
+# back after a crash or host-reboot, and `docker compose ps` shows real health.
+# The Java healthchecks use bash's /dev/tcp (present in the temurin images) so
+# no curl/wget needs to be installed.
+x-java-health: &java-health
+  interval: 15s
+  timeout: 3s
+  retries: 5
+  start_period: 60s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_MULTIPLE_DATABASES: orchestrator,scripts
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/init-multi-db.sh:/docker-entrypoint-initdb.d/init.sh
+    ports: ["5433:5432"]   # host 5433 -> container 5432 (avoids conflict with local Postgres)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  script-service:
+    build: ./services/script-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8081' || exit 1"]
+      <<: *java-health
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/scripts
+      DB_USER: postgres
+      DB_PASS: postgres
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      BIBLE_PATH: /bible/channel.yml
+    volumes:
+      - ./bible:/bible:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["8081:8081"]
+
+  voice-service:
+    build: ./services/voice-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8083' || exit 1"]
+      <<: *java-health
+    environment:
+      VOICE_MODE: ${VOICE_MODE:-silent}
+      VOICE_ENABLED: ${VOICE_ENABLED:-true}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      VOICE_ID_PIP: ${VOICE_ID_PIP:-}
+      VOICE_ID_MO: ${VOICE_ID_MO:-}
+      VOICE_ID_BO: ${VOICE_ID_BO:-}
+      WORK_ROOT: /workdir
+      BIBLE_PATH: /bible/channel.yml
+    volumes:
+      - ./workdir:/workdir
+      - ./bible:/bible:ro
+    ports: ["8083:8083"]
+
+  image-service:
+    build: ./services/image-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8084' || exit 1"]
+      <<: *java-health
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-openai}
+      REPLICATE_FLUX_MODEL: ${REPLICATE_FLUX_MODEL:-}
+      CAST_LORA_URL: ${CAST_LORA_URL:-}
+      # Gemini reference-conditioned provider (set IMAGE_PROVIDER=gemini to use).
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
+      GEMINI_REFS_DIR: /bible/refs
+      WORK_ROOT: /workdir
+      BIBLE_PATH: /bible/channel.yml
+    volumes:
+      - ./workdir:/workdir
+      - ./bible:/bible:ro
+    ports: ["8084:8084"]
+
+  thumbnail-service:
+    build: ./services/thumbnail-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8086' || exit 1"]
+      <<: *java-health
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      WORK_ROOT: /workdir
+      BIBLE_PATH: /bible/channel.yml
+      # image-service renders anchor-based thumbnail bases (real cast chicks)
+      IMAGE_URL: http://image-service:8084
+    volumes:
+      - ./workdir:/workdir
+      - ./bible:/bible:ro
+    ports: ["8086:8086"]
+
+  video-assembly-service:
+    build: ./services/video-assembly-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8082' || exit 1"]
+      <<: *java-health
+    # NOTE: bible mounted read-WRITE here (not :ro) so the intro-rebuild can
+    # write bible/intro.mp4. Only this service needs write access to bible.
+    environment:
+      WORK_ROOT: /workdir
+      FFMPEG_BIN: ffmpeg
+      FFPROBE_BIN: ffprobe
+      # Original AI music via the self-hosted Suno-API wrapper (see suno-api
+      # service below). SUNO_ENABLED=false → falls back to bible/music tracks.
+      SUNO_ENABLED: ${SUNO_ENABLED:-false}
+      SUNO_BASE_URL: ${SUNO_BASE_URL:-http://suno-api:8000}
+      SUNO_SECRET_TOKEN: ${SUNO_SECRET_TOKEN:-}
+      SUNO_MODEL: ${SUNO_MODEL:-chirp-v3-5}
+    volumes:
+      - ./workdir:/workdir
+      - ./bible:/bible
+    ports: ["8082:8082"]
+
+  # Self-hosted Suno wrapper (github.com/Suno-API/Suno-API). Drives your own
+  # Suno account via SESSION_ID + COOKIE grabbed from the browser — no per-clip
+  # charge, runs on your Suno subscription. The wrapper keeps the session alive
+  # automatically, but the cookie can still expire; re-grab it if music stops.
+  # Opt-in only:  docker compose --profile suno up -d
+  suno-api:
+    image: sunoapigo/suno-api:latest
+    profiles: ["suno"]
+    restart: always
+    environment:
+      SESSION_ID: ${SUNO_SESSION_ID:-}
+      COOKIE: ${SUNO_COOKIE:-}
+      SECRET_TOKEN: ${SUNO_SECRET_TOKEN:-}
+      PORT: "8000"
+      ROTATE_LOGS: "false"
+    ports: ["8000:8000"]
+
+  video-generation-service:
+    build: ./services/video-generation-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8087' || exit 1"]
+      <<: *java-health
+    environment:
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
+      GCS_OUTPUT_BUCKET: ${GCS_OUTPUT_BUCKET}
+      GCS_OUTPUT_PREFIX: ${GCS_OUTPUT_PREFIX:-veo-outputs}
+      VEO_MAX_PARALLEL: ${VEO_MAX_PARALLEL:-3}
+      VEO_MAX_WAIT_SEC: ${VEO_MAX_WAIT_SEC:-600}
+      # fal.ai key — enables the Seedance 2.0 provider (blank = Veo only)
+      FAL_KEY: ${FAL_KEY:-}
+      WORK_ROOT: /workdir
+      BIBLE_PATH: /bible/channel.yml
+    volumes:
+      - ./workdir:/workdir
+      - ./bible:/bible:ro
+      - ./secrets:/secrets:ro
+    ports: ["8087:8087"]
+
+  youtube-upload-service:
+    build: ./services/youtube-upload-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8085' || exit 1"]
+      <<: *java-health
+    environment:
+      YOUTUBE_CLIENT_SECRETS: /secrets/client_secret.json
+      YOUTUBE_CREDS_DIR: /secrets/yt-creds
+      MADE_FOR_KIDS: ${MADE_FOR_KIDS:-true}
+      CONTAINS_SYNTHETIC_MEDIA: ${CONTAINS_SYNTHETIC_MEDIA:-true}
+      # Multi-platform distribution (optional)
+      TIKTOK_ACCESS_TOKEN: ${TIKTOK_ACCESS_TOKEN:-}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN:-}
+      INSTAGRAM_USER_ID: ${INSTAGRAM_USER_ID:-}
+      FACEBOOK_PAGE_ACCESS_TOKEN: ${FACEBOOK_PAGE_ACCESS_TOKEN:-}
+      FACEBOOK_PAGE_ID: ${FACEBOOK_PAGE_ID:-}
+    volumes:
+      - ./secrets:/secrets
+      - ./workdir:/workdir
+    ports:
+      - "8085:8085"
+      - "8089:8089"   # one-time OAuth callback receiver during first upload
+
+  orchestrator:
+    build: ./services/orchestrator
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080' || exit 1"]
+      <<: *java-health
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/orchestrator
+      DB_USER: postgres
+      DB_PASS: postgres
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      SCRIPT_URL: http://script-service:8081
+      VOICE_URL: http://voice-service:8083
+      IMAGE_URL: http://image-service:8084
+      THUMBNAIL_URL: http://thumbnail-service:8086
+      ASSEMBLY_URL: http://video-assembly-service:8082
+      VIDEO_GEN_URL: http://video-generation-service:8087
+      UPLOAD_URL: http://youtube-upload-service:8085
+      # Per-episode original Suno instrumental (needs the suno-api container +
+      # SUNO_ENABLED on the assembly-service). Off → bible/music fallback.
+      PIPELINE_SUNO_INSTRUMENTAL: ${SUNO_ENABLED:-false}
+      INTRO_PATH: /bible/intro.mp4
+      OUTRO_PATH: /bible/outro.mp4
+      BIBLE_PATH: /bible/channel.yml
+      # Review gates — flip to override bible defaults
+      REVIEW_AFTER_SCRIPT: ${REVIEW_AFTER_SCRIPT:-true}
+      REVIEW_AFTER_ASSETS: ${REVIEW_AFTER_ASSETS:-false}
+      REVIEW_BEFORE_VEO: ${REVIEW_BEFORE_VEO:-false}
+      REVIEW_BEFORE_UPLOAD: ${REVIEW_BEFORE_UPLOAD:-true}
+      REVIEW_EMAIL_TO: ${REVIEW_EMAIL_TO:-}
+      REVIEW_EMAIL_FROM: ${REVIEW_EMAIL_FROM:-noreply@yt-pipeline.local}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+    volumes:
+      # Read-WRITE so the Cast editor can save character fields (channel.yml) and
+      # uploaded reference images (refs/{id}.png) from the UI. (Other services keep
+      # :ro.) Changes show on the Cast page immediately; new RENDERS pick them up
+      # after a restart of the services that cache the bible at startup.
+      - ./bible:/bible
+      # Orchestrator's ReviewPreviewController serves PNG's directly from the
+      # shared workdir to render the per-scene image review grid. Without this
+      # mount the grid shows broken images (404 from /review/images/.../file/N.png).
+      - ./workdir:/workdir
+      # Sample brief JSONs the /dashboard "New Job" form can pre-fill from.
+      # Drop any .json with a "topic" + "brief" structure here to get a
+      # one-click "Load <name>" button.
+      - ./samples:/samples:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["8080:8080"]
+
+volumes:
+  pgdata:
