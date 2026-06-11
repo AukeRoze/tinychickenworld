@@ -14,6 +14,42 @@ const POLL_MS = 5000;
 const host = document.getElementById("jobs-host");
 const statusLine = document.getElementById("status-line");
 
+// ── Health-strip: OAuth-token + ref-dekking ──
+// Eén rode balk bovenaan in plaats van een begraven ERROR-logregel: een dood
+// YouTube-token of een castlid zonder referentiebeelden zie je hier vóórdat
+// het een publicatie kost.
+const healthHost = document.createElement("div");
+healthHost.style.cssText = "margin:8px 0";
+host.parentNode.insertBefore(healthHost, host);
+
+async function loadHealth() {
+  try {
+    const h = await api.get("/api/v1/insights/health", { key: "health" });
+    healthHost.replaceChildren();
+    const issues = [];
+    if (h.oauth && h.oauth.healthy === false) {
+      issues.push("🔑 YouTube-token DOOD — uploads/captions falen. Fix: StoredCredential " +
+          "verwijderen + OAuth-flow opnieuw. (" + (h.oauth.lastError || "") + ")");
+    } else if (h.oauth && h.oauth.healthy == null) {
+      issues.push("🔑 Tokenstatus onbekend (upload-service niet bereikbaar of nog niet gecheckt).");
+    }
+    if (h.refs && h.refs.missing && h.refs.missing.length) {
+      issues.push("🖼 Geen referentiebeelden voor: " + h.refs.missing.join(", ") +
+          " — rendert zonder pixel-anker. Fix via de Cast-pagina.");
+    }
+    if (!issues.length) return;   // alles groen → geen balk, geen ruis
+    for (const msg of issues) {
+      const bar = document.createElement("div");
+      bar.style.cssText = "background:rgba(200,60,60,.12);border:1px solid rgba(200,60,60,.4);" +
+          "border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:13px";
+      bar.textContent = "⚠ " + msg;
+      healthHost.appendChild(bar);
+    }
+  } catch (e) { /* health is informatief — stil falen */ }
+}
+loadHealth();
+setInterval(loadHealth, 60_000);
+
 /** Coarse status → CSS hook for a coloured dot. Keeps styling in CSS, not JS. */
 function statusKind(status) {
   if (!status) return "muted";

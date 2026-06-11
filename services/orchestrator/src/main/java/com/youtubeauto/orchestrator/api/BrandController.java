@@ -48,6 +48,91 @@ public class BrandController {
                 .body(new FileSystemResource(logo));
     }
 
+    // ── Scene-transition styling (bible assembly.transitions, hot-reloaded) ─
+
+    private static final List<String> VALID_XFADE_TYPES = List.of(
+            "fade", "fadeblack", "fadewhite", "fadegrays", "dissolve", "distance",
+            "wipeleft", "wiperight", "wipeup", "wipedown",
+            "slideleft", "slideright", "slideup", "slidedown",
+            "smoothleft", "smoothright", "smoothup", "smoothdown",
+            "circlecrop", "rectcrop", "circleopen", "circleclose",
+            "horzopen", "horzclose", "vertopen", "vertclose",
+            "diagtl", "diagtr", "diagbl", "diagbr",
+            "hlslice", "hrslice", "vuslice", "vdslice",
+            "pixelize", "radial", "hblur", "zoomin", "squeezev", "squeezeh",
+            "coverleft", "coverright", "coverup", "coverdown",
+            "revealleft", "revealright", "revealup", "revealdown");
+
+    /** Current per-phase transition config + the valid type menu (for the
+     *  Brand-page editor). The assembly hot-reloads the bible ≤1 min, so an
+     *  edit here lands on the very next re-assemble — no rebuild. */
+    @GetMapping(value = "/transitions", produces = "application/json")
+    public Map<String, Object> transitions() {
+        Map<String, Object> phases = new LinkedHashMap<>();
+        try {
+            JsonNode t = new YAMLMapper().readTree(Paths.get(props.bible().path()).toFile())
+                    .path("assembly").path("transitions");
+            t.fields().forEachRemaining(e -> phases.put(e.getKey(), Map.of(
+                    "type", e.getValue().path("type").asText(""),
+                    "seconds", e.getValue().path("seconds").asDouble(0))));
+        } catch (Exception ignore) { /* empty = section absent */ }
+        return Map.of("phases", phases, "validTypes", VALID_XFADE_TYPES);
+    }
+
+    /** Update one phase's transition. Body: {phase, type, seconds}. Line-edit
+     *  with backup + YAML re-parse; restores on any problem. */
+    @PostMapping("/transitions")
+    public ResponseEntity<?> setTransition(@RequestBody Map<String, Object> body) {
+        String phase = String.valueOf(body.getOrDefault("phase", "")).trim().toLowerCase();
+        String type = String.valueOf(body.getOrDefault("type", "")).trim().toLowerCase();
+        double seconds;
+        try { seconds = Double.parseDouble(String.valueOf(body.get("seconds"))); }
+        catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "seconds moet een getal zijn")); }
+        if (!phase.matches("[a-z]{2,20}")) return ResponseEntity.badRequest().body(Map.of("error", "ongeldige fase"));
+        if (!VALID_XFADE_TYPES.contains(type)) return ResponseEntity.badRequest().body(Map.of("error", "ongeldig xfade-type"));
+        seconds = Math.max(0.05, Math.min(1.5, seconds));
+        try {
+            Path bible = Paths.get(props.bible().path());
+            List<String> lines = new ArrayList<>(Files.readAllLines(bible));
+            int asm = -1, trans = -1, target = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                String l = lines.get(i);
+                if (asm < 0 && l.startsWith("assembly:")) { asm = i; continue; }
+                if (asm >= 0 && trans < 0 && l.startsWith("  transitions:")) { trans = i; continue; }
+                if (trans >= 0) {
+                    if (!l.isBlank() && !Character.isWhitespace(l.charAt(0))) break; // next top-level key
+                    if (l.stripLeading().startsWith(phase + ":")) { target = i; break; }
+                }
+            }
+            if (asm < 0 || trans < 0) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "assembly.transitions-sectie niet gevonden in channel.yml"));
+            }
+            String newLine = String.format(java.util.Locale.ROOT,
+                    "    %-12s { type: %s, seconds: %.2f }", phase + ":", type, seconds);
+            if (target >= 0) lines.set(target, newLine);
+            else lines.add(trans + 1, newLine);
+            // Backup → write → validate → restore on failure (BibleEditor pattern).
+            Path bak = bible.resolveSibling("channel.yml.bak");
+            Files.copy(bible, bak, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.write(bible, lines);
+            try {
+                JsonNode check = new YAMLMapper().readTree(bible.toFile());
+                String got = check.path("assembly").path("transitions").path(phase).path("type").asText("");
+                if (!type.equals(got)) throw new IllegalStateException("edit niet teruggelezen");
+            } catch (Exception bad) {
+                Files.copy(bak, bible, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                return ResponseEntity.internalServerError().body(Map.of("error",
+                        "edit produceerde ongeldige YAML — teruggedraaid: " + bad.getMessage()));
+            }
+            return ResponseEntity.ok(Map.of("result", "SAVED", "phase", phase,
+                    "type", type, "seconds", seconds,
+                    "note", "actief binnen ±1 min (hot-reload) — re-assemble om te zien"));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // ── Character reference stills (the Veo/QC pixel anchor) ───────────────
     // These files now drive BOTH generation (Veo asset references) and the
     // vision-QC ground truth, so the human must be able to SEE and REJECT
@@ -98,9 +183,13 @@ public class BrandController {
         return m;
     }
 
-    /** Serves one reference still for review in the Cast page. */
-    @GetMapping("/cast/{id}/refs/{file:.+}")
-    public ResponseEntity<Resource> refImage(@PathVariable String id, @PathVariable String file) {
+    /** Serves one reference still for review in the Cast page. The filename
+     *  travels as ?file= QUERY param: angle refs contain a '/' (pip/01-front.png)
+     *  and Tomcat rejects %2F in URL paths by default — the reason the refs
+     *  strip showed nothing. */
+    @GetMapping("/cast/{id}/ref")
+    public ResponseEntity<Resource> refImage(@PathVariable String id,
+                                             @RequestParam("file") String file) {
         Path p = safeRefPath(id, file);
         if (p == null || !Files.isRegularFile(p)) return ResponseEntity.notFound().build();
         String mt = p.toString().toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
@@ -111,9 +200,9 @@ public class BrandController {
     /** REJECT a reference still: the file is renamed to *.rejected (not
      *  deleted — reversible), which removes it from both Veo and QC because
      *  the pipeline only picks .png/.jpg files. */
-    @DeleteMapping("/cast/{id}/refs/{file:.+}")
+    @DeleteMapping("/cast/{id}/ref")
     public ResponseEntity<Map<String, String>> rejectRef(@PathVariable String id,
-                                                         @PathVariable String file) {
+                                                         @RequestParam("file") String file) {
         Path p = safeRefPath(id, file);
         if (p == null || !Files.isRegularFile(p)) return ResponseEntity.notFound().build();
         try {

@@ -360,6 +360,13 @@ public class PromptBuilder {
               listening, not with one side simply being wrong. No conflict at
               all reads as flat; more than one reads as drama. Keep it tiny,
               warm and resolved within 2-3 scenes.
+            - INSERT SHOTS (the visual refrain): when a small OBJECT drives the
+              plot (a crack in an egg, a found treasure, a wobbling thing), give
+              each key object-beat its OWN short scene (2-3s) whose visualDesc
+              is an EXTREME CLOSE-UP of just that object, identically framed
+              each time — repetition reads as ritual and lets a child COUNT the
+              progress. The main character stays in the characters list but may
+              appear only as a wingtip or out-of-focus edge in these inserts.
             - PARENT WINK (dual audience): include exactly ONE line that lands
               differently for the grown-up co-watching — a dry observation, a
               gentle parenting echo ("Small things need time. Like bedtime."),

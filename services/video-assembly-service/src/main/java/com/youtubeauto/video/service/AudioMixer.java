@@ -64,6 +64,19 @@ public class AudioMixer {
      */
     public Path mixBackgroundMusic(Path video, String bgmPath, Path output, Path workdir,
                                    double swellCenterSec, double swellSpreadSec) {
+        return mixBackgroundMusic(video, bgmPath, output, workdir,
+                swellCenterSec, swellSpreadSec, 0, 0);
+    }
+
+    /**
+     * @param dipCenterSec/dipSpreadSec optional near-silence window for the
+     *        scripted SILENT visual beat (board #18): the music sinks to ~25%
+     *        with the same smooth Gaussian shape as the swell — a held breath
+     *        deserves a held score. 0 = no dip.
+     */
+    public Path mixBackgroundMusic(Path video, String bgmPath, Path output, Path workdir,
+                                   double swellCenterSec, double swellSpreadSec,
+                                   double dipCenterSec, double dipSpreadSec) {
         // Optional climax swell on the music branch: a smooth Gaussian volume bump
         // (≈+4 dB peak) centred on the climax — no hard on/off, so it can't click
         // and small timing error just shifts a gentle hump. eval=frame = per-frame.
@@ -72,6 +85,11 @@ public class AudioMixer {
             swell = String.format(java.util.Locale.ROOT,
                     ",volume='1+0.6*exp(-pow((t-%.2f)/%.2f,2))':eval=frame",
                     swellCenterSec, swellSpreadSec);
+        }
+        if (dipCenterSec > 0 && dipSpreadSec > 0) {
+            swell += String.format(java.util.Locale.ROOT,
+                    ",volume='1-0.75*exp(-pow((t-%.2f)/%.2f,2))':eval=frame",
+                    dipCenterSec, dipSpreadSec);
         }
         // Filter chain:
         //   1. Loop the music indefinitely so a 30s loop covers 75s video.

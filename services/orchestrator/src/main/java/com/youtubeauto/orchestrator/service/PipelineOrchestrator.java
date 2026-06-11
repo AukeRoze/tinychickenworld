@@ -856,7 +856,20 @@ public class PipelineOrchestrator {
             for (JsonNode s : scriptBody.path("scenes")) {
                 Map<String, Object> asm = new HashMap<>();
                 asm.put("seq", s.path("seq").asInt());
-                asm.put("durationSeconds", s.path("durationSeconds").asInt());
+                // PEAK-HOLD (board #14): the emotional summit — a climax beat
+                // scripted at maximum intensity "(5/5)" — gets 2 extra seconds
+                // of air. "Big sister." was cut short by the schedule; Pixar
+                // holds the peak. The voice doesn't fill it: the held image +
+                // ambient ARE the moment.
+                int durSec = s.path("durationSeconds").asInt();
+                String phaseId = s.path("phase").asText("").toLowerCase();
+                String emo = s.path("emotion").asText("");
+                if ("climax".equals(phaseId) && emo.matches(".*\\(\\s*5\\s*/\\s*5\\s*\\).*")) {
+                    durSec += 2;
+                    log.info("Job {} scene {} peak-hold: +2s on a 5/5 climax beat", jobId,
+                            s.path("seq").asInt());
+                }
+                asm.put("durationSeconds", durSec);
                 asm.put("narration", s.path("narration").asText(""));
                 // Carry the per-character dialogue lines so the dashboard can show
                 // + edit them, and a per-scene re-voice can rebuild the audio.
@@ -1441,26 +1454,40 @@ public class PipelineOrchestrator {
 
             // Metadata + thumbnail (using cached script title + hook)
             JsonNode scriptBody = scriptClient.get(job.getScriptJobId()).path("script");
-            MetadataGenerator.Metadata meta = metadata.generate(
-                    job.getTopic(),
-                    scriptBody.path("title").asText(),
-                    scriptBody.path("hook").asText(),
-                    format.isVertical()
-            );
-            // Auto-append YouTube chapter markers built from script phases.
-            // YouTube auto-detects the format and renders them as clickable
-            // chapter markers in the timeline — huge retention boost.
-            meta = enrichWithChapters(meta, scriptBody, format.isVertical());
-            // Deterministic brand-policy gate: banned hashtags out, required
-            // hashtags + "Episode N of Tiny Chicken World" in — guaranteed, not
-            // prompted. Fixes are recorded to QC-insights so the dashboard
-            // shows what the policy rewrote.
-            MetadataPolicy.Result polished = metadataPolicy.apply(meta, job.getEpisodeNumber());
-            if (!polished.fixes().isEmpty()) {
-                try { qcInsights.record(jobId, null, polished.fixes(), "metadata-policy"); }
-                catch (Exception ignore) { /* insights are best-effort */ }
+            MetadataGenerator.Metadata meta;
+            // METADATA LOCK (board-audit, KRITIEK): a re-assembly used to
+            // REGENERATE the metadata and silently degraded an approved title
+            // ("Pip Found a Wobbly Egg!" → "Pip Found an Egg!"). Anything that
+            // passed a gate is frozen: existing metadata is reused verbatim.
+            // Want a fresh take? Clear the title via PATCH /metadata first.
+            if (job.getMetadataTitle() != null && !job.getMetadataTitle().isBlank()) {
+                List<String> lockedTags = job.getMetadataTags() == null || job.getMetadataTags().isBlank()
+                        ? List.of()
+                        : Arrays.stream(job.getMetadataTags().split(",")).map(String::trim).toList();
+                meta = new MetadataGenerator.Metadata(
+                        job.getMetadataTitle(),
+                        job.getMetadataDescription() == null ? "" : job.getMetadataDescription(),
+                        new ArrayList<>(lockedTags));
+                log.info("Job {} metadata LOCKED — reusing approved title \"{}\" (no regen on re-assembly)",
+                        jobId, meta.title());
+            } else {
+                meta = metadata.generate(
+                        job.getTopic(),
+                        scriptBody.path("title").asText(),
+                        scriptBody.path("hook").asText(),
+                        format.isVertical()
+                );
+                // Auto-append YouTube chapter markers built from script phases.
+                meta = enrichWithChapters(meta, scriptBody, format.isVertical());
+                // Deterministic brand-policy gate: banned hashtags out, required
+                // hashtags + "Episode N of Tiny Chicken World" in.
+                MetadataPolicy.Result polished = metadataPolicy.apply(meta, job.getEpisodeNumber());
+                if (!polished.fixes().isEmpty()) {
+                    try { qcInsights.record(jobId, null, polished.fixes(), "metadata-policy"); }
+                    catch (Exception ignore) { /* insights are best-effort */ }
+                }
+                meta = polished.metadata();
             }
-            meta = polished.metadata();
             // Use real cast scene stills as the thumbnail base so the thumbnail
             // characters EXACTLY match the film (scenes are Gemini-consistent).
             List<String> castStills = pickCastStills(assemblyScenes);
@@ -2337,7 +2364,21 @@ public class PipelineOrchestrator {
                         + "of the frame (consistent left/right placement) and have them "
                         + "face and look TOWARD whoever they are interacting with — real "
                         + "eyelines between them, not both staring at the camera. Hold the "
-                        + "180-degree axis so left stays left and right stays right. ";
+                        + "180-degree axis so left stays left and right stays right. "
+                        // Board #16 — the listener ACTS: empty-faced bystanders are
+                        // the deadest tell of AI animation. Whoever is not speaking
+                        // visibly processes what they hear.
+                        + "The LISTENING character visibly reacts while the other acts or "
+                        + "speaks — a head tilt, leaning in, eyes widening or following "
+                        + "the action — never standing idle with a blank face. ";
+            }
+            // Board #21 — auto-establishing: on a LOCATION CHANGE the first shot
+            // breathes wider for a beat so a child instantly knows where we are.
+            if (prevLoc != null && !locationId.isBlank() && !"null".equals(locationId)
+                    && !locationId.equalsIgnoreCase(prevLoc)) {
+                compiled = compiled + "New location: open this shot a touch WIDER for the "
+                        + "first beat so the setting reads instantly (a brief establishing "
+                        + "breath), then settle into the framing described above. ";
             }
             m.put("visualDesc", compiled);
             m.put("negativePrompt", VEO_NEGATIVE);

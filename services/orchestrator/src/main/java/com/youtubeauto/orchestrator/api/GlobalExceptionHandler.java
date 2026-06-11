@@ -68,6 +68,17 @@ public class GlobalExceptionHandler {
         log.debug("client aborted the connection mid-response (harmless): {}", safe(e));
     }
 
+    /** A URL that simply doesn't exist (favicon.ico, the retired /dashboard,
+     *  a typo'd path). That's a plain 404, not a "500 on API call" with a
+     *  50-line stacktrace — this was the recurring noise in the logs. */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ProblemDetail staticNotFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        log.debug("404 (no such resource): {}", e.getResourcePath());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
+                "Not found: " + e.getResourcePath());
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail internal(Exception e) {
         // Client gone mid-stream, wrapped in something else? Same treatment.

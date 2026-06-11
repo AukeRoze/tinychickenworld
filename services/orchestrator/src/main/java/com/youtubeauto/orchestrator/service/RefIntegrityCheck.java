@@ -31,30 +31,39 @@ public class RefIntegrityCheck {
     private final OrchestratorProperties props;
     private final CharacterRefStills refStills;
 
-    @EventListener(ApplicationReadyEvent.class)
-    public void verify() {
+    public record Status(int ok, List<String> missing) {}
+
+    /** Live ref-coverage status — used at boot AND by the dashboard health strip. */
+    public Status status() {
+        List<String> missing = new ArrayList<>();
+        int ok = 0;
         try {
             Path bible = Paths.get(props.bible().path());
-            if (!Files.exists(bible)) return;
-            JsonNode root = new YAMLMapper().readTree(bible.toFile());
-            List<String> missing = new ArrayList<>();
-            int ok = 0;
-            for (JsonNode ch : root.path("characters")) {
-                String id = ch.path("id").asText("");
-                if (id.isBlank()) continue;
-                if (refStills.resolve(List.of(id)).isEmpty()) missing.add(id);
-                else ok++;
-            }
-            if (missing.isEmpty()) {
-                log.info("Ref integrity: all {} bible character(s) have approved reference stills.", ok);
-            } else {
-                log.error("REF INTEGRITY: character(s) {} have NO reference stills in bible/refs — "
-                        + "they will render WITHOUT pixel anchoring (Veo refs) and QC falls back "
-                        + "to text-only checks. Generate + approve refs via the Cast page before "
-                        + "their next episode.", missing);
+            if (Files.exists(bible)) {
+                JsonNode root = new YAMLMapper().readTree(bible.toFile());
+                for (JsonNode ch : root.path("characters")) {
+                    String id = ch.path("id").asText("");
+                    if (id.isBlank()) continue;
+                    if (refStills.resolve(List.of(id)).isEmpty()) missing.add(id);
+                    else ok++;
+                }
             }
         } catch (Exception e) {
             log.warn("Ref integrity check failed (non-fatal): {}", e.getMessage());
+        }
+        return new Status(ok, missing);
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void verify() {
+        Status s = status();
+        if (s.missing().isEmpty()) {
+            log.info("Ref integrity: all {} bible character(s) have approved reference stills.", s.ok());
+        } else {
+            log.error("REF INTEGRITY: character(s) {} have NO reference stills in bible/refs — "
+                    + "they will render WITHOUT pixel anchoring (Veo refs) and QC falls back "
+                    + "to text-only checks. Generate + approve refs via the Cast page before "
+                    + "their next episode.", s.missing());
         }
     }
 }

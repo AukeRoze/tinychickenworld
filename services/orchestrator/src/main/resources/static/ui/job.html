@@ -32,9 +32,15 @@
   <h2>Actions</h2>
   <div id="actions-host" class="filter-row"></div>
 
-  <h2>Scenes &amp; script
-    <a class="btn sm" id="script-pdf" target="_blank" rel="noopener" style="font-weight:500">⬇ Download NL PDF</a>
-  </h2>
+  <!-- Stap-secties: elke pipelinefase z'n eigen inklapbare blok. job-page.js
+       opent automatisch het blok dat bij de huidige status hoort, zodat de
+       pagina je aandacht naar de actuele stap stuurt i.p.v. alles tegelijk
+       te tonen. Handmatig open/dicht klikken blijft gewoon werken. -->
+  <details id="step-script" class="step-section">
+  <summary style="cursor:pointer;font-size:1.2em;font-weight:600;margin:14px 0 6px">
+    📜 Stap 1-3 · Script &amp; scènebeelden
+    <a class="btn sm" id="script-pdf" target="_blank" rel="noopener" style="font-weight:500;margin-left:8px">⬇ Download NL PDF</a>
+  </summary>
 
   <details class="help-card" open>
     <summary>ℹ️ Waar moet je op letten bij het beoordelen van de beelden?</summary>
@@ -55,9 +61,14 @@
   </details>
 
   <div id="scenes-host" class="sub small">—</div>
+  </details>
 
-  <h2>Review</h2>
+  <details id="step-review" class="step-section">
+  <summary style="cursor:pointer;font-size:1.2em;font-weight:600;margin:14px 0 6px">
+    🔍 Stap 4-7 · Review, media &amp; publicatie
+  </summary>
   <div id="review-host" class="sub small">—</div>
+  </details>
 
   <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
 

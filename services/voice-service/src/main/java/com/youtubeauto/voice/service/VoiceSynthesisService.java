@@ -28,6 +28,7 @@ public class VoiceSynthesisService {
     private final SfxComposer sfxComposer;
     private final AmbientMixer ambientMixer;
     private final OnomatopoeiaSfx onomatopoeia;
+    private final FoleyMixer foley;
 
     public SynthesizeResponse synthesize(SynthesizeRequest req) {
         Path dir = Paths.get(props.storage().workRoot(), req.jobId().toString(), "audio");
@@ -108,6 +109,17 @@ public class VoiceSynthesisService {
                 for (Path lf : lineFiles) {
                     try { Files.deleteIfExists(lf); } catch (IOException ignored) {}
                 }
+            }
+
+            // Foley (board #17): one matching contact-sound under the scene
+            // when the dialogue mentions a physical action. Dormant until
+            // clips exist in /bible/sfx/foley/.
+            if (scene.lines() != null && !scene.lines().isEmpty()) {
+                StringBuilder allText = new StringBuilder();
+                for (SynthesizeRequest.Line l : scene.lines()) {
+                    if (l.text() != null) allText.append(l.text()).append(' ');
+                }
+                foley.mix(sceneFile, allText.toString(), dir);
             }
 
             // Mix ambient sound layer under the main audio. Skips silently

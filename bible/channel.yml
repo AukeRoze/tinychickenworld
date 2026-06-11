@@ -264,7 +264,9 @@ cameraBible:
   hook:        { angle: "eye-level", lens: "50mm normal", movement: "slow gentle push-in toward the face", focus: "lock focus on the main character's eyes", depthOfField: "shallow, soft creamy background bokeh" }
   setup:       { angle: "eye-level", lens: "35mm", movement: "slow drift", focus: "main character sharp, the world readable behind", depthOfField: "medium depth" }
   development: { angle: "eye-level", lens: "50mm", movement: "subtle slow move", focus: "lock focus on whoever is speaking", depthOfField: "medium depth, soft background" }
-  climax:      { angle: "slightly low angle", lens: "35mm wide", movement: "slow cinematic pull-back revealing the whole scene", focus: "keep the whole flock and setting sharp", depthOfField: "deep focus, everything crisp" }
+  # Board #20 — gedurfdere taal op de piek: worm's-eye maakt het moment groots
+  # vanuit kuiken-perspectief (alles ís groot als je zo klein bent).
+  climax:      { angle: "dramatic worm's-eye low angle, the world towering above the tiny chicks", lens: "24mm wide", movement: "slow cinematic pull-back revealing the whole scene", focus: "keep the whole flock and setting sharp", depthOfField: "deep focus, everything crisp" }
   resolution:  { angle: "eye-level", lens: "50mm", movement: "very slow, calm drift", focus: "soft focus on the flock together", depthOfField: "medium-shallow, warm soft background" }
   closer:      { angle: "eye-level", lens: "85mm", movement: "very slow, warm push-in", focus: "lock focus on the main character, world melting soft behind", depthOfField: "shallow, dreamy soft background" }
 

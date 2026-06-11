@@ -106,6 +106,58 @@ function render(data) {
   wrap.appendChild(table);
 
   host.replaceChildren(wrap);
+  appendProductionMetrics(wrap);
+}
+
+// ── Productie-metrics per aflevering (kosten, stretch, bible-hash) ──
+// De data zit sinds vandaag in metrics_json op elke job; dit maakt de trend
+// zichtbaar: wat kostte een aflevering, hoe ver liep de render uit het script,
+// en met welke bible-versie is hij gemaakt (consistentie-forensiek).
+async function appendProductionMetrics(wrap) {
+  try {
+    const rows = await api.get("/api/v1/insights/production-metrics", { key: "prod-metrics" });
+    if (!Array.isArray(rows) || !rows.length) return;
+    const h = document.createElement("h2");
+    h.textContent = "Productie-metrics per aflevering";
+    wrap.appendChild(h);
+    const t = document.createElement("table");
+    t.className = "joblist";
+    const thead = document.createElement("thead");
+    const htr = document.createElement("tr");
+    ["Ep", "Onderwerp", "Veo-kosten", "Clips OK", "Script→master", "Stretch", "Bible", "Thumb-AI"].forEach(l => {
+      const th = document.createElement("th"); th.textContent = l; htr.appendChild(th);
+    });
+    thead.appendChild(htr);
+    t.appendChild(thead);
+    const tb = document.createElement("tbody");
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      const td = (v, mono) => {
+        const c = document.createElement("td");
+        if (mono) c.className = "mono small";
+        c.textContent = v == null ? "—" : String(v);
+        tr.appendChild(c);
+      };
+      td(r.episodeNumber);
+      td(r.topic);
+      td(r.veoCostEur == null ? null : "€" + Number(r.veoCostEur).toFixed(2), true);
+      td(r.veoOk == null ? null : `${r.veoOk}/${r.veoTotal}`, true);
+      td(r.scriptedSeconds == null ? null : `${r.scriptedSeconds}s → ${Math.round(r.masterSeconds)}s`, true);
+      const stretch = document.createElement("td");
+      stretch.className = "mono small";
+      if (r.stretchFactor == null) stretch.textContent = "—";
+      else {
+        stretch.textContent = "×" + r.stretchFactor;
+        if (Number(r.stretchFactor) > 1.3) { stretch.style.color = "#b8651f"; stretch.textContent += " ⚠"; }
+      }
+      tr.appendChild(stretch);
+      td(r.bibleSha256, true);
+      td(r.thumbnailBestVariant == null ? null : "v" + r.thumbnailBestVariant, true);
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb);
+    wrap.appendChild(t);
+  } catch (e) { /* informatief — stil falen */ }
 }
 
 async function load() {

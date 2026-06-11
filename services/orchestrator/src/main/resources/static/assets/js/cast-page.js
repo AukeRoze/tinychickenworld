@@ -126,8 +126,8 @@ function renderCard(c, reload) {
             img.loading = "lazy";
             img.style.cssText = "width:84px;height:84px;object-fit:cover;border-radius:8px;" +
                 (r.active ? "" : "opacity:.35;filter:grayscale(1);");
-            img.src = `/api/v1/brand/cast/${encodeURIComponent(c.id)}/refs/` +
-                encodeURIComponent(r.file) + "?t=" + Date.now();
+            img.src = `/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref?file=` +
+                encodeURIComponent(r.file) + "&t=" + Date.now();
             img.title = r.file + " · " + r.kind + (r.active ? "" : " (genegeerd)");
             cell.appendChild(img);
             const cap = document.createElement("div");
@@ -144,7 +144,7 @@ function renderCard(c, reload) {
               del.addEventListener("click", async () => {
                 if (!confirm(`Referentie '${r.file}' afkeuren? Veo en QC gebruiken hem dan niet meer.`)) return;
                 try {
-                  await fetch(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/refs/` +
+                  await fetch(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref?file=` +
                       encodeURIComponent(r.file), { method: "DELETE" });
                   toast(`Referentie ${r.file} afgekeurd`, "info");
                   showView();   // refresh the strip

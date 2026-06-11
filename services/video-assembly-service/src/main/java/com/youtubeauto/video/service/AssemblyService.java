@@ -62,8 +62,11 @@ public class AssemblyService {
         Path afterMusic = branded;
         if (req.backgroundMusicPath() != null && !req.backgroundMusicPath().isBlank()) {
             double[] swell = climaxSwell(req, ws);
+            // Board #18 — the SILENT visual beat earns near-silence from the
+            // score too: a held breath with full music isn't a held breath.
+            double[] dip = silentBeatWindow(req, ws);
             afterMusic = mixer.mixBackgroundMusic(branded, req.backgroundMusicPath(),
-                    ws.withMusic(), ws.root(), swell[0], swell[1]);
+                    ws.withMusic(), ws.root(), swell[0], swell[1], dip[0], dip[1]);
         }
 
         // Step 4.5 — branded audio sting (channel sonic logo) at intro.
@@ -119,6 +122,24 @@ public class AssemblyService {
                 info.videoCodec(), info.audioCodec(), info.width(), info.height(),
                 captionsSrt.toString(), shortPath
         );
+    }
+
+    /** Centre + half-width (seconds, final-video time) of the scripted SILENT
+     *  visual beat (the scene with no dialogue lines and no narration), or
+     *  {0,0} when there is none. Same approximation rules as the climax swell. */
+    private double[] silentBeatWindow(AssemblyRequest req, Workspace ws) {
+        try {
+            double t = introOffsetSeconds(req, ws);
+            for (var s : req.scenes()) {
+                boolean silent = (s.narration() == null || s.narration().isBlank());
+                if (silent && (s.lineTimings() == null || s.lineTimings().isEmpty())) {
+                    return new double[]{t + s.durationSeconds() / 2.0,
+                                        Math.max(1.5, s.durationSeconds() / 2.0)};
+                }
+                t += s.durationSeconds();
+            }
+        } catch (Exception ignore) { /* no dip */ }
+        return new double[]{0, 0};
     }
 
     /** Intro duration (seconds) used to shift the caption timing. 0 when no

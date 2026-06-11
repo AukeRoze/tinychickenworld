@@ -46,7 +46,14 @@ public class ThumbnailGenerator {
             + "proportions with an oversized head — never a generic or adult "
             + "chicken. Rendered as glossy 3D Pixar / Illumination CGI "
             + "animation — absolutely NOT watercolor, NOT painterly, NOT a "
-            + "2D flat or storybook illustration. ";
+            + "2D flat or storybook illustration. "
+            // Board #19 — squint-test hard constraints, fed forward so EVERY
+            // variant starts above the bar instead of 2 of 3 scoring <45:
+            + "SQUINT-TEST RULES (hard): the character's FACE occupies at least "
+            + "40% of the frame HEIGHT; exactly ONE mystery object is visible "
+            + "(the episode's riddle) and NOTHING else competes for attention; "
+            + "keep all important elements at least 5% away from every edge; "
+            + "the image must still read when shrunk to 120 pixels wide. ";
 
     // Group hero-shot policy — used when the title/topic references 2+ cast
     // members (e.g. "Meet Pip, Mo & Bo"). Shows the whole cast instead of a
@@ -67,7 +74,12 @@ public class ThumbnailGenerator {
             + "Each character MUST keep newly-hatched baby-chick proportions with "
             + "an oversized head — never generic or adult chickens. Rendered as "
             + "glossy 3D Pixar / Illumination CGI animation — absolutely NOT "
-            + "watercolor, NOT painterly, NOT a 2D flat or storybook illustration. ";
+            + "watercolor, NOT painterly, NOT a 2D flat or storybook illustration. "
+            + "SQUINT-TEST RULES (hard): the nearest character's FACE occupies at "
+            + "least 35% of the frame HEIGHT; exactly ONE mystery object is "
+            + "visible and NOTHING else competes for attention; keep all "
+            + "important elements at least 5% away from every edge; the image "
+            + "must still read when shrunk to 120 pixels wide. ";
 
     private static final String[] CAST_VARIANT_MOODS = {
         "all the chicks side by side beaming at the viewer, shared joy — the safe winner",

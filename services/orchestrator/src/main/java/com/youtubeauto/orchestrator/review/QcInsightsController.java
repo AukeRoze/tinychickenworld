@@ -28,6 +28,61 @@ public class QcInsightsController {
     private final QcInsights qcInsights;
     private final BibleSuggestions bibleSuggestions;
     private final BibleEditor bibleEditor;
+    private final com.youtubeauto.orchestrator.client.UploadServiceClient uploadClient;
+    private final com.youtubeauto.orchestrator.service.RefIntegrityCheck refIntegrity;
+    private final com.youtubeauto.orchestrator.repository.VideoJobRepository jobRepo;
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+
+    /** Dashboard health strip: OAuth-token status (proxied from the
+     *  upload-service) + character ref-coverage. One red bar at the top of the
+     *  jobs list beats a buried ERROR log line. */
+    @GetMapping("/api/v1/insights/health")
+    public Map<String, Object> health() {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        var oauth = uploadClient.oauthHealth();
+        Map<String, Object> o = new java.util.LinkedHashMap<>();
+        if (oauth == null) {
+            o.put("healthy", null);   // unknown — service unreachable / not yet probed
+            o.put("note", "upload-service niet bereikbaar of nog niet gecheckt");
+        } else {
+            o.put("healthy", oauth.path("healthy").asBoolean(false));
+            o.put("lastError", oauth.path("lastError").asText(""));
+            o.put("checkedAt", oauth.path("checkedAt").asText(""));
+        }
+        out.put("oauth", o);
+        var refs = refIntegrity.status();
+        out.put("refs", Map.of("ok", refs.ok(), "missing", refs.missing()));
+        return out;
+    }
+
+    /** Production metrics per job (kosten, stretch, bible-hash, thumbnail-keuze)
+     *  for the analytics page — parsed from metrics_json, newest first. */
+    @GetMapping("/api/v1/insights/production-metrics")
+    public List<Map<String, Object>> productionMetrics() {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (var j : jobRepo.findAll()) {
+            if (j.getMetricsJson() == null || j.getMetricsJson().isBlank()) continue;
+            try {
+                var m = mapper.readTree(j.getMetricsJson());
+                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("jobId", j.getId().toString());
+                row.put("topic", j.getTopic());
+                row.put("episodeNumber", j.getEpisodeNumber());
+                row.put("createdAt", j.getCreatedAt() == null ? null : j.getCreatedAt().toString());
+                row.put("veoCostEur", m.path("veoCostEur").isMissingNode() ? null : m.path("veoCostEur").asDouble());
+                row.put("veoOk", m.path("veoOk").isMissingNode() ? null : m.path("veoOk").asInt());
+                row.put("veoTotal", m.path("veoTotal").isMissingNode() ? null : m.path("veoTotal").asInt());
+                row.put("scriptedSeconds", m.path("scriptedSeconds").isMissingNode() ? null : m.path("scriptedSeconds").asInt());
+                row.put("masterSeconds", m.path("masterSeconds").isMissingNode() ? null : m.path("masterSeconds").asDouble());
+                row.put("stretchFactor", m.path("stretchFactor").isMissingNode() ? null : m.path("stretchFactor").asDouble());
+                row.put("bibleSha256", m.path("bibleSha256").asText(null));
+                row.put("thumbnailBestVariant", m.path("thumbnailBestVariant").isMissingNode() ? null : m.path("thumbnailBestVariant").asInt());
+                out.add(row);
+            } catch (Exception ignore) { /* skip malformed */ }
+        }
+        out.sort((a, b) -> String.valueOf(b.get("createdAt")).compareTo(String.valueOf(a.get("createdAt"))));
+        return out;
+    }
 
     /** Learning-studio loop 2: recurring QC patterns translated into concrete,
      *  reviewable bible-fix proposals. ?refresh=true forces regeneration

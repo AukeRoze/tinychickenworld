@@ -142,3 +142,55 @@ async function loadAudio() {
 }
 
 loadAudio();
+
+// ── Scène-overgangen editor (bible assembly.transitions, hot-reload ≤1 min) ──
+async function loadTransitions() {
+  const tHost = document.getElementById("transitions-host");
+  if (!tHost) return;
+  try {
+    const data = await api.get("/api/v1/brand/transitions", { key: "brand-trans" });
+    const phases = data.phases || {};
+    const types = data.validTypes || [];
+    tHost.replaceChildren();
+    if (!Object.keys(phases).length) {
+      tHost.textContent = "Geen assembly.transitions-sectie in channel.yml — de ingebouwde defaults gelden.";
+      return;
+    }
+    for (const [phase, cfg] of Object.entries(phases)) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin:4px 0";
+      const lbl = document.createElement("span");
+      lbl.className = "mono small";
+      lbl.style.cssText = "width:110px;display:inline-block";
+      lbl.textContent = phase;
+      row.appendChild(lbl);
+      const sel = document.createElement("select");
+      sel.className = "btn sm";
+      for (const t of types) sel.appendChild(new Option(t, t, false, t === cfg.type));
+      row.appendChild(sel);
+      const sec = document.createElement("input");
+      sec.type = "number";
+      sec.min = "0.05"; sec.max = "1.5"; sec.step = "0.05";
+      sec.value = cfg.seconds || 0.2;
+      sec.style.cssText = "width:80px;padding:4px 8px;border:1px solid var(--border,#ccc);" +
+          "border-radius:8px;background:var(--bg,#fff);color:inherit;font:inherit";
+      row.appendChild(sec);
+      const save = document.createElement("button");
+      save.className = "btn sm";
+      save.textContent = "💾";
+      save.title = "Opslaan — actief binnen ±1 min";
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try {
+          await api.post("/api/v1/brand/transitions",
+              { phase, type: sel.value, seconds: Number(sec.value) }, { key: "trans-save" });
+          toast(`Overgang '${phase}' → ${sel.value} ${sec.value}s ✓`, "info");
+        } catch (e) { /* api.js toasted */ }
+        finally { save.disabled = false; }
+      });
+      row.appendChild(save);
+      tHost.appendChild(row);
+    }
+  } catch (e) { tHost.textContent = "Kon overgangen niet laden."; }
+}
+loadTransitions();

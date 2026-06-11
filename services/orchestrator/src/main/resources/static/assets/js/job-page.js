@@ -281,12 +281,28 @@ function renderGate(job) {
     api.get(`/api/v1/videos/${id}/review`, { key: "gate-thumbs" }).then(data => {
       const variants = (data.media && data.media.thumbnailVariants) || [];
       if (!variants.length) { grid.textContent = "Geen varianten gevonden."; return; }
+      // 🤖 Squint-test advies: de AI heeft de varianten al gerankt op
+      // telefoonformaat-leesbaarheid; de winnaar is voorgeselecteerd als
+      // default. Jij beslist — dit toont alleen WAAROM die voorstaat.
+      const best = data.metrics && data.metrics.thumbnailBestVariant;
+      if (best != null) {
+        const advice = document.createElement("p");
+        advice.className = "small";
+        advice.style.color = "#b8860b";
+        advice.textContent = `🤖 AI-advies (squint-test): variant ${best}` +
+            (data.metrics.thumbnailScores ? ` — scores ${data.metrics.thumbnailScores}` : "") +
+            " · is al voorgeselecteerd; klik een andere om te overrulen.";
+        card.insertBefore(advice, grid);
+      }
       for (const tv of variants) {
         const img = document.createElement("img");
         img.src = `/dashboard/${encodeURIComponent(id)}/thumbnail/${tv}.png?t=` + Date.now();
         img.alt = `Thumbnail ${tv}`;
         img.title = `Kies thumbnail ${tv}`;
         img.style.cursor = "pointer";
+        if (best != null && tv === best) {
+          img.style.cssText += "outline:3px solid #d4a017;outline-offset:2px;border-radius:6px";
+        }
         img.addEventListener("click", async () => {
           try {
             await api.post(`/api/v1/videos/${id}/thumbnail/${tv}`, undefined, { key: "gate-thumb" });
@@ -592,20 +608,32 @@ function renderReview(ctx) {
       v.src = `/dashboard/${encodeURIComponent(id)}/master.mp4`;
       card.appendChild(v);
     }
-    // Auto-derived vertical Short (hook + meest energieke moment, 9:16).
-    // Gratis bijvangst van elke assembly — download en upload als Short.
+    // Auto-derived vertical Short (hook + meest energieke moment, 9:16) —
+    // inline afspeelbaar naast de master, plus downloadknop voor de upload.
     if (media.hasShort) {
       const row = document.createElement("div");
-      row.style.cssText = "display:flex;align-items:center;gap:8px;margin:8px 0";
+      row.style.cssText = "display:flex;align-items:flex-start;gap:12px;margin:8px 0";
+      const sv = document.createElement("video");
+      sv.controls = true;
+      sv.preload = "metadata";
+      sv.style.cssText = "width:160px;aspect-ratio:9/16;border-radius:10px;background:#000";
+      sv.src = `/dashboard/${encodeURIComponent(id)}/short.mp4`;
+      row.appendChild(sv);
+      const col = document.createElement("div");
       const a = document.createElement("a");
       a.className = "btn sm";
       a.href = `/dashboard/${encodeURIComponent(id)}/short.mp4`;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.textContent = "📱 Bekijk/download de auto-Short (9:16, ±22s)";
+      a.download = "short.mp4";
+      a.textContent = "⬇ Download Short";
       a.title = "Automatisch afgeleid uit de hook + het luidste (= spannendste) moment. " +
           "Upload als YouTube Short voor extra ontdekking — voeg #Shorts toe aan de titel.";
-      row.appendChild(a);
+      col.appendChild(a);
+      const note = document.createElement("p");
+      note.className = "small";
+      note.style.color = "var(--muted)";
+      note.textContent = "📱 9:16, intro overgeslagen, captions ingebrand, tekst-hook in de eerste 3s.";
+      col.appendChild(note);
+      row.appendChild(col);
       card.appendChild(row);
     }
     // Productie-metrics: wat kostte deze aflevering en hoe ver rekte de render
@@ -1059,9 +1087,18 @@ function renderScenes(scenes) {
     row.className = "scene-row" + (s.locked ? " locked" : "");
 
     // ✨ SILENT VISUAL BEAT — the one scene with no dialogue, carried entirely
-    // by the image. Golden frame so the reviewer's eye lands here first:
-    // this is the shot to judge hardest (acting beat, not scenery).
-    const isSilentBeat = (!s.lines || s.lines.length === 0) && !s.narration;
+    // by the image. Golden frame so the reviewer's eye lands here first.
+    // Uses the backend's silentBeat flag: the old client-side check broke when
+    // the API started filling empty narration with the visualDesc for display
+    // (the reason the golden frame silently disappeared).
+    const isSilentBeat = s.silentBeat === true ||
+        ((!s.lines || s.lines.length === 0) && !s.narration);
+    // 🌟 HERO SCENES (hook/climax) — the beats that carry retention; a gold
+    // edge pulls review attention to them without shouting like the silent beat.
+    const isHero = !isSilentBeat && /^(hook|climax)$/i.test(s.phase || "");
+    if (isHero) {
+      row.style.cssText += "border:2px solid rgba(212,160,23,.55);border-radius:10px;padding:10px";
+    }
     if (isSilentBeat) {
       row.style.cssText += "border:2px solid #d4a017;border-radius:10px;" +
           "box-shadow:0 0 12px rgba(212,160,23,.35);padding:10px;" +
@@ -1080,11 +1117,16 @@ function renderScenes(scenes) {
     head.className = "script-head";
     const bits = ["Scene " + seq];
     if (s.durationSeconds) bits.push(s.durationSeconds + "s");
-    if (s.phase) bits.push(s.phase);
+    if (s.phase) bits.push(isHero ? "🌟 " + s.phase : s.phase);
     if (s.hasClip) bits.push("🎬");
     if (s.locked) bits.push("🔒");
     head.textContent = bits.join(" · ");
     left.appendChild(head);
+    // 🛡 QC findings for this scene (filled async by annotateQcFindings).
+    const qcSlot = document.createElement("div");
+    qcSlot.className = "small";
+    qcSlot.dataset.qcSeq = String(seq);
+    left.appendChild(qcSlot);
     for (const l of (s.lines || [])) {
       const line = document.createElement("div");
       line.className = "script-line";
@@ -1254,9 +1296,55 @@ async function loadScenes() {
   try {
     const scenes = await api.get(`/api/v1/videos/${id}/scenes`, { key: "scenes-" + id });
     renderScenes(scenes);
+    annotateQcFindings();
   } catch (e) {
     if (e.name === "AbortError") return;
     scenesHost.textContent = "could not load scenes (see toast)";
+  }
+}
+
+// 🛡 Per-scene QC badges: shows which scenes the vision-QC flagged and from
+// which checker (scene-qc / clip-qc / auto-fix) — so the reviewer knows where
+// the machine already looked and what it found.
+async function annotateQcFindings() {
+  try {
+    const findings = await api.get(`/api/v1/videos/${id}/qc-findings`, { key: "qcf-" + id });
+    if (!Array.isArray(findings) || !findings.length) return;
+    const bySeq = new Map();
+    for (const f of findings) {
+      if (f.seq == null) continue;
+      if (!bySeq.has(f.seq)) bySeq.set(f.seq, []);
+      bySeq.get(f.seq).push(f);
+    }
+    for (const [seq, list] of bySeq) {
+      const slot = scenesHost.querySelector(`[data-qc-seq="${seq}"]`);
+      if (!slot) continue;
+      slot.style.cssText = "color:#b8651f;margin:2px 0";
+      const srcs = [...new Set(list.map(f => f.source))].join(", ");
+      slot.textContent = `🛡 QC: ${list.length} bevinding(en) [${srcs}] — ` +
+          (list[0].issue || list[0].category || "");
+      slot.title = list.map(f => `[${f.source}/${f.category}] ${f.issue}`).join("\n");
+    }
+  } catch (e) { /* badges zijn informatief — stil falen */ }
+}
+
+// Stap-focus: open de sectie die bij de huidige pipelinefase hoort, één keer
+// per statuswisseling — daarna blijven handmatige open/dicht-keuzes van de
+// gebruiker staan (de 5s-poll mag die niet overschrijven).
+function applyStepFocus(status) {
+  const script = document.getElementById("step-script");
+  const review = document.getElementById("step-review");
+  if (!script || !review) return;
+  const sig = String(status || "");
+  if (document.body.dataset.stepSig === sig) return;
+  document.body.dataset.stepSig = sig;
+  const scriptPhases = /^(PENDING|SCRIPT_|ASSETS_|IMAGES_|VEO_)/;
+  if (scriptPhases.test(sig)) {
+    script.open = true;
+    review.open = false;
+  } else {
+    script.open = false;
+    review.open = true;
   }
 }
 
@@ -1268,6 +1356,7 @@ async function load() {
   try {
     const job = await api.get(`/api/v1/videos/${id}`, { key: "job-" + id });
     renderJob(job);
+    applyStepFocus(job.status);
     statusLine.textContent = `updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     if (e.name === "AbortError") return;
