@@ -386,9 +386,16 @@ public class BrandingStudioController {
                 // magenta en is de key mislukt — geen half werk opslaan.
                 AlphaStats stats = scanAlpha(keyed);
                 if (stats.transparentFraction() < MIN_TRANSPARENT_FRACTION) {
+                    // Diagnose erbij: wélke randkleur is er gemeten? Egale rand
+                    // ≈ key gelukt maar artwork randvullend (geen achtergrond);
+                    // bonte rand = het model negeerde de effen-achtergrond-eis.
                     return ResponseEntity.badRequest().body(Map.of("error",
-                            "chroma-key kon de achtergrond niet scheiden — kies een "
-                                    + "andere kandidaat"));
+                            "chroma-key kon de achtergrond niet scheiden (gemeten "
+                                    + "randkleur: " + borderColorHex(src) + "). "
+                                    + "Meestal: het artwork vult het beeld randvullend "
+                                    + "(geen achtergrond om te wissen) of de achtergrond "
+                                    + "is niet effen. Kies een kandidaat met duidelijk "
+                                    + "vrije ruimte rondom het bord."));
                 }
                 java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
                 javax.imageio.ImageIO.write(keyed, "png", buf);
@@ -640,33 +647,71 @@ public class BrandingStudioController {
 
     // ── Chroma-key (overlay-approve): magenta achtergrond → transparant ─────
 
-    /** Max RGB-afstand (Euclidisch; theoretisch maximum ≈441) tot puur magenta
-     *  #FF00FF om een pixel tijdens de flood-fill als ACHTERGROND te zien.
+    /** Max RGB-afstand (Euclidisch; theoretisch maximum ≈441) tot de SLEUTEL-
+     *  kleur om een pixel tijdens de flood-fill als ACHTERGROND te zien.
      *  90 is ruim genoeg voor compressieruis en de lichte tint-drift die
      *  image-modellen in een "effen" vlak leggen, maar ver onder de afstand
-     *  van élke realistische logokleur — crème, hout, geel en groen zitten
-     *  allemaal ≥ ~250 van magenta vandaan. */
+     *  van élke realistische logokleur. */
     private static final int CHROMA_BG_TOLERANCE = 90;
+    /** Adaptieve sleutel (fix 2026-06-12, 400-melding gebruiker): modellen
+     *  leveren soms een NET-niet-magenta achtergrond (roze/paars-drift) en dan
+     *  vond de vaste #FF00FF-key niets. Nu wordt eerst de werkelijke randkleur
+     *  gemeten (mediaan-achtig gemiddelde van de buitenste 2px); is die rand
+     *  voldoende EGAAL (≥{@link #BORDER_UNIFORMITY} van de randpixels binnen
+     *  {@link #BORDER_SAMPLE_TOLERANCE} van het gemiddelde), dan keyen we op
+     *  díé kleur — werkt dus ook als het model wit/crème koos. Niet egaal →
+     *  fallback op puur magenta (oud gedrag). Vangrail: als de key >97% van
+     *  het beeld zou wissen is de "achtergrond" vermoedelijk het artwork zelf
+     *  en weigeren we (de approve-validatie meldt dat). */
+    private static final int BORDER_SAMPLE_TOLERANCE = 70;
+    private static final double BORDER_UNIFORMITY = 0.60;
+    private static final double MAX_BG_FRACTION = 0.97;
     /** Bredere band voor de rand-feather: een pixel die aan verwijderde
      *  achtergrond grenst en binnen deze afstand van magenta ligt, is deels met
      *  de achtergrond vermengd (anti-aliasing) en krijgt alpha + kleur-
      *  decontaminatie naar rato van die bijmenging. */
     private static final int CHROMA_FEATHER_BAND = 220;
 
-    /** Kwadratische RGB-afstand tot puur magenta (255, 0, 255). */
-    private static int distSqToMagenta(int argb) {
-        int dr = 255 - ((argb >> 16) & 0xFF);
-        int dg = (argb >> 8) & 0xFF;
-        int db = 255 - (argb & 0xFF);
+    /** Kwadratische RGB-afstand tussen twee kleuren (alpha genegeerd). */
+    private static int distSq(int argb, int key) {
+        int dr = ((argb >> 16) & 0xFF) - ((key >> 16) & 0xFF);
+        int dg = ((argb >> 8) & 0xFF) - ((key >> 8) & 0xFF);
+        int db = (argb & 0xFF) - (key & 0xFF);
         return dr * dr + dg * dg + db * db;
     }
 
+    private static final int PURE_MAGENTA = 0xFF00FF;
+
+    /** Meet de werkelijke achtergrond-sleutelkleur: gemiddelde van de buitenste
+     *  2px-rand, mits die rand egaal genoeg is; anders puur magenta (fallback). */
+    private static int sampleKeyColor(int[] px, int w, int h) {
+        long sr = 0, sg = 0, sb = 0;
+        java.util.List<Integer> border = new java.util.ArrayList<>();
+        for (int d = 0; d < Math.min(2, Math.min(w, h)); d++) {
+            for (int x = 0; x < w; x++) { border.add(px[d * w + x]); border.add(px[(h - 1 - d) * w + x]); }
+            for (int y = 0; y < h; y++) { border.add(px[y * w + d]); border.add(px[y * w + (w - 1 - d)]); }
+        }
+        for (int c : border) { sr += (c >> 16) & 0xFF; sg += (c >> 8) & 0xFF; sb += c & 0xFF; }
+        int n = border.size();
+        int mean = ((int) (sr / n) << 16) | ((int) (sg / n) << 8) | (int) (sb / n);
+        int tolSq = BORDER_SAMPLE_TOLERANCE * BORDER_SAMPLE_TOLERANCE;
+        long within = border.stream().filter(c -> distSq(c, mean) <= tolSq).count();
+        return (within >= n * BORDER_UNIFORMITY) ? mean : PURE_MAGENTA;
+    }
+
+    /** Hex-weergave van de gemeten randkleur — voor de 400-diagnose. */
+    private static String borderColorHex(java.awt.image.BufferedImage src) {
+        int w = src.getWidth(), h = src.getHeight();
+        int key = sampleKeyColor(src.getRGB(0, 0, w, h, null, 0, w), w, h);
+        return String.format("#%06X", key & 0xFFFFFF);
+    }
+
     /** Markeert idx als achtergrond en zet hem op de stack, mits nog niet
-     *  bezocht én dicht genoeg bij magenta ({@link #CHROMA_BG_TOLERANCE}). */
+     *  bezocht én dicht genoeg bij de sleutelkleur ({@link #CHROMA_BG_TOLERANCE}). */
     private static void floodPush(java.util.ArrayDeque<Integer> stack, boolean[] bg,
-                                  int[] px, int idx) {
+                                  int[] px, int idx, int key) {
         if (bg[idx]) return;
-        if (distSqToMagenta(px[idx]) > CHROMA_BG_TOLERANCE * CHROMA_BG_TOLERANCE) return;
+        if (distSq(px[idx], key) > CHROMA_BG_TOLERANCE * CHROMA_BG_TOLERANCE) return;
         bg[idx] = true;
         stack.push(idx);
     }
@@ -695,24 +740,36 @@ public class BrandingStudioController {
         final int[] px = src.getRGB(0, 0, w, h, null, 0, w);
         final boolean[] bg = new boolean[w * h];
 
+        // Adaptieve sleutel: de gemeten randkleur (of magenta-fallback) — zie
+        // de constanten-javadoc. Hierdoor werkt de key ook bij tint-drift of
+        // een model dat de magenta-instructie negeerde en wit/crème koos.
+        final int key = sampleKeyColor(px, w, h);
+
         // (a) flood-fill: seeds op alle vier de randen, 4-connectiviteit.
         java.util.ArrayDeque<Integer> stack = new java.util.ArrayDeque<>();
         for (int x = 0; x < w; x++) {
-            floodPush(stack, bg, px, x);                    // bovenrand
-            floodPush(stack, bg, px, (h - 1) * w + x);      // onderrand
+            floodPush(stack, bg, px, x, key);                    // bovenrand
+            floodPush(stack, bg, px, (h - 1) * w + x, key);      // onderrand
         }
         for (int y = 0; y < h; y++) {
-            floodPush(stack, bg, px, y * w);                // linkerrand
-            floodPush(stack, bg, px, y * w + (w - 1));      // rechterrand
+            floodPush(stack, bg, px, y * w, key);                // linkerrand
+            floodPush(stack, bg, px, y * w + (w - 1), key);      // rechterrand
         }
         while (!stack.isEmpty()) {
             int i = stack.pop();
             int x = i % w, y = i / w;
-            if (x > 0)     floodPush(stack, bg, px, i - 1);
-            if (x < w - 1) floodPush(stack, bg, px, i + 1);
-            if (y > 0)     floodPush(stack, bg, px, i - w);
-            if (y < h - 1) floodPush(stack, bg, px, i + w);
+            if (x > 0)     floodPush(stack, bg, px, i - 1, key);
+            if (x < w - 1) floodPush(stack, bg, px, i + 1, key);
+            if (y > 0)     floodPush(stack, bg, px, i - w, key);
+            if (y < h - 1) floodPush(stack, bg, px, i + w, key);
         }
+        // Vangrail: wist de key vrijwel het hele beeld, dan was de "achtergrond"
+        // het artwork zelf (bv. een logo dat naadloos in de randkleur overloopt)
+        // — geef het bronbeeld terug; de approve-validatie (≥2% transparant
+        // wordt dan 0%) weigert netjes met de diagnose-melding.
+        long bgCount = 0;
+        for (boolean b : bg) if (b) bgCount++;
+        if (bgCount > (long) (w * h * MAX_BG_FRACTION)) return src;
 
         // (b) + (c): feather + decontaminatie, alleen op pixels die aan de
         // verwijderde achtergrond grenzen — het binnenwerk blijft onaangeroerd.
@@ -725,7 +782,7 @@ public class BrandingStudioController {
                 int argb = px[i];
                 boolean touchesBg = (x > 0 && bg[i - 1]) || (x < w - 1 && bg[i + 1])
                         || (y > 0 && bg[i - w]) || (y < h - 1 && bg[i + w]);
-                int dSq = distSqToMagenta(argb);
+                int dSq = distSq(argb, key);
                 if (!touchesBg || dSq >= bandSq) {
                     out[i] = 0xFF000000 | (argb & 0xFFFFFF); // binnenwerk: vol dekkend
                     continue;
@@ -745,7 +802,7 @@ public class BrandingStudioController {
                         int nx = x + dx, ny = y + dy;
                         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
                         int j = ny * w + nx;
-                        if (bg[j] || distSqToMagenta(px[j]) < bandSq) continue;
+                        if (bg[j] || distSq(px[j], key) < bandSq) continue;
                         sr += (px[j] >> 16) & 0xFF;
                         sg += (px[j] >> 8) & 0xFF;
                         sb += px[j] & 0xFF;
