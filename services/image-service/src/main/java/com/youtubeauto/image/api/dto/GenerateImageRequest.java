@@ -41,9 +41,21 @@ public record GenerateImageRequest(
         /** A recurring prop's reference image: a name + a readable PNG path. */
         public record PropRef(String name, String imagePath) {}
 
-        /** One character's episode-canon exemplar: the bible character id + a
-         *  readable PNG path of an approved still from this same episode. */
-        public record EpisodeAnchor(String characterId, String imagePath) {}
+        /** One character's canon exemplar: the bible character id + a readable
+         *  PNG path of an approved still. {@code source} (additive, optional)
+         *  says where the still comes from so providers can phrase the match
+         *  instruction honestly: {@code "episode"} (default when null/unknown —
+         *  a QC-approved still from earlier in this same episode) or
+         *  {@code "series"} (the character's promoted anchor from the previous
+         *  human-approved episode of the same series). */
+        public record EpisodeAnchor(String characterId, String imagePath, String source) {
+            /** Legacy two-arg form — source defaults to the episode itself. */
+            public EpisodeAnchor(String characterId, String imagePath) {
+                this(characterId, imagePath, null);
+            }
+            /** True when this anchor was promoted from a previous episode of the series. */
+            public boolean fromSeries() { return "series".equalsIgnoreCase(source); }
+        }
 
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId) {
             this(seq, visualDesc, characters, locationId, null, null, null, null, null);

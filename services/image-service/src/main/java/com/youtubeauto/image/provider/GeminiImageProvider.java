@@ -167,6 +167,8 @@ public class GeminiImageProvider implements ImageProvider {
         //   2. the service's generic disk-scan stills (episodeAnchors param) as
         //      the fallback when the request carries none.
         List<String> epNames = new ArrayList<>();   // stays empty for the generic source
+        List<Boolean> epSeries = new ArrayList<>(); // parallel to epNames: anchor promoted
+                                                    // from a PREVIOUS episode of the series
         List<byte[]> epImgs = new ArrayList<>();
         if (scene.episodeAnchors() != null && !scene.episodeAnchors().isEmpty()) {
             for (var ea : scene.episodeAnchors()) {
@@ -179,6 +181,7 @@ public class GeminiImageProvider implements ImageProvider {
                     epNames.add(bible.character(ea.characterId())
                             .map(com.youtubeauto.image.bible.Character::name)
                             .orElse(ea.characterId() == null ? "the cast" : ea.characterId()));
+                    epSeries.add(ea.fromSeries());
                 } catch (Exception e) {
                     log.warn("gemini: failed reading episode anchor {} — {}", pp, e.toString());
                 }
@@ -246,15 +249,35 @@ public class GeminiImageProvider implements ImageProvider {
                     + "across every scene. Only show a prop if the scene text mentions it. ";
         }
         if (namedEpisode) {
+            // Source-aware phrasing (series anchors): an anchor promoted from a
+            // PREVIOUS episode of the series must not be sold to the model as a
+            // still "from earlier in this exact episode" — that's false on the
+            // first batch of a new episode. The orchestrator never mixes sources
+            // in one request (own episode canon wins outright), so allSeries is
+            // effectively "this is a series-seeded first batch".
+            boolean allSeries = !epSeries.isEmpty() && epSeries.stream().allMatch(Boolean::booleanValue);
             StringBuilder ep = new StringBuilder();
             ep.append(" Reference image(s) ").append(epStart).append("-").append(epEnd)
-              .append(" are QC-APPROVED STILLS FROM EARLIER IN THIS EXACT EPISODE. ");
+              .append(allSeries
+                  ? " are APPROVED STILLS FROM THE PREVIOUS EPISODE OF THIS EXACT SERIES. "
+                  : " are QC-APPROVED STILLS FROM EARLIER IN THIS EXACT EPISODE. ");
             for (int i = 0; i < epNames.size(); i++) {
+                boolean fromSeries = i < epSeries.size() && epSeries.get(i);
                 ep.append("Reference image ").append(epStart + i).append(" shows ")
                   .append(epNames.get(i))
-                  .append(" — the SAME individual character earlier in this exact episode. ");
+                  .append(fromSeries
+                      ? " — the SAME individual character in the previous episode of this exact series. "
+                      : " — the SAME individual character earlier in this exact episode. ");
             }
-            ep.append("Match each character EXACTLY as in these episode stills: identical "
+            ep.append(allSeries
+                    ? "Match each character EXACTLY as in these series stills: identical "
+                    + "feather colours and markings, identical accessories and accessory "
+                    + "state, identical proportions and relative size — the look this "
+                    + "series has already established overrides any other interpretation "
+                    + "of the design. Do NOT copy the lighting, background or pose from "
+                    + "the series stills: light and stage the character for THIS scene's "
+                    + "own time of day, weather and action. "
+                    : "Match each character EXACTLY as in these episode stills: identical "
                     + "feather colours and markings, identical accessories and accessory "
                     + "state, identical proportions and relative size — this episode's "
                     + "already-rendered look overrides any other interpretation of the "

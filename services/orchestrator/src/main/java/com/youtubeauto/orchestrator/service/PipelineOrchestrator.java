@@ -100,6 +100,17 @@ public class PipelineOrchestrator {
     @org.springframework.beans.factory.annotation.Value("${pipeline.distribution-gate.enabled:true}")
     private boolean distributionGateEnabled;
 
+    /** Series anchors (Series-ConsistencyState, backlog P3): on a successful
+     *  upload a series job's episode character anchors are PROMOTED to the
+     *  durable {bible-dir}/refs/series/{seriesId}/ folder, and the NEXT
+     *  episode's first image batch is seeded from that folder — so the canon
+     *  carries across episodes, not just within one. Off → both promotion and
+     *  seeding are skipped; per-episode Story B behaviour is untouched. (In
+     *  plain unit tests without Spring this field keeps its Java default
+     *  false — an extra no-op guarantee on top of the tests' seriesId=null.) */
+    @org.springframework.beans.factory.annotation.Value("${app.series.anchors-enabled:true}")
+    private boolean seriesAnchorsEnabled;
+
     /** Frame-chaining: consecutive same-location/same-cast Veo scenes render
      *  sequentially, each starting on the previous clip's extracted last frame
      *  (pixel-level shot continuity). Off → all scenes render independently in
@@ -1026,7 +1037,10 @@ public class PipelineOrchestrator {
                 // stage the episode anchors may already exist — re-attach them so
                 // the re-generated scenes keep the established canon. On the very
                 // first run there are no anchors yet (this batch IS the canon
-                // source) and this is a no-op.
+                // source); for a SERIES job the fallback inside then seeds the
+                // previous episode's promoted anchors from {bible-dir}/refs/
+                // series/{seriesId}/ instead (episode canon > series canon >
+                // bible refs). Without a seriesId: a no-op, exactly as before.
                 attachEpisodeAnchors(img, job);
                 imageScenes.add(img);
                 prevPhase = phase;
@@ -2246,6 +2260,9 @@ public class PipelineOrchestrator {
                 // Series playlist: after the YouTube id is persisted, so a crash
                 // here never loses the upload result. Best-effort, never blocks.
                 addToSeriesPlaylist(jobId, job, ytId);
+                // Series anchors: a human-approved upload promotes this episode's
+                // character canon to the series folder. Best-effort, never blocks.
+                promoteSeriesAnchors(jobId, job);
                 pauseForReview(jobId, JobStatus.DISTRIBUTION_PENDING,
                         "on YouTube — push other platforms, then finish");
                 log.info("Job {} uploaded -> {} ; awaiting distribution", jobId, ytUrl);
@@ -2257,6 +2274,8 @@ public class PipelineOrchestrator {
 
             // Series playlist (best-effort, after persist — see helper).
             addToSeriesPlaylist(jobId, job, ytId);
+            // Series anchors (best-effort, after persist — see helper).
+            promoteSeriesAnchors(jobId, job);
 
             // Best-effort cross-post to Facebook Page. Never blocks completion;
             // the user can re-trigger from the dashboard if it fails or is
@@ -2509,24 +2528,28 @@ public class PipelineOrchestrator {
      *       batch attaches these itself; this only fills the gap when absent);</li>
      *   <li>a compact EPISODE CANON prompt clause on the scene text.</li>
      * </ul>
-     * No canon on the job (null/blank column) → strict no-op, byte-identical
-     * payload to today. Anchor files that no longer exist are skipped. Never
-     * throws — a failure here only means a re-roll without episode anchors.
+     * No canon on the job (null/blank column) → fall back to the SERIES canon
+     * ({@link #attachSeriesAnchors}); without that too (no seriesId / flag off /
+     * empty folder) the payload stays byte-identical to today. The priority is
+     * therefore explicit: <b>own episode canon &gt; series canon &gt; bible refs
+     * only</b> — the first image batch (and any pre-canon re-roll) of a series
+     * episode is seeded from the previous episode's promoted anchors, and the
+     * moment {@link #collectEpisodeAnchors} fills the column the episode's own
+     * canon takes over automatically. Anchor files that no longer exist are
+     * skipped. Never throws — a failure here only means a re-roll without canon.
      */
     private void attachEpisodeAnchors(Map<String, Object> imgScene, VideoJob job) {
         try {
             if (imgScene == null || job == null) return;
             String json = job.getEpisodeAnchorsJson();
-            if (json == null || json.isBlank()) return;
+            if (json == null || json.isBlank()) {
+                attachSeriesAnchors(imgScene, job);
+                return;
+            }
             JsonNode root = mapper.readTree(json);
 
             // 1) Character anchors for THIS scene's cast (file must still exist).
-            Set<String> sceneChars = new HashSet<>();
-            if (imgScene.get("characters") instanceof Collection<?> col) {
-                for (Object c : col) {
-                    if (c != null) sceneChars.add(c.toString().trim().toLowerCase());
-                }
-            }
+            Set<String> sceneChars = sceneCharacterIds(imgScene);
             List<Map<String, String>> eps = new ArrayList<>();
             var charFields = root.path("characters").fields();
             while (charFields.hasNext()) {
@@ -2570,6 +2593,194 @@ public class PipelineOrchestrator {
         }
     }
 
+    /** The scene payload's cast ids, trimmed + lowercased (the form both the
+     *  episode-anchor json keys and the series anchor files use). */
+    private static Set<String> sceneCharacterIds(Map<String, Object> imgScene) {
+        Set<String> out = new HashSet<>();
+        if (imgScene.get("characters") instanceof Collection<?> col) {
+            for (Object c : col) {
+                if (c != null) out.add(c.toString().trim().toLowerCase());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Series-ConsistencyState — SERIES canon seeding. Used only while the job
+     * has no episode canon of its own (the {@link #attachEpisodeAnchors}
+     * fallback): for a series job, the previous approved episode's promoted
+     * anchors ({bible-dir}/refs/series/{seriesId}/{characterId}.png) are sent
+     * as {@code episodeAnchors} — same payload field, same filter (only
+     * characters actually in the scene, only files that exist) and the same
+     * provider cap mechanics — but each entry is tagged {@code source:"series"}
+     * so the image provider phrases the match clause honestly ("the previous
+     * episode of this exact series", not "earlier in this exact episode").
+     *
+     * <p>Characters without a series file (they didn't appear in the previous
+     * episode — e.g. the duckling joining mid-season) are skipped silently;
+     * their bible refs remain the baseline. Strict no-op when the flag is off,
+     * the job has no seriesId (every state-machine-test job), or the folder
+     * doesn't exist. Never throws.
+     */
+    private void attachSeriesAnchors(Map<String, Object> imgScene, VideoJob job) {
+        try {
+            if (!seriesAnchorsEnabled) return;
+            if (job.getSeriesId() == null || job.getSeriesId().isBlank()) return;
+            if (imgScene.containsKey("episodeAnchors")) return;
+            java.nio.file.Path dir = seriesAnchorsDir(job.getSeriesId());
+            if (dir == null || !java.nio.file.Files.isDirectory(dir)) return;
+
+            Map<String, String> seeds = SeriesAnchors.selectSeeds(
+                    sceneCharacterIds(imgScene),
+                    id -> dir.resolve(id + ".png").toString(),
+                    this::fileExists);
+            if (seeds.isEmpty()) return;
+            List<Map<String, String>> eps = new ArrayList<>();
+            seeds.forEach((id, path) -> eps.add(Map.of(
+                    "characterId", id, "imagePath", path, "source", "series")));
+            imgScene.put("episodeAnchors", eps);
+
+            // Compact series-canon clause — the cross-episode sibling of the
+            // EPISODE CANON clause: identity comes from the previous episode,
+            // lighting/mood stay with THIS scene.
+            String vd = String.valueOf(imgScene.getOrDefault("visualDesc", ""));
+            if (!vd.isBlank() && !vd.contains("SERIES CANON:") && !vd.contains("EPISODE CANON:")) {
+                imgScene.put("visualDesc", vd.trim()
+                        + " SERIES CANON: this is a new episode of an existing series — "
+                        + "every returning character keeps the exact look established in "
+                        + "the previous episode's approved stills (feather colours and "
+                        + "markings, accessories, proportions and relative size). Lighting "
+                        + "and mood follow THIS scene's own time of day and weather.");
+            }
+        } catch (Exception e) {
+            log.warn("attachSeriesAnchors failed (continuing without series canon): {}",
+                    e.getMessage());
+        }
+    }
+
+    /**
+     * {bible-dir}/refs/series/{seriesId} — the durable home of a series'
+     * promoted character anchors. bible-dir is the parent of
+     * {@code props.bible().path()}, i.e. the same refs/ tree BibleEditor and
+     * BrandController use ({@code bible/refs}); it is mounted read-write on the
+     * orchestrator and survives workdir cleanups, which is exactly why the
+     * anchors are promoted INTO it instead of referenced in the workdir.
+     *
+     * <p>Null-safe by contract: a null/blank/unsafe seriesId, missing
+     * properties, a blank bible path (or any resolution surprise) → null, and
+     * every caller no-ops. The state-machine test's non-existent bible file
+     * ("no-such-bible-for-this-test.yml", no parent) resolves to the same
+     * "refs"-relative fallback BibleEditor.refsDir() uses — and is never
+     * touched because those jobs carry no seriesId.
+     */
+    private java.nio.file.Path seriesAnchorsDir(String seriesId) {
+        try {
+            String sid = SeriesAnchors.sanitizeId(seriesId);
+            if (sid == null) return null;
+            if (props == null || props.bible() == null) return null;
+            String biblePath = props.bible().path();
+            if (biblePath == null || biblePath.isBlank()) return null;
+            java.nio.file.Path parent = java.nio.file.Paths.get(biblePath).getParent();
+            java.nio.file.Path refs = parent == null
+                    ? java.nio.file.Paths.get("refs") : parent.resolve("refs");
+            return refs.resolve("series").resolve(sid);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Series-ConsistencyState — promotion at human approval. Called from
+     * {@link #runUploadStage} right after the upload result is persisted (the
+     * same best-effort spot as the series-playlist add): an episode that made
+     * it PAST every human gate onto YouTube is by definition approved, so its
+     * episode character anchors are copied to the durable series folder,
+     * OVERWRITING what's there — the newest approved episode wins, keeping the
+     * series canon fresh instead of frozen at episode 1.
+     *
+     * <p>NOTE lifestage changes (the chicks grow up, the duckling fledges): a
+     * DELIBERATE look change is done by emptying {bible-dir}/refs/series/
+     * {seriesId}/ (and updating the bible refs) — the next approved episode
+     * then re-establishes the series canon from scratch. See the README this
+     * method drops in refs/series/.
+     *
+     * <p>Best-effort: no flag / no seriesId (every state-machine-test job) /
+     * no episode canon / vanished source files → silent no-op; any I/O failure
+     * is logged and swallowed — promotion can never break an upload.
+     */
+    private void promoteSeriesAnchors(UUID jobId, VideoJob job) {
+        try {
+            if (!seriesAnchorsEnabled || job == null) return;
+            if (job.getSeriesId() == null || job.getSeriesId().isBlank()) return;
+            Map<String, String> picks = SeriesAnchors.selectPromotions(
+                    job.getEpisodeAnchorsJson(), this::fileExists);
+            if (picks.isEmpty()) return;
+            java.nio.file.Path dir = seriesAnchorsDir(job.getSeriesId());
+            if (dir == null) return;
+            java.nio.file.Files.createDirectories(dir);
+            writeSeriesAnchorsReadme(dir.getParent());
+            int copied = 0;
+            for (var e : picks.entrySet()) {
+                try {
+                    java.nio.file.Files.copy(
+                            java.nio.file.Paths.get(e.getValue()),
+                            dir.resolve(e.getKey() + ".png"),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    copied++;
+                } catch (Exception one) {
+                    log.warn("Job {} series-anchor copy failed for '{}' (non-fatal): {}",
+                            jobId, e.getKey(), one.getMessage());
+                }
+            }
+            if (copied > 0) {
+                log.info("Job {} promoted {} character anchor(s) to series canon {} ({})",
+                        jobId, copied, dir, picks.keySet());
+            }
+        } catch (Exception e) {
+            log.warn("Job {} series-anchor promotion failed (non-fatal): {}",
+                    jobId, e.getMessage());
+        }
+    }
+
+    /** Drops a one-time README.md in {bible-dir}/refs/series/ explaining the
+     *  folder's lifecycle (promotion, seeding, ducklings, lifestage resets).
+     *  Never overwrites a hand-edited one; never throws. */
+    private void writeSeriesAnchorsReadme(java.nio.file.Path seriesRoot) {
+        try {
+            if (seriesRoot == null) return;
+            java.nio.file.Path readme = seriesRoot.resolve("README.md");
+            if (java.nio.file.Files.exists(readme)) return;
+            java.nio.file.Files.createDirectories(seriesRoot);
+            java.nio.file.Files.writeString(readme, """
+                    # Series anchors — refs/series/{seriesId}/{characterId}.png
+
+                    Written automatically by the orchestrator (flag:
+                    `app.series.anchors-enabled`, default true).
+
+                    * **Promotion** — when a series episode passes every human gate and
+                      its YouTube upload succeeds, the episode's QC-approved character
+                      anchors are copied here, overwriting what exists: the NEWEST
+                      approved episode defines the series canon.
+                    * **Seeding** — the next episode of the same series sends these
+                      files as extra reference images on its FIRST image batch (and any
+                      re-roll before its own canon is elected), so episode N+1's cast
+                      matches episode N — not just the bible. As soon as the new episode
+                      elects its own episode anchors, those take priority:
+                      episode canon > series canon > bible refs.
+                    * **New characters** — a character that did not appear in the
+                      previous episode has no file here and is skipped silently; its
+                      `bible/refs/{id}.png` anchors remain the baseline.
+                    * **Deliberate look changes** (lifestage: chicks grow up, the
+                      duckling fledges, a new outfit) — EMPTY this series' folder (and
+                      update the bible refs); the next approved episode re-establishes
+                      the canon with the new look. Otherwise seeding would keep pulling
+                      the cast back to their old appearance.
+                    """);
+        } catch (Exception e) {
+            log.debug("series-anchors README write skipped: {}", e.getMessage());
+        }
+    }
+
     /** Re-generate a single scene's still from its current assembly fields. */
     private String regenScene(UUID jobId, SceneDto a, String imageFormat) {
         try {
@@ -2583,7 +2794,8 @@ public class PipelineOrchestrator {
             m.put("weather", nz(a.getWeather()));
             // Episode-ConsistencyState: a QC/Auto-Fix re-roll must match the
             // episode's canon. During the first batch (autoQcImages before the
-            // canon is collected) there are no anchors yet — no-op.
+            // canon is collected) there are no episode anchors yet — a series
+            // job then falls back to its SERIES anchors; otherwise no-op.
             attachEpisodeAnchors(m, repo.findById(jobId).orElse(null));
             JsonNode resp = imageClient.generate(jobId, List.of(m), imageFormat);
             for (JsonNode n : resp.path("scenes")) {

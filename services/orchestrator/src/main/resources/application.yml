@@ -91,6 +91,15 @@ app:
     outroPath: ${OUTRO_PATH:/bible/outro.mp4}
   bible:
     path: ${BIBLE_PATH:/bible/channel.yml}
+  series:
+    # Series anchors (cross-episode canon). On a successful upload a series
+    # job's QC-approved character anchors are promoted to
+    # {bible-dir}/refs/series/{seriesId}/, and the next episode's first image
+    # batch is seeded from that folder (priority: own episode canon > series
+    # canon > bible refs). Read via @Value (NOT via OrchestratorProperties —
+    # see app.seo above for why adding record fields ripples). Best-effort and
+    # only active for jobs with a seriesId; flip off as the emergency brake.
+    anchors-enabled: ${SERIES_ANCHORS_ENABLED:true}
   review:
     # HMAC-secret voor signed review-links (GET /api/v1/review/confirm?token=...).
     # Leeg = random secret bij opstart: werkt, maar eerder gemailde links worden

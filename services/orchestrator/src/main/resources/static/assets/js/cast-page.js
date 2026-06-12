@@ -6,6 +6,12 @@
  * /api/v1/brand/cast/* and show here immediately; new RENDERS pick them up
  * after a restart of the orchestrator + image-service (they cache the bible).
  *
+ * Naast uploaden kan een referentie ook AI-GEGENEREERD worden ("🎨 Genereer
+ * nieuwe referentie"): POST .../generate-ref maakt 2-3 kandidaten vanuit de
+ * actuele bible-DNA (tekst-only, zonder het oude referentiebeeld als anchor),
+ * POST .../ref/approve promoveert er één naar refs/{id}.png en ruimt de stale
+ * multi-angle refs + serie-anchors op.
+ *
  * Data: GET /api/v1/brand/cast ; images: /api/v1/brand/character/{id}.png.
  */
 import api, { toast } from "/assets/js/api.js";
@@ -22,6 +28,125 @@ async function uploadImage(id, file) {
     throw new Error(`${res.status} ${t.slice(0, 200)}`);
   }
   return res.json().catch(() => ({}));
+}
+
+/** Hoeveel AI-kandidaten één "🎨 Genereer"-klik aanvraagt (max 4 server-side). */
+const CANDIDATE_COUNT = 3;
+
+function refImgUrl(id, file) {
+  return `/api/v1/brand/cast/${encodeURIComponent(id)}/ref?file=` +
+      encodeURIComponent(file) + "&t=" + Date.now();
+}
+
+/**
+ * "🎨 Genereer nieuwe referentie"-flow: knop → confirm met kosten-indicatie →
+ * spinner → kandidaat-thumbnails met "✓ Gebruik als referentie" (promoveert
+ * naar refs/{id}.png en ruimt stale refs op) en "🗑 Weiger alles". De bestaande
+ * upload-flow in ✎ Bewerken blijft hier los van bestaan. Een pending batch van
+ * een eerdere sessie wordt bij het renderen van de kaart teruggetoond.
+ */
+function renderGenerateRef(c, host, refreshCard) {
+  host.replaceChildren();
+
+  const btn = document.createElement("button");
+  btn.className = "btn sm";
+  btn.textContent = "🎨 Genereer nieuwe referentie";
+  btn.title = "Genereert " + CANDIDATE_COUNT + " AI-kandidaten vanuit de actuele bible-DNA " +
+      "(tekst bepaalt de vorm — het oude referentiebeeld gaat NIET mee)";
+  host.appendChild(btn);
+
+  const strip = document.createElement("div");
+  strip.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-start";
+  host.appendChild(strip);
+
+  function showCandidates(cands) {
+    strip.replaceChildren();
+    if (!Array.isArray(cands) || cands.length === 0) return;
+    const lbl = document.createElement("div");
+    lbl.className = "small";
+    lbl.style.cssText = "flex-basis:100%;font-weight:600";
+    lbl.textContent = "Kandidaten (pipeline negeert ze tot je er één goedkeurt):";
+    strip.appendChild(lbl);
+    for (const cand of cands) {
+      const cell = document.createElement("div");
+      cell.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.style.cssText = "width:110px;height:110px;object-fit:cover;border-radius:8px;cursor:zoom-in";
+      img.src = refImgUrl(c.id, cand.file);
+      img.title = cand.file + " — klik voor volledig formaat";
+      img.addEventListener("click", () => window.open(img.src, "_blank"));
+      cell.appendChild(img);
+      const ok = document.createElement("button");
+      ok.className = "btn approve sm";
+      ok.style.cssText = "font-size:10px;padding:1px 6px";
+      ok.textContent = "✓ Gebruik als referentie";
+      ok.addEventListener("click", async () => {
+        if (!confirm(`Deze kandidaat promoveren tot canonieke referentie van ${c.name}?\n\n` +
+            `Dit vervangt refs/${c.id}.png (oude versie → .bak), verwijdert de overige ` +
+            `kandidaten, leegt de multi-angle map refs/${c.id}/ en verwijdert de ` +
+            `serie-anchors — die dragen allemaal nog de oude look.`)) return;
+        ok.disabled = true;
+        try {
+          const resp = await api.post(
+              `/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref/approve`,
+              { file: cand.file }, { key: `approve-ref-${c.id}` });
+          const cl = (resp && resp.cleaned) || {};
+          toast(`Referentie van ${c.name} vervangen — opgeruimd: ${cl.candidates ?? 0} ` +
+              `kandidaten, ${cl.staleAngles ?? 0} oude hoek-refs, ` +
+              `${cl.seriesAnchors ?? 0} serie-anchor(s)`, "info", 8000);
+          refreshCard();   // kaart verversen: nieuwe canonieke ref + lege strip
+        } catch (e) {
+          ok.disabled = false;   // api.post toont de serverfout al als toast
+        }
+      });
+      cell.appendChild(ok);
+      strip.appendChild(cell);
+    }
+    const rejectAll = document.createElement("button");
+    rejectAll.className = "btn sm";
+    rejectAll.style.cssText = "font-size:10px;padding:1px 6px;align-self:center";
+    rejectAll.textContent = "🗑 Weiger alles";
+    rejectAll.addEventListener("click", async () => {
+      if (!confirm("Alle kandidaten weigeren en verwijderen? De huidige referentie blijft staan.")) return;
+      try {
+        await api.del(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref/candidates`,
+            { key: `discard-ref-${c.id}` });
+        toast("Kandidaten verwijderd", "info");
+        strip.replaceChildren();
+      } catch (e) { /* api.del toont de fout al */ }
+    });
+    strip.appendChild(rejectAll);
+  }
+
+  // Pending batch van een eerdere sessie terugtonen (best-effort).
+  api.get(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref/candidates`,
+      { key: `ref-cands-${c.id}` })
+    .then(showCandidates)
+    .catch(() => { /* informatief — stil falen */ });
+
+  btn.addEventListener("click", async () => {
+    if (!confirm(`${CANDIDATE_COUNT} AI-kandidaten genereren voor ${c.name}?\n\n` +
+        `Kosten: ~€0,05-0,10 per kandidaat (~€0,15-0,30 totaal). De huidige referentie ` +
+        `blijft staan tot je een kandidaat goedkeurt.`)) return;
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = "⏳ Genereren… (±1-2 min)";
+    try {
+      const resp = await api.post(
+          `/api/v1/brand/cast/${encodeURIComponent(c.id)}/generate-ref`,
+          { count: CANDIDATE_COUNT }, { key: `gen-ref-${c.id}` });
+      if (resp && Array.isArray(resp.errors) && resp.errors.length) {
+        toast(`Deels gelukt — ${resp.errors.length} kandidaat/kandidaten mislukt`, "info", 7000);
+      }
+      showCandidates(resp ? resp.candidates : []);
+    } catch (e) {
+      /* api.post toont de serverfout al als toast */
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  });
 }
 
 function castImg(id, cls) {
@@ -156,6 +281,14 @@ function renderCard(c, reload) {
           }
         })
         .catch(() => { /* strip is informatief — stil falen */ });
+    }
+
+    // ── 🎨 AI-referentie genereren (naast de upload-flow in ✎ Bewerken) ──
+    {
+      const genHost = document.createElement("div");
+      genHost.style.marginTop = "8px";
+      body.appendChild(genHost);
+      renderGenerateRef(c, genHost, showView);
     }
 
     const editBtn = document.createElement("button");

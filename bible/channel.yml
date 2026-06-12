@@ -460,7 +460,8 @@ characters:
     species: chicken
     role: "main"
     description: >
-      A small fluffy young chick with soft CREAM-WHITE down feathers all over the
+      A small, perfectly ROUND fluffy young chick — circle body, circle head, every
+      contour a soft curve — with soft CREAM-WHITE down feathers all over the
       body, a bright red pointy chicken comb on top of the head, EXTRA-LARGE round
       shiny brown eyes with multiple bright reflective highlights and clearly visible
       iris detail, thick dark eyelashes, wears a tiny STRAW FARMER'S HAT on the head
@@ -484,7 +485,10 @@ characters:
     # child recognises the character by silhouette + tic, not just colour.
     dna:
       coreColor: "cream-white"
-      silhouette: "round chick topped by a tall straw farmer hat — a pointed-hat silhouette you read instantly"
+      # Silhouet-redesign (board-audit EP3 #25, uitgevoerd 2026-06-12): elk
+      # personage moet als ZWART VLAK herkenbaar zijn, hoed of geen hoed.
+      # Vorm-taal: Pip = CIRKEL, Mo = AAMBEELD/basis, Bo = VERTICALE STREEP.
+      silhouette: "a perfectly ROUND ball-of-fluff chick — circle body, circle head, every line a curve — topped by the tall pointed straw hat: a circle-plus-triangle shape you read instantly as a black silhouette"
       accessory: "straw farmer hat and a red neck bandana"
       # Herformuleerd (feedback ep 3): "tips her straw hat back" liet Veo de
       # hoed AFNEMEN en op de grond leggen — volgende scène had ze hem weer op.
@@ -494,14 +498,14 @@ characters:
       # Extended cross-shot identity fields — keep the look stable across
       # different stills/shots WITHOUT needing an identical reference frame.
       feathers: "dense ultra-soft cream-white down with a faint warm-yellow tint, fluffy and a little wispy at the cheeks"
-      build: "the middle of the three — small and round with an oversized head and a soft little pot-belly, soft round chick proportions; only slightly between Mo and Bo in size"
+      build: "the middle of the three in size but the ROUNDEST of the trio by far — small and circular with an oversized head and a soft little pot-belly, every contour a curve (where Mo is base and weight, and Bo is a vertical line); only slightly between Mo and Bo in size"
       weight: "light and bouncy, as if a gentle breeze could lift her"
       eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
       # Scale lock — the three chicks have DISTINCT but FIXED proportions so each
       # has its own silhouette: Mo is the tallest + sturdiest, Pip is the medium
       # round one, Bo is the smallest + slimmest. Keep this Mo > Pip > Bo size
       # order identical in every shot; only the world dwarfs them all.
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the middle of the trio, only slightly between Mo and Bo. Keep the size difference subtle — all three are clearly the same kind of small chick."
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the middle of the trio, only slightly between Mo and Bo. Keep the size difference subtle — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
       # Accessories this character must NEVER wear (anti-swap lock). Pip is the
       # only one with a straw hat; she must never get Bo's glasses or Mo's scarf.
       antiAccessory: "any eyeglasses or glasses, any knitted scarf, any green scarf"
@@ -541,10 +545,11 @@ characters:
     species: chicken
     role: "sidekick"
     description: >
-      A round fluffy chick with soft BLUE-GREY down feathers all over the body, a
-      bright red pointy chicken comb on top of the head, EXTRA-LARGE round shining
-      brown eyes with multiple bright reflective highlights, thick dark eyelashes,
-      warm friendly expression, wears a small RED knitted scarf / kerchief around the
+      A sturdy, bottom-heavy fluffy chick with soft BLUE-GREY down feathers all over
+      the body — a broad, solid lower body tapering to squared shoulders (anvil-like,
+      planted stance) — a bright red pointy chicken comb on top of the head,
+      EXTRA-LARGE round shining brown eyes with multiple bright reflective highlights,
+      warm friendly expression, wears a small RED knitted scarf around the
       neck (always clearly visible — the signature accessory), small orange beak, two
       thin orange legs, dense fluffy 3D-rendered soft down feathers,
       Pixar/Illumination cartoon proportions with oversized head.
@@ -552,15 +557,16 @@ characters:
     triggerWord: "mo_chicken"
     dna:
       coreColor: "blue-grey"
-      silhouette: "a gently rounder, slightly sturdier chick (only a touch the biggest), with a TALL BRIGHT-RED COMB on top of his head and a thick knitted scarf bunched at the neck"
+      # Vorm-taal: Mo = AAMBEELD — breed en zwaar van onderen, recht van schouders.
+      silhouette: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, planted wide stance, with the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette, unmistakably different from Pip's circle"
       accessory: "a red knitted neck scarf"
       tic: "tilts his head slowly and gives one calm, slow blink while thinking"
       signatureSound: "a soft low thoughtful hum"
       feathers: "smooth even blue-grey down with a soft dusty sheen, neat and tidy, no stray tufts"
-      build: "very slightly the largest of the three — a gently rounder, solid little body, only a TOUCH taller and sturdier than the others (NOT much bigger), calm balanced posture and oversized head; still clearly the same kind of small chick"
+      build: "very slightly the largest of the three — a bottom-heavy, solid little body with a broad base and squared, settled posture (NOT round: where Pip is all curves, Mo is weight and foundation), only a TOUCH taller and sturdier than the others, oversized head; still clearly the same kind of small chick"
       weight: "solid and settled — plants both feet when he stops to think"
       eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); only SLIGHTLY the largest of the trio — just a touch taller and rounder than Pip, with Bo a touch the smallest. Keep the size difference SUBTLE — all three are clearly the same kind of small chick, NEVER one much bigger than the rest."
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); only SLIGHTLY the largest of the trio — just a touch taller and broader-based than Pip, with Bo a touch the smallest. Keep the size difference SUBTLE (never one much bigger than the rest) — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
       # Mo wears ONLY a chunky red KNITTED scarf — never a thin bandana/kerchief
       # (that's Pip's), never glasses (Bo's), never a hat (Pip's).
       antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any wattles or red flaps under the beak, any eyelashes or feminine eye makeup"
@@ -590,8 +596,9 @@ characters:
     species: chicken
     role: sidekick
     description: >
-      A small fluffy chick with soft warm TAN and sandy-brown down
-      feathers, a tiny tuft of feathers sticking up on top of the head,
+      A small, slim, UPRIGHT fluffy chick — narrow vertical body, neck stretched
+      tall — with soft warm TAN and sandy-brown down
+      feathers, a comic cowlick tuft of feathers spiking straight up on top of the head,
       wears ROUND THIN-FRAMED EYEGLASSES perched on the beak (these glasses
       are a signature accessory and must always be present and clearly
       visible) and a small GREEN knitted scarf around the neck (also
@@ -604,15 +611,16 @@ characters:
     triggerWord: "bo_chicken"
     dna:
       coreColor: "tan and sandy-brown"
-      silhouette: "a slightly smaller, slimmer chick, with big round eyeglasses dominating the face"
+      # Vorm-taal: Bo = VERTICALE STREEP — smal, gestrekt, tuft als spits.
+      silhouette: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up as the dot's echo, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette, the opposite of Pip's circle and Mo's anvil"
       accessory: "round thin-framed eyeglasses and a green neck scarf"
       tic: "pushes her glasses up the beak with a wingtip before a joke"
       signatureSound: "a goofy hiccup-giggle"
       feathers: "warm tan and sandy-brown down, slightly ruffled, with a comic cowlick tuft sticking up on top"
-      build: "very slightly the smallest of the three — a slightly slimmer, springy little body, just a TOUCH shorter and lighter than Pip and Mo (NOT much smaller), with an oversized head; still clearly the same kind of small chick"
+      build: "very slightly the smallest of the three — a slim, VERTICAL, springy little body stretched upward (NOT round: where Pip is a ball and Mo is a base, Bo is a line), just a TOUCH shorter and lighter than Pip and Mo, with an oversized head; still clearly the same kind of small chick"
       weight: "light and twitchy, looks caught half-way through a hop"
       eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
-      scaleAnchor: "a small chick against the world; only SLIGHTLY the smallest of the trio — just a touch shorter and slimmer than the others. Keep the size difference SUBTLE — all three are clearly the same kind of small chick, NEVER one much smaller than the rest."
+      scaleAnchor: "a small chick against the world; only SLIGHTLY the smallest of the trio — just a touch shorter and slimmer than the others. Keep the size difference SUBTLE (never one much smaller than the rest) — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
       # Bo's glasses are ALWAYS thin round wire frames (never thick/black). Never a
       # hat (Pip's), never a bandana or red scarf (Pip/Mo's) — Bo's scarf is green.
       antiAccessory: "any hat, any bandana, any red scarf or red kerchief, thick or black-framed glasses"

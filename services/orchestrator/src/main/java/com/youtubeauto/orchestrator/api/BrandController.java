@@ -2,6 +2,7 @@ package com.youtubeauto.orchestrator.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.youtubeauto.orchestrator.client.ImageServiceClient;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.service.BibleEditor;
 import com.youtubeauto.orchestrator.service.BibleReloadService;
@@ -25,7 +26,9 @@ import java.util.Map;
  * Serves channel brand assets so the static UI can show them: the logo, the
  * cast (from bible.characters) and each character's reference image. Also lets
  * the Cast editor change a character's scalar fields + upload a new reference
- * image (writes via {@link BibleEditor}; needs the read-WRITE bible mount).
+ * image (writes via {@link BibleEditor}; needs the read-WRITE bible mount),
+ * and AI-generate reference CANDIDATES from the current bible DNA
+ * (generate-ref / ref/approve — see the candidates section below).
  */
 @RestController
 @RequestMapping("/api/v1/brand")
@@ -35,6 +38,7 @@ public class BrandController {
     private final OrchestratorProperties props;
     private final BibleEditor bibleEditor;
     private final BibleReloadService bibleReloadService;
+    private final ImageServiceClient imageClient;
 
     /**
      * Hot-reload van de bible over de hele stack (orchestrator-caches +
@@ -229,13 +233,19 @@ public class BrandController {
     }
 
     /** Resolves id+file to a path STRICTLY inside bible/refs (id-prefixed),
-     *  or null when the input smells like traversal. */
+     *  or null when the input smells like traversal. Accepts three shapes:
+     *  {@code <id>.png} (canonical), {@code <id>/<file>} (angle shot) and
+     *  {@code <id>/candidates/<file>} (pending AI-generated candidate). */
     private Path safeRefPath(String id, String file) {
         if (!SAFE_ID.matcher(id).matches()) return null;
         String name = file;
         Path refsDir = bibleDir().resolve("refs").normalize();
         Path p;
-        if (name.startsWith(id + "/")) {
+        if (name.startsWith(id + "/candidates/")) {
+            String inner = name.substring((id + "/candidates/").length());
+            if (!SAFE_REF_FILE.matcher(inner).matches()) return null;
+            p = refsDir.resolve(id).resolve("candidates").resolve(inner).normalize();
+        } else if (name.startsWith(id + "/")) {
             String inner = name.substring(id.length() + 1);
             if (!SAFE_REF_FILE.matcher(inner).matches()) return null;
             p = refsDir.resolve(id).resolve(inner).normalize();
@@ -245,6 +255,296 @@ public class BrandController {
             p = refsDir.resolve(name).normalize();
         }
         return p.startsWith(refsDir) ? p : null;
+    }
+
+    // ── AI-generated reference candidates (Cast page "🎨 Genereer referentie") ─
+    //
+    // Schone-generatie-route: de scène-payload noemt GEEN characters, dus de
+    // image-service hecht NUL bestaande referentie-anchors aan (Gemini laadt
+    // anchors per character-id in scene.characters — een lege lijst = tekst-
+    // only, describe-achtig gedrag). De volledige character-DNA reist als
+    // TEKST mee in visualDesc, zodat een aangescherpte dna.silhouette/build de
+    // kandidaat bepaalt en het OUDE referentiebeeld het oude silhouet niet
+    // terug kan trekken. Elke kandidaat krijgt een eigen synthetisch jobId →
+    // een eigen seed (image-service: sharedSeed = |jobId.hashCode()|) en een
+    // eigen /workdir/{uuid}/images-scratchmap, die hierna wordt opgeruimd.
+    //
+    // Kandidaten landen in bible/refs/{id}/candidates/ — een SUBmap, dus
+    // onzichtbaar voor alle pipeline-scans (die lijsten niet-recursief
+    // *.png in refs/ en refs/{id}/), en de naam bevat "candidate" als
+    // dubbele beveiliging (CharacterRefStills/CharacterRefs filteren daarop).
+
+    /** Max kandidaten per batch — elke kandidaat is een betaalde image-call
+     *  (orde ~€0,05-0,10). */
+    private static final int MAX_REF_CANDIDATES = 4;
+
+    /** Genereert 1-4 AI-referentiekandidaten voor een character vanuit de
+     *  ACTUELE bible-DNA (neutrale studio-referentiesheet, geen oude anchors).
+     *  Body: {"count": 3} (optioneel, default 3). Best-effort per kandidaat:
+     *  een mislukte variant blokkeert de rest niet. */
+    @PostMapping(value = "/cast/{id}/generate-ref", produces = "application/json")
+    public ResponseEntity<Map<String, Object>> generateReference(
+            @PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> body) {
+        if (!SAFE_ID.matcher(id).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid character id"));
+        }
+        JsonNode ch = findCharacter(id);
+        if (ch == null) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "character '" + id + "' niet gevonden in de bible"));
+        }
+        int count = 3;
+        try { count = Integer.parseInt(String.valueOf(body == null ? null : body.get("count"))); }
+        catch (Exception ignore) { /* default */ }
+        count = Math.max(1, Math.min(MAX_REF_CANDIDATES, count));
+
+        String prompt = refSheetPrompt(ch);
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates");
+        try {
+            Files.createDirectories(candDir);
+            deleteRegularFiles(candDir);   // vorige, nooit-goedgekeurde batch opruimen
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error",
+                    "kan kandidaten-map niet aanmaken: " + e.getMessage()));
+        }
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            java.util.UUID tempJob = java.util.UUID.randomUUID();
+            try {
+                Map<String, Object> scene = new LinkedHashMap<>();
+                scene.put("seq", 1);
+                scene.put("visualDesc", prompt);
+                // Lege characters-lijst = de schone route: geen anchors, de
+                // DNA-tekst in visualDesc bepaalt de vorm.
+                scene.put("characters", List.of());
+                // "studio" is bewust géén bible-timeOfDay-id, zodat er geen
+                // goldenHour-lichtclausule over de neutrale setup heen komt.
+                scene.put("timeOfDay", "studio");
+                scene.put("cameraFraming",
+                        "full body shot, the whole character visible from head to feet, centered");
+                JsonNode resp = imageClient.generate(tempJob, List.of(scene), "landscape");
+                Path src = null;
+                for (JsonNode s : resp.path("scenes")) {
+                    String p = s.path("imagePath").asText("");
+                    if (!p.isBlank()) { src = Paths.get(p); break; }
+                }
+                if (src == null || !Files.isReadable(src)) {
+                    // Pad uit de respons is image-service-lokaal; de gedeelde
+                    // /workdir-mount (zelfde volume) is de fallback.
+                    Path alt = Paths.get("/workdir", tempJob.toString(), "images", "scene_01.png");
+                    if (Files.isReadable(alt)) src = alt;
+                }
+                if (src == null || !Files.isReadable(src)) {
+                    throw new IllegalStateException(
+                            "gegenereerd bestand niet leesbaar via de gedeelde workdir");
+                }
+                Path dst = candDir.resolve("candidate-" + i + ".png");
+                Files.copy(src, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                candidates.add(Map.of("file", id + "/candidates/" + dst.getFileName()));
+            } catch (Exception e) {
+                errors.add("kandidaat " + i + ": " + e.getMessage());
+            } finally {
+                deleteTempWorkdir(tempJob);   // scratch van de synthetische job
+            }
+        }
+        if (candidates.isEmpty()) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("error", "geen enkele kandidaat gegenereerd");
+            err.put("details", errors);
+            return ResponseEntity.internalServerError().body(err);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", id);
+        out.put("result", "GENERATED");
+        out.put("candidates", candidates);
+        if (!errors.isEmpty()) out.put("errors", errors);
+        out.put("note", "Kandidaten staan in bible/refs/" + id + "/candidates/ en worden door "
+                + "de pipeline genegeerd tot je er één goedkeurt via POST .../ref/approve.");
+        return ResponseEntity.ok(out);
+    }
+
+    /** Pending AI-kandidaten voor een character (refs/{id}/candidates/*.png) —
+     *  zo kan de Cast-pagina een eerdere batch na een refresh terugtonen. */
+    @GetMapping(value = "/cast/{id}/ref/candidates", produces = "application/json")
+    public ResponseEntity<List<Map<String, Object>>> refCandidates(@PathVariable String id) {
+        if (!SAFE_ID.matcher(id).matches()) return ResponseEntity.badRequest().build();
+        List<Map<String, Object>> out = new ArrayList<>();
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates");
+        if (Files.isDirectory(candDir)) {
+            try (var s = Files.list(candDir)) {
+                s.filter(p -> SAFE_REF_FILE.matcher(p.getFileName().toString()).matches())
+                 .sorted()
+                 .forEach(p -> out.add(Map.of("file", id + "/candidates/" + p.getFileName())));
+            } catch (Exception ignore) { /* lijst is best-effort */ }
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /** Weigert ALLE pending kandidaten van een character (🗑 Weiger alles). */
+    @DeleteMapping("/cast/{id}/ref/candidates")
+    public ResponseEntity<Map<String, Object>> discardCandidates(@PathVariable String id) {
+        if (!SAFE_ID.matcher(id).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid character id"));
+        }
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates");
+        int removed = deleteRegularFiles(candDir);
+        try { Files.deleteIfExists(candDir); } catch (Exception ignore) { /* niet leeg of weg */ }
+        return ResponseEntity.ok(Map.of("id", id, "result", "DISCARDED", "removed", removed));
+    }
+
+    /** Promoveert één kandidaat tot canonieke referentie. Body: {"file":
+     *  "{id}/candidates/candidate-1.png"}. Schrijft refs/{id}.png via
+     *  {@link BibleEditor#saveReference} (oude referentie → refs/{id}.png.bak),
+     *  ruimt daarna op wat na een redesign stale is: de overige kandidaten, de
+     *  multi-angle map refs/{id}/ (oude hoeken) en refs/series/*&#47;{id}.png
+     *  (serie-anchors dragen de oude look), en hot-reloadt de bible stack-breed. */
+    @PostMapping(value = "/cast/{id}/ref/approve", consumes = "application/json")
+    public ResponseEntity<Map<String, Object>> approveRef(@PathVariable String id,
+                                                          @RequestBody Map<String, String> body) {
+        if (!SAFE_ID.matcher(id).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid character id"));
+        }
+        String file = body == null ? null : body.get("file");
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates").normalize();
+        Path cand = file == null ? null : safeRefPath(id, file);
+        if (cand == null || !cand.startsWith(candDir) || !Files.isRegularFile(cand)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "file moet een bestaande kandidaat zijn (" + id + "/candidates/...)"));
+        }
+        try {
+            byte[] png = Files.readAllBytes(cand);
+            // Zelfde promotie-pad als de upload-flow: refs/{id}.png + backup .bak.
+            Path saved = bibleEditor.saveReference(id, png);
+
+            // Opruimen — alles hieronder is na een redesign stale:
+            int candidatesRemoved = deleteRegularFiles(candDir);          // incl. de gekozen kandidaat
+            try { Files.deleteIfExists(candDir); } catch (Exception ignore) { }
+            Path angleDir = bibleDir().resolve("refs").resolve(id);
+            int anglesRemoved = deleteRegularFiles(angleDir);             // oude multi-angle hoeken
+            try { Files.deleteIfExists(angleDir); } catch (Exception ignore) { }
+            int seriesRemoved = deleteSeriesAnchors(id);                  // serie-anchors = oude look
+
+            Map<String, Object> reload = bibleReloadService.reloadAll();
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("id", id);
+            out.put("result", "APPROVED");
+            out.put("path", saved.toString());
+            out.put("backup", saved + ".bak (vorige referentie — terugzetten = hernoemen)");
+            out.put("cleaned", Map.of(
+                    "candidates", candidatesRemoved,
+                    "staleAngles", anglesRemoved,
+                    "seriesAnchors", seriesRemoved));
+            out.put("bibleReload", reload);
+            out.put("note", "Nieuwe referentie actief (bible hot-reloaded). Opgeruimd: "
+                    + candidatesRemoved + " kandida(a)t(en), " + anglesRemoved
+                    + " stale multi-angle ref(s) uit refs/" + id + "/ en " + seriesRemoved
+                    + " serie-anchor(s) uit refs/series/*/" + id + ".png — die droegen "
+                    + "allemaal nog de oude look.");
+            return ResponseEntity.ok(out);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Het character-node uit channel.yml (live gelezen), of null. */
+    private JsonNode findCharacter(String id) {
+        try {
+            JsonNode root = new YAMLMapper().readTree(Paths.get(props.bible().path()).toFile());
+            for (JsonNode c : root.path("characters")) {
+                if (id.equalsIgnoreCase(c.path("id").asText(""))) return c;
+            }
+        } catch (Exception ignore) { /* null = niet gevonden */ }
+        return null;
+    }
+
+    /** Neutrale studio-referentiesheet-prompt. Het character wordt puur in
+     *  TEKST beschreven (description + dna.*), zodat een geredesignde
+     *  silhouette/build in de bible het beeld bepaalt — veld-voor-veld
+     *  gespiegeld aan PromptComposer.dnaLine in de image-service (minus
+     *  weight: dat is een Veo-motion-cue, geen still-eigenschap). */
+    private String refSheetPrompt(JsonNode ch) {
+        String name = ch.path("name").asText(ch.path("id").asText(""));
+        JsonNode d = ch.path("dna");
+        StringBuilder b = new StringBuilder();
+        b.append("Character reference sheet: ").append(name)
+         .append(" standing in a relaxed neutral three-quarter pose, full body visible from ")
+         .append("head to feet, on a plain soft warm cream background, even soft lighting, ")
+         .append("no scene, no other characters, no props beyond the signature accessories. ")
+         .append("Exactly ONE character in the whole image — no second character, no twin, ")
+         .append("no clone, no reflection. ");
+        String life = ch.path("lifeStage").asText("").trim();
+        if (!life.isBlank()) b.append(name).append(" is ").append(life).append(". ");
+        String desc = ch.path("description").asText("").trim();
+        if (!desc.isBlank()) b.append("APPEARANCE — ").append(desc.replaceAll("\\s+", " ")).append(' ');
+        b.append("CHARACTER DNA (every detail must be clearly visible and correct): ");
+        appendDna(b, "Core colour", d.path("coreColor").asText(""));
+        String acc = d.path("accessory").asText("").trim();
+        if (!acc.isBlank()) {
+            b.append("ALWAYS wears ").append(acc)
+             .append(" — clearly visible, never dropped or swapped. ");
+        }
+        appendDna(b, "Silhouette", d.path("silhouette").asText(""));
+        appendDna(b, "Feathers", d.path("feathers").asText(""));
+        appendDna(b, "Build", d.path("build").asText(""));
+        appendDna(b, "Eyes", d.path("eyeColor").asText(""));
+        String anti = d.path("antiAccessory").asText("").trim();
+        if (!anti.isBlank()) b.append(name).append(" must NEVER wear ").append(anti).append(". ");
+        return b.toString().trim();
+    }
+
+    private void appendDna(StringBuilder b, String label, String value) {
+        String v = value == null ? "" : value.trim();
+        if (!v.isEmpty()) b.append(label).append(": ").append(v).append(". ");
+    }
+
+    /** Best-effort: verwijdert de gewone bestanden DIRECT in {@code dir}
+     *  (niet recursief — submappen zoals candidates/ blijven staan). */
+    private int deleteRegularFiles(Path dir) {
+        int n = 0;
+        if (!Files.isDirectory(dir)) return 0;
+        try (var s = Files.list(dir)) {
+            for (Path p : s.filter(Files::isRegularFile).toList()) {
+                try { if (Files.deleteIfExists(p)) n++; } catch (Exception ignore) { }
+            }
+        } catch (Exception ignore) { /* best-effort */ }
+        return n;
+    }
+
+    /** Verwijdert refs/series/*&#47;{id}.png|jpg — de serie-anchors van dit
+     *  character dragen na een redesign nog de OUDE look. */
+    private int deleteSeriesAnchors(String id) {
+        int n = 0;
+        Path seriesRoot = bibleDir().resolve("refs").resolve("series");
+        if (!Files.isDirectory(seriesRoot)) return 0;
+        try (var dirs = Files.list(seriesRoot)) {
+            for (Path d : dirs.filter(Files::isDirectory).toList()) {
+                for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
+                    try { if (Files.deleteIfExists(d.resolve(id + ext))) n++; }
+                    catch (Exception ignore) { }
+                }
+            }
+        } catch (Exception ignore) { /* best-effort */ }
+        return n;
+    }
+
+    /** Best-effort: ruimt de /workdir/{uuid}-scratch van één kandidaat-
+     *  generatie op. Het uuid is synthetisch (geen echte job), dus niets
+     *  anders schrijft of leest daar. */
+    private void deleteTempWorkdir(java.util.UUID tempJob) {
+        try {
+            Path dir = Paths.get("/workdir", tempJob.toString());
+            if (!Files.isDirectory(dir)) return;
+            try (var walk = Files.walk(dir)) {
+                walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                    try { Files.deleteIfExists(p); } catch (Exception ignore) { }
+                });
+            }
+        } catch (Exception ignore) { /* scratch-opruiming is best-effort */ }
     }
 
     /** The registered music library (id, mood, file presence) so the Brand
