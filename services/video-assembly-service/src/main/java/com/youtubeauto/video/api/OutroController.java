@@ -9,8 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Composites the branded SUBSCRIBE call-to-action over a one-time Veo "chickens
- * waving goodbye" clip and writes the outro the assembly stage appends to every
+ * Composites the branded end-screen outro (logo + thin bottom line + music +
+ * sparkle — see OutroBuilder's safe-zone schema) over a one-time Veo "chickens
+ * giggling" clip and writes the outro the assembly stage appends to every
  * video. Called by the orchestrator's outro-rebuild flow.
  */
 @RestController
@@ -20,8 +21,8 @@ public class OutroController {
 
     private final OutroBuilder builder;
 
-    /** voiceLines = ordered ElevenLabs MP3s (Pip, Mo, Bo) of the chickens
-     *  waving goodbye; when present they replace Veo's own audio. */
+    /** voiceLines = ordered ElevenLabs MP3s of the farewell — normally ONE
+     *  line (Pip); when present they replace Veo's own audio. */
     public record BuildRequest(String clipPath, List<String> voiceLines) {}
 
     @PostMapping("/build")

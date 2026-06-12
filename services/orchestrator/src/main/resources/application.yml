@@ -89,6 +89,13 @@ app:
   brand:
     introPath: ${INTRO_PATH:/bible/intro.mp4}
     outroPath: ${OUTRO_PATH:/bible/outro.mp4}
+    # Single end-screen farewell line, spoken by Pip. Read via @Value in
+    # OutroRebuildService (NOT via OrchestratorProperties — the record binds
+    # positionally, see app.seo above). The line is embedded VERBATIM in both
+    # the Veo motion prompt and the synthesized voice line, so changing it
+    # here keeps the "voice lines match the motion prompt word for word"
+    # contract intact. Takes effect on the next outro rebuild/re-composite.
+    outro-line: ${OUTRO_LINE:See you in the next adventure!}
   bible:
     path: ${BIBLE_PATH:/bible/channel.yml}
   series:

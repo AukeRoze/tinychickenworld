@@ -7,6 +7,7 @@ import com.youtubeauto.orchestrator.client.VideoGenerationServiceClient;
 import com.youtubeauto.orchestrator.client.VoiceServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -18,10 +19,13 @@ import java.util.UUID;
 
 /**
  * One-click OUTRO rebuild: chains the running services to (re)make the branded
- * outro without any manual step —
+ * END-SCREEN outro without any manual step —
  *   1. image-service → a character-consistent end still (anchors pip/mo/bo),
- *   2. video-gen      → a Veo clip animating it (chicks wave goodbye one by one),
- *   3. assembly       → composite the SUBSCRIBE CTA + logo + sparkle → bible/outro.mp4.
+ *   2. video-gen      → a Veo clip animating it (chicks giggle together, low in
+ *                       frame, the upper two thirds calm/empty for YouTube's
+ *                       end-screen elements),
+ *   3. assembly       → composite logo + one thin bottom line + music + sparkle
+ *                       → bible/outro.mp4 (see OutroBuilder's safe-zone schema).
  * Runs async (Veo takes minutes); the dashboard polls {@link #status()}.
  * Mirrors {@link IntroRebuildService}.
  */
@@ -30,43 +34,62 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OutroRebuildService {
 
+    /** End-screen composition: chicks LOW (bottom third), upper two thirds
+     *  deliberately empty — the still anchors the Veo clip, so the safe zones
+     *  start here, not in the motion prompt. */
     private static final String STILL_DESC =
             "The SAME " + IntroRebuildService.BANNER_WORLD + ", but the warm sun now sits a "
             + "little LOWER and gently DIMMED for a soft, cosy end-of-day golden glow. The "
-            + "three little chickens stand close together, centred, facing the camera and "
-            + "smiling warmly, each lifting one wing to wave goodbye. Keep the LOWER THIRD of "
-            + "the frame as open grass with nothing in it (room for a caption). Wholesome, "
-            + "cosy, centred composition.";
+            + "three little chickens sit CLOSE TOGETHER, LOW in the frame — all three fully "
+            + "inside the BOTTOM THIRD of the picture — smiling and giggling warmly at each "
+            + "other. The UPPER TWO THIRDS of the frame are deliberately CALM and EMPTY: only "
+            + "soft warm evening sky and gently blurred farm bokeh, nothing else there (that "
+            + "space is reserved for on-screen elements added later). No signboard, no sign, "
+            + "no banner and NO text anywhere. Wholesome, cosy composition.";
 
-    private static final String MOTION_DESC =
-            "The three little cartoon chickens wave goodbye to the viewer ONE BY ONE, each saying a "
-            + "cheerful farewell as they wave, then all three wave together at the end. "
-            + "FIRST Pip waves her wing energetically, tips her straw hat and says brightly: "
-            + "'Bye bye!'. THEN Mo gives a calm, gentle wave and a warm slow blink and says: "
-            + "'See you soon!'. THEN Bo waves both wings in a gentle wobble, nudges his round "
-            + "glasses and says warmly: 'Byeee!'. Finally all three wave together and beam at "
-            + "the camera. A soft breeze sways the grass and flowers, a few petals drift and "
-            + "2-3 butterflies flutter past, in warm DIMMED end-of-day light. Keep it warm, "
-            + "calm and gentle — NOT over-the-top, NO laughing or giggling. Keep the lower "
-            + "third clear. "
-            // P5 (outro) — dub-friendly mouth motion: the farewells are dubbed in later as
-            // a separate ElevenLabs track, so don't articulate the exact words. But the beak
-            // must still CLEARLY move on the chicken whose turn it is, or the audio reads as
-            // unsynced. Visible open-close on the speaker, closed on the others.
-            + "BEAK / MOUTH: the farewells are dubbed in separately, so do NOT lip-sync or "
-            + "mouth the exact words and do NOT hold a wide gaping beak. BUT on its OWN turn "
-            + "the speaking chicken MUST clearly open and close its beak a few times — a "
-            + "simple, visible 'talking' motion so it's obvious which chicken is speaking — "
-            + "while the other two keep their beaks CLOSED and still. Gentle rounded "
+    /** End-screen motion prompt. The single dubbed farewell line is embedded
+     *  VERBATIM (the "voice lines match MOTION_DESC word for word" contract),
+     *  and the line is configurable — so this is a method, not a constant. */
+    private String motionDesc() {
+        return "STATIC, calm camera — locked off, or at most a very slow, minimal push-in. "
+            + "The three little cartoon chickens sit CLOSE TOGETHER, LOW in the frame — all "
+            + "three fully inside the BOTTOM THIRD of the picture — in warm golden-hour light. "
+            + "They giggle and laugh warmly WITH EACH OTHER first, leaning into each other "
+            + "happily, then all three turn and beam warmly at the camera. While looking at "
+            + "the camera, Pip says cheerfully: '" + outroLine + "'. "
+            + "The UPPER TWO THIRDS of the frame stay deliberately CALM and EMPTY the whole "
+            + "clip — just soft warm evening sky and gently blurred farm bokeh, with NOTHING "
+            + "appearing there (no birds, no butterflies, no objects): on-screen end-screen "
+            + "elements will be overlaid in that space later. "
+            + "NO waving, NO held-up objects, NO signboard, no sign, no banner and NO text "
+            + "anywhere. Only a soft breeze low in the grass, warm DIMMED end-of-day light, "
+            + "cosy, gentle and unhurried. "
+            // P5 (outro) — dub-friendly mouth motion: the farewell is dubbed in later as a
+            // separate ElevenLabs track, so don't articulate the exact words. But Pip's beak
+            // must still CLEARLY move while her line plays, or the audio reads as unsynced.
+            + "BEAK / MOUTH: the spoken farewell is dubbed in separately, so do NOT lip-sync "
+            + "or mouth the exact words and do NOT hold a wide gaping beak. BUT while Pip "
+            + "says her line her beak MUST clearly open and close a few times — a simple, "
+            + "visible 'talking' motion so it's obvious she is speaking — while Mo and Bo "
+            + "only giggle softly with closed or barely-open beaks. Gentle rounded "
             + "open-close, never a wide gape, never word-shaped phonemes. "
             + IntroRebuildService.IDENTITY_LOCK;
+    }
 
-    /** The chickens' farewell lines — MUST match the words in {@link #MOTION_DESC}
-     *  so the spoken voices line up with the wave. Order = Pip, Mo, Bo. */
-    static final List<Map<String, String>> OUTRO_LINES = List.of(
-            Map.of("speaker", "pip", "text", "Bye bye!",     "emotion", "happy"),
-            Map.of("speaker", "mo",  "text", "See you soon!", "emotion", "warm"),
-            Map.of("speaker", "bo",  "text", "Byeee!",        "emotion", "happy"));
+    /** The single farewell line, spoken by Pip. Configurable without a rebuild
+     *  via {@code app.brand.outro-line} (or env OUTRO_LINE); read via @Value,
+     *  NOT via OrchestratorProperties (the record binds positionally — see the
+     *  app.seo note in application.yml). Channel language is English. */
+    @Value("${app.brand.outro-line:See you in the next adventure!}")
+    private String outroLine;
+
+    /** The farewell as voice-service lines — built from {@link #outroLine} so
+     *  the synthesized words ALWAYS match {@link #motionDesc()} verbatim.
+     *  One line only since the end-screen redesign (the old three-voice
+     *  Pip/Mo/Bo goodbye made the end screen too busy). */
+    private List<Map<String, String>> outroLines() {
+        return List.of(Map.of("speaker", "pip", "text", outroLine, "emotion", "warm"));
+    }
 
     private final ImageServiceClient imageClient;
     private final VideoGenerationServiceClient videoGenClient;
@@ -160,15 +183,17 @@ public class OutroRebuildService {
             // QC the still BEFORE the (paid) Veo step — mirrors IntroRebuildService.
             stillPath = qcStillOrRegen(job, still, stillPath, 2);
 
-            status = "2/3 — Veo chickens-waving clip (a few minutes)…";
+            status = "2/3 — Veo giggling-chicks clip (a few minutes)…";
             log.info("Outro rebuild {}: veo clip from {}", job, stillPath);
             Map<String, Object> scene = new HashMap<>();
             scene.put("seq", 1);
             scene.put("sceneType", "outro");
             scene.put("startImagePath", stillPath);
-            scene.put("visualDesc", MOTION_DESC);
+            scene.put("visualDesc", motionDesc());
             scene.put("negativePrompt", IntroRebuildService.IDENTITY_NEG);
-            scene.put("durationSeconds", 6);
+            // ~8s of Veo (6 → 8 with the 12s end-screen template): more giggle
+            // before OutroBuilder's tpad freeze-hold covers the final ~4s.
+            scene.put("durationSeconds", 8);
             if (model != null && !model.isBlank()) scene.put("modelOverride", model.trim());
             // Async submit + poll (drop-in: same args, same result shape) — no
             // minutes-long open HTTP connection for a proxy/idle-timeout to kill.
@@ -181,11 +206,11 @@ public class OutroRebuildService {
             String clip = c0.path("clipPath").asText();
             rememberClip(clip);   // cache for cheap re-composites (no Veo), survives restart
 
-            // Branded farewell voices (same voices as the episodes); best-effort.
+            // Branded farewell voice (same voice as the episodes); best-effort.
             List<String> voiceLines =
-                    IntroRebuildService.synthVoiceLines(voiceClient, job, OUTRO_LINES);
+                    IntroRebuildService.synthVoiceLines(voiceClient, job, outroLines());
 
-            status = "3/3 — compositing SUBSCRIBE call-to-action…";
+            status = "3/3 — compositing end-screen outro…";
             log.info("Outro rebuild {}: composite {} ({} branded voices)", job, clip, voiceLines.size());
             assemblyClient.buildOutro(clip, voiceLines);
 
@@ -200,9 +225,9 @@ public class OutroRebuildService {
     }
 
     /**
-     * Re-run ONLY the CTA / credits / SFX assembly on the last Veo clip — no
-     * image, no Veo. Cheap way to iterate on the outro composite (e.g. after a
-     * credits-overlay change) without paying for a fresh Veo render. Requires a
+     * Re-run ONLY the overlay / voice / SFX assembly on the last Veo clip — no
+     * image, no Veo. Cheap way to iterate on the outro composite (e.g. after an
+     * overlay or music change) without paying for a fresh Veo render. Requires a
      * previous full rebuild so a clip exists. Mirrors {@link IntroRebuildService}.
      */
     @Async("pipelineExecutor")
@@ -216,10 +241,10 @@ public class OutroRebuildService {
         try {
             UUID job = UUID.randomUUID();
             String clip = resolveClip();
-            status = "re-compositing CTA + credits + sound (no Veo)…";
+            status = "re-compositing end-screen overlays + sound (no Veo)…";
             log.info("Outro re-composite from cached clip {}", clip);
             List<String> voiceLines =
-                    IntroRebuildService.synthVoiceLines(voiceClient, job, OUTRO_LINES);
+                    IntroRebuildService.synthVoiceLines(voiceClient, job, outroLines());
             assemblyClient.buildOutro(clip, voiceLines);
             status = "done — outro.mp4 re-composited at " + LocalTime.now().withNano(0);
         } catch (Exception e) {

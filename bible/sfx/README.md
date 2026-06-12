@@ -59,6 +59,22 @@ ambient/
 location bed keeps playing. Like everything in the bible this is
 dormant-until-asset: drop a file and the next synthesis uses it.
 
+## Outro music bed (`outro/`)
+
+`outro/calm.mp3` — optional calm music bed for the branded 12s end-screen
+outro. Mixed by the video-assembly OutroBuilder (property
+`app.brand.outro-music`, default `/bible/sfx/outro/calm.mp3`): looped/trimmed
+to the outro length, ~-16 dB under Pip's farewell line, and faded out with the
+outro's 2.6s tail fade. Like everything in the bible this is
+dormant-until-asset: no file = the outro renders without music; drop the file
+and the next outro (re)build mixes it in. Pick something soft and sleepy —
+the outro is the bedtime wind-down, not a sting.
+
+```
+outro/
+└── calm.mp3        ← gentle golden-hour lullaby bed, loopable
+```
+
 ## Emotion taxonomy
 
 Used by script-service emotion tag → voice-service file picker mapping.
