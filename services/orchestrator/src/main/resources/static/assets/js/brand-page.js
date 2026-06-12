@@ -345,7 +345,9 @@ loadAudio();
   async function refreshCandidates() {
     try {
       const data = await api.get("/api/v1/brand/branding/candidates", { key: "branding-cands" });
-      renderCandidates((data && data.candidates) || []);
+      // Overlay-kandidaten (kind "overlay", zelfde endpoint) horen bij de
+      // 🐔-kaart verderop — hier alleen logo/banner tonen.
+      renderCandidates(((data && data.candidates) || []).filter(c => c.kind !== "overlay"));
       renderApproved(!!(data && data.avatarPresent), !!(data && data.bannerPresent));
     } catch (e) { /* informatief — stil falen */ }
   }
@@ -394,6 +396,13 @@ loadAudio();
 // cast-page.js uploadImage), en twee snelkoppelingen die DEZELFDE
 // /recomposite-endpoints + confirm/poll-patronen gebruiken als wire() bovenin
 // — eigen knoppen, geen programmatisch geklik op de bestaande.
+// Plus: "🎨 Genereer opnieuw (nieuwe cast)" — zelfde bord/ontwerp, nieuwe
+// cast-refs (kind:"overlay" op het bestaande /generate-endpoint; het oude logo
+// reist server-side als styleAnchor mee). De cast-selectie komt van de
+// checkboxes op de 📺-kaart (persistent via localStorage "brandingCast.v1" —
+// hier alleen GELEZEN uit de DOM, geen tweede checkbox-rij). Kandidaten staan
+// nog op hun magenta generatie-achtergrond; de approve chroma-keyt die er
+// server-side uit en vervangt bible/logo.png.
 (() => {
   const img = document.getElementById("overlay-logo-preview");
   const fileInput = document.getElementById("overlay-logo-file");
@@ -475,6 +484,156 @@ loadAudio();
   }
   wireRecompShortcut("intro", "overlay-recomp-intro");
   wireRecompShortcut("outro", "overlay-recomp-outro");
+
+  // ── 🎨 Genereer opnieuw (zelfde bord, nieuwe cast) ─────────────────────
+  const regenBtn = document.getElementById("overlay-regen");
+  const candHost = document.getElementById("overlay-candidates");
+  if (regenBtn && candHost) {
+    const CANDIDATE_COUNT = 3;
+    const fileUrl = (name) => `/api/v1/brand/branding/file?name=${encodeURIComponent(name)}`;
+
+    // Zelfde selectie als de 📺-kaart: lees de checkbox-rij daar uit de DOM
+    // (de keuze zelf is al persistent via localStorage "brandingCast.v1").
+    // Leeg (niets aangevinkt of nog niet geladen) → de server valt terug op
+    // de hoofdcast-default (main + sidekicks).
+    function brandingCastIds() {
+      return [...document.querySelectorAll("#branding-cast input[type=checkbox]:checked")]
+          .map(c => c.value);
+    }
+
+    function renderOverlayCandidates(list) {
+      candHost.replaceChildren();
+      if (!list.length) return;
+      const note = document.createElement("p");
+      note.className = "sub small";
+      note.textContent = "Kandidaten staan nog op hun magenta generatie-achtergrond — " +
+          "bij goedkeuren wordt die automatisch transparant gemaakt (chroma-key) en " +
+          "vervangt de kandidaat bible/logo.png (oude → logo.previous.png).";
+      candHost.appendChild(note);
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:flex;flex-wrap:wrap;gap:12px";
+      for (const cand of list) {
+        const cell = document.createElement("div");
+        cell.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px";
+        const pic = document.createElement("img");
+        pic.src = fileUrl(cand.file);
+        pic.title = cand.file + " — klik voor volledig formaat";
+        pic.style.cssText = "width:220px;aspect-ratio:16/9;object-fit:contain;" +
+            "border-radius:8px;border:1px solid var(--border,#ccc);cursor:zoom-in";
+        pic.addEventListener("click", () => window.open(pic.src, "_blank"));
+        cell.appendChild(pic);
+        const ok = document.createElement("button");
+        ok.className = "btn approve sm";
+        ok.style.cssText = "font-size:10px;padding:1px 6px";
+        ok.textContent = "✓ Gebruik als overlay-logo";
+        ok.addEventListener("click", async () => {
+          const sure = confirm(
+            "Deze kandidaat als overlay-logo gebruiken?\n\n" +
+            "De magenta achtergrond wordt automatisch verwijderd (chroma-key) en " +
+            "bible/logo.png vervangen — het logo dat in ÉLKE video gebakken wordt. " +
+            "De oude versie gaat naar logo.previous.png.\n\n" +
+            "Daarna intro én outro re-compositen (gratis, geen Veo) om het nieuwe " +
+            "logo in de bumpers te bakken — knoppen hierboven.");
+          if (!sure) return;
+          ok.disabled = true;
+          try {
+            const resp = await api.post("/api/v1/brand/branding/approve",
+                { file: cand.file, kind: "overlay" }, { key: "overlay-approve" });
+            toast(resp && resp.note ? resp.note : "Overlay-logo vervangen ✓", "info", 9000);
+            img.style.display = "";   // preview kan verborgen zijn na een eerdere 404
+            refreshPreview();         // checkerboard toont het nieuwe, gekeyde logo
+            if (st) st.textContent = "✓ vervangen — nu intro + outro re-compositen";
+            await refreshOverlayCandidates();
+          } catch (e) { ok.disabled = false; /* api.js toonde de fout al (bv. 400 chroma-key) */ }
+        });
+        cell.appendChild(ok);
+        grid.appendChild(cell);
+      }
+      candHost.appendChild(grid);
+      const rejectAll = document.createElement("button");
+      rejectAll.className = "btn sm";
+      rejectAll.style.marginTop = "8px";
+      rejectAll.textContent = "🗑 Weiger alles";
+      rejectAll.addEventListener("click", async () => {
+        if (!confirm("Alle overlay-kandidaten weigeren en verwijderen?")) return;
+        try {
+          await api.del("/api/v1/brand/branding/candidates?kind=overlay",
+              { key: "overlay-discard" });
+          toast("Overlay-kandidaten verwijderd", "info");
+          await refreshOverlayCandidates();
+        } catch (e) { /* api.js toonde de fout al */ }
+      });
+      candHost.appendChild(rejectAll);
+    }
+
+    async function refreshOverlayCandidates() {
+      try {
+        const data = await api.get("/api/v1/brand/branding/candidates", { key: "overlay-cands" });
+        renderOverlayCandidates(((data && data.candidates) || [])
+            .filter(c => c.kind === "overlay"));
+      } catch (e) { /* informatief — stil falen */ }
+    }
+
+    // Plan B-vinkje: standaard gaat het oude logo als design-referentie mee
+    // (zelfde bord, maar het model kan de oude kippen soms terug-kopiëren);
+    // uitgevinkt = VRIJ genereren — het bord wordt tekstueel beschreven en de
+    // cast-refs zijn de enige beeldbron, dus de nieuwe kippen zijn gegarandeerd.
+    const designRefWrap = document.createElement("label");
+    designRefWrap.className = "small";
+    designRefWrap.style.cssText = "display:flex;align-items:center;gap:6px;cursor:pointer";
+    designRefWrap.title = "Aangevinkt: het huidige logo gaat als beeld-referentie mee " +
+        "(zelfde bord, maar het model kan de oude personages terug-kopiëren). " +
+        "Uitgevinkt (plan B): het bord wordt in tekst beschreven — iets ander " +
+        "bord mogelijk, maar gegarandeerd de nieuwe cast.";
+    const designRefBox = document.createElement("input");
+    designRefBox.type = "checkbox";
+    designRefBox.checked = true;
+    designRefWrap.appendChild(designRefBox);
+    designRefWrap.appendChild(document.createTextNode("oude logo als design-referentie (uit = vrij genereren)"));
+    regenBtn.insertAdjacentElement("afterend", designRefWrap);
+
+    regenBtn.addEventListener("click", async () => {
+      const ids = brandingCastIds();
+      const castLabel = ids.length ? ids.join(", ") : "default (main + sidekicks)";
+      const useDesignRef = designRefBox.checked;
+      const routeText = useDesignRef
+        ? "Het huidige logo gaat als design-referentie mee: zelfde bord, letters " +
+          "en compositie — personages worden opnieuw geschilderd naar de cast-refs."
+        : "VRIJ genereren (plan B): geen oud beeld mee — het bord wordt in tekst " +
+          "beschreven (zelfde stijl/kleuren), de cast-refs zijn de enige beeldbron. " +
+          "Gegarandeerd de nieuwe kippen; het bord kan licht afwijken.";
+      const ok = confirm(
+        "🎨 Overlay-logo opnieuw genereren?\n\n" +
+        `Cast (selectie van de 📺-kaart): ${castLabel}\n\n` +
+        `${CANDIDATE_COUNT} kandidaten — elke kandidaat is een betaalde image-call ` +
+        "(~€0,05-0,10). " + routeText + "\n\n" +
+        "bible/logo.png wordt pas vervangen als je een kandidaat goedkeurt.");
+      if (!ok) return;
+      regenBtn.disabled = true;
+      const oldText = regenBtn.textContent;
+      regenBtn.textContent = "⏳ Genereren… (±1-2 min)";
+      if (st) st.textContent = "overlay-kandidaten genereren…";
+      try {
+        const resp = await api.post("/api/v1/brand/branding/generate",
+            { kind: "overlay", characters: ids, count: CANDIDATE_COUNT,
+              useDesignRef: useDesignRef },
+            { key: "overlay-gen" });
+        if (resp && Array.isArray(resp.errors) && resp.errors.length) {
+          toast(`Deels gelukt — ${resp.errors.length} kandidaat(en) mislukt`, "warn", 8000);
+        } else {
+          toast("Overlay-kandidaten klaar — kies er één", "info");
+        }
+        await refreshOverlayCandidates();
+      } catch (e) { /* api.js toonde de fout al */ }
+      finally {
+        regenBtn.disabled = false;
+        regenBtn.textContent = oldText;
+        if (st) st.textContent = "";
+      }
+    });
+
+    refreshOverlayCandidates();   // na een refresh: pending kandidaten terugtonen
+  }
 })();
 
 // ── Scène-overgangen editor (bible assembly.transitions, hot-reload ≤1 min) ──

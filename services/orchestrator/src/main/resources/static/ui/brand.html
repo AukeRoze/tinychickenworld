@@ -130,12 +130,17 @@
           <input type="file" id="overlay-logo-file" accept="image/png,.png">
           <div class="filter-row">
             <button class="btn" id="overlay-logo-upload">⬆ Vervang logo</button>
+            <button class="btn" id="overlay-regen" title="Hetzelfde logo-ontwerp (bord, letters, compositie) opnieuw genereren met de huidige cast-refs — het oude logo gaat als design-referentie mee; cast-selectie via de checkboxes op de 📺-kaart hierboven">🎨 Genereer opnieuw (nieuwe cast)</button>
             <button class="btn sm" id="overlay-recomp-intro" title="Zelfde actie als ♻ Re-composite bij de intro bovenaan — bakt o.a. het overlay-logo opnieuw in, geen Veo-kosten">♻ Re-composite intro</button>
             <button class="btn sm" id="overlay-recomp-outro" title="Zelfde actie als ♻ Re-composite bij de outro bovenaan — bakt o.a. het overlay-logo opnieuw in, geen Veo-kosten">♻ Re-composite outro</button>
             <span id="overlay-logo-status" class="small" style="color:var(--muted)"></span>
           </div>
         </div>
       </div>
+      <!-- Hergenereer-kandidaten (zelfde bord, nieuwe cast). De kandidaten staan
+           bewust nog op hun magenta achtergrond — die gaat er bij goedkeuren
+           automatisch uit (chroma-key op de server). -->
+      <div id="overlay-candidates" style="margin-top:10px"></div>
     </div>
   </div>
 

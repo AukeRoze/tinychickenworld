@@ -36,7 +36,17 @@ public record GenerateImageRequest(
              *  bible refs, so a re-rolled scene matches how THIS episode already
              *  drew the cast — not just the bible's version of the character.
              *  May be null (first generation batch / no canon yet). */
-            List<EpisodeAnchor> episodeAnchors
+            List<EpisodeAnchor> episodeAnchors,
+            /** STYLE anchors (additive, optional — same pattern as
+             *  {@code episodeAnchors}: absent in the JSON → null → exactly the
+             *  current behaviour): paths to images of an ORIGINAL design/logo
+             *  whose composition must be RECREATED, only the characters change.
+             *  Used by the branding-studio's "regenerate overlay logo with the
+             *  new cast" flow — the old logo travels along as a layout/design
+             *  reference next to the character anchors. Anchor-capable providers
+             *  attach them as the FINAL reference images (max 2, counted in the
+             *  total-ref budget). May be null. */
+            List<String> styleAnchors
     ) {
         /** A recurring prop's reference image: a name + a readable PNG path. */
         public record PropRef(String name, String imagePath) {}
@@ -58,11 +68,12 @@ public record GenerateImageRequest(
         }
 
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId) {
-            this(seq, visualDesc, characters, locationId, null, null, null, null, null);
+            this(seq, visualDesc, characters, locationId, null, null, null, null, null, null);
         }
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId,
                            String timeOfDay, String weather, String cameraFraming) {
-            this(seq, visualDesc, characters, locationId, timeOfDay, weather, cameraFraming, null, null);
+            this(seq, visualDesc, characters, locationId, timeOfDay, weather, cameraFraming,
+                    null, null, null);
         }
     }
 

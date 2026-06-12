@@ -42,9 +42,11 @@ import java.util.Map;
  * Bestanden (bible/branding/, een NIEUWE map — bible/logo.png is het
  * TRANSPARANTE intro/outro-overlay-asset; de avatar/banner-flow blijft daar
  * overal vanaf, alleen de expliciete upload-route {@code POST /logo-overlay}
- * vervangt het, mét backup en alpha-validatie):
+ * en de overlay-approve ({@code kind:"overlay"} — "zelfde bord, nieuwe cast",
+ * op magenta gegenereerd en bij approve gechroma-keyed) vervangen het, mét
+ * backup en alpha-validatie):
  * <ul>
- *   <li>candidates/{logo|banner}-N.png — pending kandidaten;</li>
+ *   <li>candidates/{logo|banner|overlay}-N.png — pending kandidaten;</li>
  *   <li>avatar.png — goedgekeurd logo, 800×800 (YouTube-avatar-formaat). De
  *       Data API heeft GÉÉN endpoint voor de profielfoto — eenmalig handmatig
  *       uploaden via studio.youtube.com → Aanpassing → Branding;</li>
@@ -75,9 +77,13 @@ public class BrandingStudioController {
 
     private static final java.util.regex.Pattern SAFE_ID =
             java.util.regex.Pattern.compile("[a-z0-9_-]{1,40}");
-    /** Kandidaat-bestandsnamen: {kind}-N.png, niets anders. */
+    /** Kandidaat-bestandsnamen: {kind}-N.png, niets anders. "overlay" =
+     *  hergenereer-kandidaten voor bible/logo.png (zelfde bord, nieuwe cast) —
+     *  op magenta gegenereerd, bij approve gechroma-keyed naar transparant. */
     private static final java.util.regex.Pattern SAFE_CANDIDATE_FILE =
-            java.util.regex.Pattern.compile("(logo|banner)-[0-9]{1,2}\\.png");
+            java.util.regex.Pattern.compile("(logo|banner|overlay)-[0-9]{1,2}\\.png");
+    /** Geldige kinds voor generate/approve/discard. */
+    private static final List<String> KINDS = List.of("logo", "banner", "overlay");
     /** Goedgekeurde assets die de UI mag opvragen (download-link / preview). */
     private static final List<String> APPROVED_FILES = List.of("avatar.png", "banner.png");
 
@@ -99,15 +105,20 @@ public class BrandingStudioController {
 
     // ── Genereren ───────────────────────────────────────────────────────────
 
-    /** Genereert 1-4 kandidaten voor het kanaal-logo of de kanaal-banner.
-     *  Body: {"kind": "logo"|"banner", "characters": ["pip","mo"], "count": 3}.
-     *  De geselecteerde ids gaan als scene.characters mee → de provider ankert
-     *  op ál hun goedgekeurde refs. Best-effort per kandidaat. */
+    /** Genereert 1-4 kandidaten voor het kanaal-logo, de kanaal-banner of het
+     *  OVERLAY-logo (bible/logo.png — zelfde bord/ontwerp, nieuwe cast).
+     *  Body: {"kind": "logo"|"banner"|"overlay", "characters": ["pip","mo"],
+     *  "count": 3}. De geselecteerde ids gaan als scene.characters mee → de
+     *  provider ankert op ál hun goedgekeurde refs. Bij "overlay" reist het
+     *  HUIDIGE logo bovendien als styleAnchor mee: de provider krijgt het als
+     *  extra referentie met de instructie het ontwerp exact te herhalen en
+     *  alleen de personages te vervangen. Best-effort per kandidaat. */
     @PostMapping(value = "/generate", produces = "application/json")
     public ResponseEntity<Map<String, Object>> generate(@RequestBody Map<String, Object> body) {
         String kind = String.valueOf(body == null ? "" : body.getOrDefault("kind", "")).trim();
-        if (!"logo".equals(kind) && !"banner".equals(kind)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "kind moet 'logo' of 'banner' zijn"));
+        if (!KINDS.contains(kind)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "kind moet 'logo', 'banner' of 'overlay' zijn"));
         }
         List<String> ids = new ArrayList<>();
         Object raw = body.get("characters");
@@ -117,9 +128,35 @@ public class BrandingStudioController {
                 if (!id.isEmpty() && !ids.contains(id)) ids.add(id);
             }
         }
+        if (ids.isEmpty() && "overlay".equals(kind)) {
+            // Overlay-regeneratie zonder expliciete selectie: de hoofdcast
+            // (main + sidekicks) — dezelfde default als de checkbox-rij in de UI.
+            ids = defaultMainCastIds();
+        }
         if (ids.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error",
                     "characters: selecteer minstens één personage"));
+        }
+        // Overlay kent twee routes (UI-vinkje "gebruik oude logo als design-ref"):
+        //  - useDesignRef=true (default): het bestaande logo reist als styleAnchor
+        //    mee — exact hetzelfde bord, maar het model kan de oude personages
+        //    soms terug-kopiëren ondanks de REPAINT-instructie.
+        //  - useDesignRef=false (PLAN B): géén design-beeld; het bord wordt
+        //    tekstueel beschreven (overlayFreePrompt). Iets ander bord mogelijk,
+        //    maar gegarandeerd de NIEUWE cast — er is geen oud beeld om van te
+        //    spieken.
+        // logo-source.png (origineel vóór de uitsnijding/de-halo) heeft geen
+        // weggesneden randen en is de betere design-ref; fallback = logo.png.
+        boolean useDesignRef = !Boolean.FALSE.equals(body.get("useDesignRef"));
+        Path styleRef = null;
+        if ("overlay".equals(kind) && useDesignRef) {
+            styleRef = bibleDir().resolve("logo-source.png");
+            if (!Files.isRegularFile(styleRef)) styleRef = bibleDir().resolve("logo.png");
+            if (!Files.isRegularFile(styleRef)) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "geen bestaand logo gevonden (bible/logo-source.png noch bible/logo.png) "
+                                + "— kies 'vrij genereren' (zonder design-referentie)"));
+            }
         }
         // Valideer elk id tegen de bible-cast (live gelezen, zoals BrandController).
         List<JsonNode> cast = new ArrayList<>();
@@ -139,7 +176,12 @@ public class BrandingStudioController {
         catch (Exception ignore) { /* default */ }
         count = Math.max(1, Math.min(MAX_CANDIDATES, count));
 
-        String prompt = "logo".equals(kind) ? logoPrompt(cast) : bannerPrompt(cast);
+        String prompt = switch (kind) {
+            case "logo"   -> logoPrompt(cast);
+            case "banner" -> bannerPrompt(cast);
+            // "overlay" — KINDS-gevalideerd; plan B = vrij, zonder design-beeld.
+            default       -> useDesignRef ? overlayPrompt(cast) : overlayFreePrompt(cast);
+        };
         Path candDir = candidatesDir();
         try {
             Files.createDirectories(candDir);
@@ -166,9 +208,18 @@ public class BrandingStudioController {
                 // lichtclausule óver het logo heen; de banner-prompt benoemt
                 // golden hour zelf, op de plek waar hij het hebben wil.
                 scene.put("timeOfDay", "studio");
-                scene.put("cameraFraming", "logo".equals(kind)
-                        ? "tight group close-up, heads and shoulders, perfectly centered"
-                        : "very wide panoramic establishing shot, characters small and centered");
+                scene.put("cameraFraming", switch (kind) {
+                    case "logo"   -> "tight group close-up, heads and shoulders, perfectly centered";
+                    case "banner" -> "very wide panoramic establishing shot, characters small and centered";
+                    default       -> "flat frontal logo composition, the complete artwork centered "
+                                   + "with generous margins on all sides";
+                });
+                if (styleRef != null) {
+                    // Additief veld op de scene-payload (zie GenerateImageRequest.
+                    // SceneVisual.styleAnchors in de image-service): het huidige
+                    // logo-ontwerp als design-anchor — max 2, hier altijd 1.
+                    scene.put("styleAnchors", List.of(styleRef.toString()));
+                }
                 // format kent alleen landscape|vertical (request-DTO-validatie);
                 // het logo wordt dus 16:9 gegenereerd en bij approve naar een
                 // gecentreerd vierkant gecropt — de prompt vraagt om royale
@@ -228,8 +279,10 @@ public class BrandingStudioController {
                 s.map(p -> p.getFileName().toString())
                  .filter(n -> SAFE_CANDIDATE_FILE.matcher(n).matches())
                  .sorted()
+                 // kind = het prefix vóór de streep (logo|banner|overlay) —
+                 // gegarandeerd aanwezig door de SAFE_CANDIDATE_FILE-match.
                  .forEach(n -> out.add(Map.of("file", n,
-                         "kind", n.startsWith("logo-") ? "logo" : "banner")));
+                         "kind", n.substring(0, n.indexOf('-')))));
             } catch (Exception ignore) { /* lijst is best-effort */ }
         }
         Map<String, Object> resp = new LinkedHashMap<>();
@@ -252,17 +305,18 @@ public class BrandingStudioController {
                 .body(new FileSystemResource(p));
     }
 
-    /** Weigert pending kandidaten (🗑). Optioneel ?kind=logo|banner om één
-     *  soort te wissen; zonder kind gaat alles weg. */
+    /** Weigert pending kandidaten (🗑). Optioneel ?kind=logo|banner|overlay om
+     *  één soort te wissen; zonder kind gaat alles weg. */
     @DeleteMapping("/candidates")
     public ResponseEntity<Map<String, Object>> discardCandidates(
             @RequestParam(value = "kind", required = false) String kind) {
-        if (kind != null && !"logo".equals(kind) && !"banner".equals(kind)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "kind moet 'logo' of 'banner' zijn"));
+        if (kind != null && !KINDS.contains(kind)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "kind moet 'logo', 'banner' of 'overlay' zijn"));
         }
         Path candDir = candidatesDir();
         int removed = kind == null
-                ? deleteKindCandidates(candDir, "logo") + deleteKindCandidates(candDir, "banner")
+                ? KINDS.stream().mapToInt(k -> deleteKindCandidates(candDir, k)).sum()
                 : deleteKindCandidates(candDir, kind);
         try { Files.deleteIfExists(candDir); } catch (Exception ignore) { /* niet leeg of weg */ }
         return ResponseEntity.ok(Map.of("result", "DISCARDED", "removed", removed));
@@ -276,13 +330,21 @@ public class BrandingStudioController {
      *  intro/outro-overlay) wordt NIET aangeraakt.</li>
      *  <li>banner → cover-crop naar 2560×1440 als bible/branding/banner.png én
      *  als JPEG (quality ~0.9) naar bible/youtube_banner.jpg — de cast-canon-
-     *  referentie; de oude gaat eerst naar youtube_banner.previous.jpg.</li></ul>
-     *  Geen bible-reload: geen service leest deze bestanden bij opstart. */
+     *  referentie; de oude gaat eerst naar youtube_banner.previous.jpg.</li>
+     *  <li>overlay → chroma-key: de magenta achtergrond eruit (flood-fill vanaf
+     *  de randen + rand-feather met kleur-decontaminatie, zie
+     *  {@link #chromaKeyMagenta}), gevalideerd met dezelfde
+     *  {@link #scanAlpha}-check als de upload-route, daarna backup →
+     *  logo.previous.png en vervang bible/logo.png — exact dezelfde staart als
+     *  de upload-flow ({@link #writeOverlayLogo}).</li></ul>
+     *  Geen bible-reload: geen service leest deze bestanden bij opstart (het
+     *  overlay-logo wordt pas bij een intro/outro-re-composite gelezen). */
     @PostMapping(value = "/approve", consumes = "application/json")
     public ResponseEntity<Map<String, Object>> approve(@RequestBody Map<String, String> body) {
         String kind = body == null ? null : body.get("kind");
-        if (!"logo".equals(kind) && !"banner".equals(kind)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "kind moet 'logo' of 'banner' zijn"));
+        if (kind == null || !KINDS.contains(kind)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "kind moet 'logo', 'banner' of 'overlay' zijn"));
         }
         String file = body.get("file");
         Path candDir = candidatesDir().normalize();
@@ -313,6 +375,31 @@ public class BrandingStudioController {
                         + "profielfoto — download het bestand en upload het eenmalig handmatig "
                         + "via studio.youtube.com → Aanpassing → Branding. bible/logo.png "
                         + "(het transparante intro/outro-overlay) is niet aangeraakt.");
+            } else if ("overlay".equals(kind)) {
+                // Magenta-kandidaat → transparant overlay-logo. De kandidaat is
+                // bewust op effen #FF00FF gegenereerd (zie overlayPrompt) zodat
+                // de achtergrond hier deterministisch te scheiden is.
+                java.awt.image.BufferedImage keyed = chromaKeyMagenta(src);
+                // Dezelfde validatie als de handmatige upload: een overlay is
+                // grotendeels transparant, dus ≥2% doorzichtig hoort nu vanzelf
+                // te kloppen. Zo niet, dan was de achtergrond niet (effen)
+                // magenta en is de key mislukt — geen half werk opslaan.
+                AlphaStats stats = scanAlpha(keyed);
+                if (stats.transparentFraction() < MIN_TRANSPARENT_FRACTION) {
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "chroma-key kon de achtergrond niet scheiden — kies een "
+                                    + "andere kandidaat"));
+                }
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(keyed, "png", buf);
+                Path backup = writeOverlayLogo(buf.toByteArray());
+                out.put("path", bibleDir().resolve("logo.png").toString());
+                if (backup != null) out.put("backup", backup.toString());
+                out.put("transparentPct", Math.round(stats.transparentFraction() * 100));
+                out.put("note", "Overlay-logo vervangen (achtergrond automatisch verwijderd"
+                        + (backup != null ? "; oude → logo.previous.png" : "") + "). "
+                        + "Het zit pas in de bumpers na een ♻ Re-composite van intro én "
+                        + "outro (gratis, geen Veo).");
             } else {
                 java.awt.image.BufferedImage banner =
                         coverCrop(src, BANNER_WIDTH, BANNER_HEIGHT, true);
@@ -475,17 +562,12 @@ public class BrandingStudioController {
                         stats.lightShareOfSemi() * 100);
             }
 
-            Path logo = bibleDir().resolve("logo.png");
-            Path backup = logo.resolveSibling("logo.previous.png");
-            boolean hadPrevious = Files.isRegularFile(logo);
-            if (hadPrevious) {
-                Files.copy(logo, backup, StandardCopyOption.REPLACE_EXISTING);
-            }
-            Files.write(logo, bytes);
+            Path backup = writeOverlayLogo(bytes);
+            boolean hadPrevious = backup != null;
 
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("result", "REPLACED");
-            out.put("path", logo.toString());
+            out.put("path", bibleDir().resolve("logo.png").toString());
             if (hadPrevious) out.put("backup", backup.toString());
             out.put("transparentPct", Math.round(stats.transparentFraction() * 100));
             if (warning != null) out.put("warning", warning);
@@ -540,6 +622,153 @@ public class BrandingStudioController {
     private record AlphaStats(double transparentFraction, double lightShareOfSemi,
                               long semiCount) { }
 
+    /** Backup + vervang bible/logo.png — de GEDEELDE staart van de upload-route
+     *  ({@link #replaceOverlayLogo}) en de overlay-approve: oude versie →
+     *  logo.previous.png (een bestaande backup wordt overschreven), daarna de
+     *  PNG-bytes naar bible/logo.png. Retourneert het backup-pad, of null als
+     *  er nog geen logo bestond. */
+    private Path writeOverlayLogo(byte[] pngBytes) throws Exception {
+        Path logo = bibleDir().resolve("logo.png");
+        Path backup = logo.resolveSibling("logo.previous.png");
+        boolean hadPrevious = Files.isRegularFile(logo);
+        if (hadPrevious) {
+            Files.copy(logo, backup, StandardCopyOption.REPLACE_EXISTING);
+        }
+        Files.write(logo, pngBytes);
+        return hadPrevious ? backup : null;
+    }
+
+    // ── Chroma-key (overlay-approve): magenta achtergrond → transparant ─────
+
+    /** Max RGB-afstand (Euclidisch; theoretisch maximum ≈441) tot puur magenta
+     *  #FF00FF om een pixel tijdens de flood-fill als ACHTERGROND te zien.
+     *  90 is ruim genoeg voor compressieruis en de lichte tint-drift die
+     *  image-modellen in een "effen" vlak leggen, maar ver onder de afstand
+     *  van élke realistische logokleur — crème, hout, geel en groen zitten
+     *  allemaal ≥ ~250 van magenta vandaan. */
+    private static final int CHROMA_BG_TOLERANCE = 90;
+    /** Bredere band voor de rand-feather: een pixel die aan verwijderde
+     *  achtergrond grenst en binnen deze afstand van magenta ligt, is deels met
+     *  de achtergrond vermengd (anti-aliasing) en krijgt alpha + kleur-
+     *  decontaminatie naar rato van die bijmenging. */
+    private static final int CHROMA_FEATHER_BAND = 220;
+
+    /** Kwadratische RGB-afstand tot puur magenta (255, 0, 255). */
+    private static int distSqToMagenta(int argb) {
+        int dr = 255 - ((argb >> 16) & 0xFF);
+        int dg = (argb >> 8) & 0xFF;
+        int db = 255 - (argb & 0xFF);
+        return dr * dr + dg * dg + db * db;
+    }
+
+    /** Markeert idx als achtergrond en zet hem op de stack, mits nog niet
+     *  bezocht én dicht genoeg bij magenta ({@link #CHROMA_BG_TOLERANCE}). */
+    private static void floodPush(java.util.ArrayDeque<Integer> stack, boolean[] bg,
+                                  int[] px, int idx) {
+        if (bg[idx]) return;
+        if (distSqToMagenta(px[idx]) > CHROMA_BG_TOLERANCE * CHROMA_BG_TOLERANCE) return;
+        bg[idx] = true;
+        stack.push(idx);
+    }
+
+    /** Chroma-key voor de overlay-approve: maakt de effen magenta achtergrond
+     *  van een kandidaat transparant. Drie stappen:
+     *  <ol>
+     *    <li>flood-fill vanaf alle vier de randen over bijna-magenta pixels
+     *        → alpha 0. Vanaf de randen en niet beeldbreed, zodat magenta-
+     *        achtige kleuren BINNEN het artwork (roze kam, paars accent) nooit
+     *        weggeslagen worden;</li>
+     *    <li>rand-feather: niet-achtergrond-pixels die aan verwijderde
+     *        achtergrond grenzen én meetbaar magenta bijgemengd hebben (de
+     *        anti-alias-rand) krijgen alpha naar rato van de bijmenging;</li>
+     *    <li>kleur-decontaminatie op diezelfde randpixels: de magenta-component
+     *        wordt richting de gemiddelde SCHONE (niet-magenta) buurkleur
+     *        gemengd — de de-halo-stap. Zonder deze stap blijft er een roze
+     *        gloedrand om het silhouet staan zodra het logo over video
+     *        gecomposit wordt — exact het crème-halo-probleem dat het oude,
+     *        tegen een lichte achtergrond uitgesneden logo had.</li>
+     *  </ol> */
+    private static java.awt.image.BufferedImage chromaKeyMagenta(
+            java.awt.image.BufferedImage src) {
+        final int w = src.getWidth(), h = src.getHeight();
+        // getRGB levert altijd ARGB, ook bij palette-/grayscale-PNG's.
+        final int[] px = src.getRGB(0, 0, w, h, null, 0, w);
+        final boolean[] bg = new boolean[w * h];
+
+        // (a) flood-fill: seeds op alle vier de randen, 4-connectiviteit.
+        java.util.ArrayDeque<Integer> stack = new java.util.ArrayDeque<>();
+        for (int x = 0; x < w; x++) {
+            floodPush(stack, bg, px, x);                    // bovenrand
+            floodPush(stack, bg, px, (h - 1) * w + x);      // onderrand
+        }
+        for (int y = 0; y < h; y++) {
+            floodPush(stack, bg, px, y * w);                // linkerrand
+            floodPush(stack, bg, px, y * w + (w - 1));      // rechterrand
+        }
+        while (!stack.isEmpty()) {
+            int i = stack.pop();
+            int x = i % w, y = i / w;
+            if (x > 0)     floodPush(stack, bg, px, i - 1);
+            if (x < w - 1) floodPush(stack, bg, px, i + 1);
+            if (y > 0)     floodPush(stack, bg, px, i - w);
+            if (y < h - 1) floodPush(stack, bg, px, i + w);
+        }
+
+        // (b) + (c): feather + decontaminatie, alleen op pixels die aan de
+        // verwijderde achtergrond grenzen — het binnenwerk blijft onaangeroerd.
+        final int bandSq = CHROMA_FEATHER_BAND * CHROMA_FEATHER_BAND;
+        final int[] out = new int[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int i = y * w + x;
+                if (bg[i]) { out[i] = 0; continue; }        // achtergrond → alpha 0
+                int argb = px[i];
+                boolean touchesBg = (x > 0 && bg[i - 1]) || (x < w - 1 && bg[i + 1])
+                        || (y > 0 && bg[i - w]) || (y < h - 1 && bg[i + w]);
+                int dSq = distSqToMagenta(argb);
+                if (!touchesBg || dSq >= bandSq) {
+                    out[i] = 0xFF000000 | (argb & 0xFFFFFF); // binnenwerk: vol dekkend
+                    continue;
+                }
+                // t = aandeel magenta-bijmenging in deze randpixel: 1 bij puur
+                // magenta, 0 aan de buitenkant van de feather-band.
+                double t = 1.0 - Math.sqrt(dSq) / CHROMA_FEATHER_BAND;
+                int a = (int) Math.round(255 * (1.0 - t));
+                // Decontaminatie: gemiddelde van de schone 8-buren (geen
+                // achtergrond, buiten de magenta-band) = waar deze rand naartoe
+                // hoort te mengen; de pixel schuift daar naar rato van t heen.
+                long sr = 0, sg = 0, sb = 0;
+                int n = 0;
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        if (dx == 0 && dy == 0) continue;
+                        int nx = x + dx, ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                        int j = ny * w + nx;
+                        if (bg[j] || distSqToMagenta(px[j]) < bandSq) continue;
+                        sr += (px[j] >> 16) & 0xFF;
+                        sg += (px[j] >> 8) & 0xFF;
+                        sb += px[j] & 0xFF;
+                        n++;
+                    }
+                }
+                int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+                if (n > 0) {
+                    r = (int) Math.round(r * (1.0 - t) + (sr / (double) n) * t);
+                    g = (int) Math.round(g * (1.0 - t) + (sg / (double) n) * t);
+                    b = (int) Math.round(b * (1.0 - t) + (sb / (double) n) * t);
+                }
+                // Zonder schone buur blijft de eigen kleur staan — de verlaagde
+                // alpha drukt de zichtbare magenta-bijdrage dan al fors.
+                out[i] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(
+                w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        img.setRGB(0, 0, w, h, out, 0, w);
+        return img;
+    }
+
     // ── Prompts ─────────────────────────────────────────────────────────────
 
     /** Avatar-prompt. De refs van de geselecteerde cast reizen als BEELD-
@@ -570,6 +799,53 @@ public class BrandingStudioController {
          .append("and any key content within the narrow central safe strip (the outer ")
          .append("thirds left/right and top/bottom edges get cropped on TV and mobile — ")
          .append("keep them as simple scenery), warm inviting, NO text anywhere. ");
+        appendCastDna(b, cast);
+        return b.toString().trim();
+    }
+
+    /** Overlay-logo-prompt ("zelfde bord, nieuwe cast"). Het oude logo reist
+     *  als styleAnchor (beeld-referentie) mee — deze tekst pint vast dat ALLEEN
+     *  de personages veranderen, en dwingt de effen magenta achtergrond af die
+     *  de approve-chroma-key ({@link #chromaKeyMagenta}) er deterministisch uit
+     *  haalt. Magenta omdat geen enkele kanaal-kleur (crème, hout, geel, groen)
+     *  er ook maar in de buurt komt — anders dan groen/blauw screen-kleuren,
+     *  die met gras of lucht zouden botsen. */
+    private String overlayPrompt(List<JsonNode> cast) {
+        StringBuilder b = new StringBuilder();
+        b.append("the channel's logo artwork, EXACTLY the same wooden sign/board design, ")
+         .append("lettering and composition as the reference design, but every character ")
+         .append("FULLY REPLACED — repainted from scratch — to match the character ")
+         .append("reference images (the current, updated designs). The characters in the ")
+         .append("old design are outdated and must not be copied: new body shapes, new ")
+         .append("sizes, new proportions, exactly as the character references show them. ")
+         .append("The artwork is isolated on a perfectly flat, uniform, pure magenta ")
+         .append("(#FF00FF) background with NOTHING else — no scenery, no shadows on the ")
+         .append("background, no vignette. ");
+        appendCastDna(b, cast);
+        return b.toString().trim();
+    }
+
+    /** PLAN B (vrij genereren, zonder design-beeld): het bord wordt tekstueel
+     *  beschreven i.p.v. als referentie meegestuurd. Voordeel: het model heeft
+     *  géén oud beeld om de verouderde personages uit te kopiëren — de cast-refs
+     *  zijn de enige beeldbron, dus de nieuwe kippen zijn gegarandeerd. Nadeel:
+     *  het bord zelf kan licht afwijken van het origineel. Merk-kleuren komen
+     *  uit het oude intro-titelontwerp (TINY/CHICKEN goud-geel 0xF0B010,
+     *  WORLD blauw 0x3E72C8). */
+    private String overlayFreePrompt(List<JsonNode> cast) {
+        StringBuilder b = new StringBuilder();
+        b.append("the channel's logo artwork: a rustic, warm wooden farm sign board ")
+         .append("(weathered planks, slightly rounded corners, a friendly hand-painted ")
+         .append("look) with the channel name 'TINY CHICKEN WORLD' painted on it in ")
+         .append("cheerful rounded letters — 'TINY' and 'CHICKEN' in warm golden ")
+         .append("yellow (#F0B010), 'WORLD' in sky blue (#3E72C8) — and the selected ")
+         .append("characters sitting on top of and peeking around the board, joyful ")
+         .append("and looking at the camera, drawn EXACTLY as the character reference ")
+         .append("images show them (their body shapes, sizes and proportions win over ")
+         .append("everything else). A tiny golden egg as a small accent near the board. ")
+         .append("The artwork is isolated on a perfectly flat, uniform, pure magenta ")
+         .append("(#FF00FF) background with NOTHING else — no scenery, no shadows on ")
+         .append("the background, no vignette. ");
         appendCastDna(b, cast);
         return b.toString().trim();
     }
@@ -609,6 +885,24 @@ public class BrandingStudioController {
             }
         } catch (Exception ignore) { /* null = niet gevonden */ }
         return null;
+    }
+
+    /** Ids van de hoofdcast (role main|sidekick) uit channel.yml — de default
+     *  voor overlay-regeneratie zonder expliciete selectie; spiegelt de
+     *  checkbox-default in brand-page.js (main + sidekicks aan, baby uit). */
+    private List<String> defaultMainCastIds() {
+        List<String> ids = new ArrayList<>();
+        try {
+            JsonNode root = new YAMLMapper().readTree(Paths.get(props.bible().path()).toFile());
+            for (JsonNode c : root.path("characters")) {
+                String id = c.path("id").asText("");
+                String role = c.path("role").asText("");
+                if (!id.isEmpty() && ("main".equals(role) || "sidekick".equals(role))) {
+                    ids.add(id);
+                }
+            }
+        } catch (Exception ignore) { /* leeg → generate() geeft 400 */ }
+        return ids;
     }
 
     /** Resolves een UI-bestandsnaam STRIKT binnen bible/branding, of null:

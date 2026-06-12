@@ -460,7 +460,8 @@ characters:
     species: chicken
     role: "main"
     description: >
-      A small, perfectly ROUND fluffy young chick — circle body, circle head, every
+      A TINY, dainty, perfectly ROUND fluffy young chick — the smallest of the
+      trio, a petite little circle body under an extra-large round head, every
       contour a soft curve — with soft CREAM-WHITE down feathers all over the
       body, a bright red pointy chicken comb on top of the head, EXTRA-LARGE round
       shiny brown eyes with multiple bright reflective highlights and clearly visible
@@ -488,7 +489,10 @@ characters:
       # Silhouet-redesign (board-audit EP3 #25, uitgevoerd 2026-06-12): elk
       # personage moet als ZWART VLAK herkenbaar zijn, hoed of geen hoed.
       # Vorm-taal: Pip = CIRKEL, Mo = AAMBEELD/basis, Bo = VERTICALE STREEP.
-      silhouette: "a perfectly ROUND ball-of-fluff chick — circle body, circle head, every line a curve — topped by the tall pointed straw hat: a circle-plus-triangle shape you read instantly as a black silhouette"
+      # Verfijning 2026-06-12 (gebruikerswens): Pip duidelijk KLEINER, fijner
+      # en schattiger dan Mo — petite i.p.v. mollig. Nieuwe grootte-orde:
+      # Mo = grootste/breedste, Bo = dunste (middelhoog), Pip = kleinste.
+      silhouette: "a TINY, petite, perfectly ROUND ball-of-fluff chick — the smallest of the trio, a dainty little circle body under an extra-large round head, every line a soft curve — topped by the tall pointed straw hat: a small circle-plus-triangle shape you read instantly as a black silhouette"
       accessory: "straw farmer hat and a red neck bandana"
       # Herformuleerd (feedback ep 3): "tips her straw hat back" liet Veo de
       # hoed AFNEMEN en op de grond leggen — volgende scène had ze hem weer op.
@@ -498,14 +502,14 @@ characters:
       # Extended cross-shot identity fields — keep the look stable across
       # different stills/shots WITHOUT needing an identical reference frame.
       feathers: "dense ultra-soft cream-white down with a faint warm-yellow tint, fluffy and a little wispy at the cheeks"
-      build: "the middle of the three in size but the ROUNDEST of the trio by far — small and circular with an oversized head and a soft little pot-belly, every contour a curve (where Mo is base and weight, and Bo is a vertical line); only slightly between Mo and Bo in size"
+      build: "the SMALLEST and roundest of the trio — a petite, dainty little circle of a body, noticeably smaller and finer than Mo (never chubby: small and delicate, not plump), with an extra-oversized round head and HUGE sparkling eyes — baby proportions that read as instantly adorable (where Mo is base and weight, and Bo is a vertical line)"
       weight: "light and bouncy, as if a gentle breeze could lift her"
       eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
       # Scale lock — the three chicks have DISTINCT but FIXED proportions so each
       # has its own silhouette: Mo is the tallest + sturdiest, Pip is the medium
       # round one, Bo is the smallest + slimmest. Keep this Mo > Pip > Bo size
       # order identical in every shot; only the world dwarfs them all.
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the middle of the trio, only slightly between Mo and Bo. Keep the size difference subtle — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the SMALLEST of the trio — clearly daintier and more petite than Mo, a touch smaller than Bo. All three stay the same kind of small chick (no extreme gaps) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
       # Accessories this character must NEVER wear (anti-swap lock). Pip is the
       # only one with a straw hat; she must never get Bo's glasses or Mo's scarf.
       antiAccessory: "any eyeglasses or glasses, any knitted scarf, any green scarf"
@@ -566,7 +570,7 @@ characters:
       build: "very slightly the largest of the three — a bottom-heavy, solid little body with a broad base and squared, settled posture (NOT round: where Pip is all curves, Mo is weight and foundation), only a TOUCH taller and sturdier than the others, oversized head; still clearly the same kind of small chick"
       weight: "solid and settled — plants both feet when he stops to think"
       eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); only SLIGHTLY the largest of the trio — just a touch taller and broader-based than Pip, with Bo a touch the smallest. Keep the size difference SUBTLE (never one much bigger than the rest) — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
+      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); the largest of the trio — a touch taller and clearly broader-based than the others, with Pip the smallest and Bo thin in between. Keep the gaps modest (never one much bigger than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
       # Mo wears ONLY a chunky red KNITTED scarf — never a thin bandana/kerchief
       # (that's Pip's), never glasses (Bo's), never a hat (Pip's).
       antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any wattles or red flaps under the beak, any eyelashes or feminine eye makeup"
@@ -617,10 +621,10 @@ characters:
       tic: "pushes her glasses up the beak with a wingtip before a joke"
       signatureSound: "a goofy hiccup-giggle"
       feathers: "warm tan and sandy-brown down, slightly ruffled, with a comic cowlick tuft sticking up on top"
-      build: "very slightly the smallest of the three — a slim, VERTICAL, springy little body stretched upward (NOT round: where Pip is a ball and Mo is a base, Bo is a line), just a TOUCH shorter and lighter than Pip and Mo, with an oversized head; still clearly the same kind of small chick"
+      build: "the THINNEST of the three, middle in height — a slim, VERTICAL, springy little body stretched upward (NOT round: where Pip is a tiny ball and Mo is a broad base, Bo is a line), lighter than Mo, slightly taller than petite Pip, with an oversized head; still clearly the same kind of small chick"
       weight: "light and twitchy, looks caught half-way through a hop"
       eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
-      scaleAnchor: "a small chick against the world; only SLIGHTLY the smallest of the trio — just a touch shorter and slimmer than the others. Keep the size difference SUBTLE (never one much smaller than the rest) — similar SIZES, distinct SHAPES: Pip a circle, Mo an anvil, Bo a vertical line."
+      scaleAnchor: "a small chick against the world; the THINNEST of the trio, middle in height — slimmer than both, slightly taller than petite Pip, clearly lighter than Mo. Keep the gaps modest (never one much smaller than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
       # Bo's glasses are ALWAYS thin round wire frames (never thick/black). Never a
       # hat (Pip's), never a bandana or red scarf (Pip/Mo's) — Bo's scarf is green.
       antiAccessory: "any hat, any bandana, any red scarf or red kerchief, thick or black-framed glasses"

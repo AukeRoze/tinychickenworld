@@ -54,6 +54,12 @@ public class GeminiImageProvider implements ImageProvider {
      *  in-scene character is the normal case; the standard cast is 3. */
     private static final int MAX_EPISODE_ANCHORS = 3;
 
+    /** Max STYLE anchors (original-design references whose composition must be
+     *  recreated — scene.styleAnchors, additive). One is the normal case (the
+     *  current overlay logo); two is already generous, more would just dilute
+     *  the character conditioning. Counted in the MAX_TOTAL_REFS budget. */
+    private static final int MAX_STYLE_ANCHORS = 2;
+
     /** Hard cap on the TOTAL reference images per request. 9 = the legacy
      *  worst case (3 characters × MAX_ANGLES), so without episode/prop refs
      *  nothing changes; with them, extra bible ANGLES are displaced first
@@ -196,13 +202,29 @@ public class GeminiImageProvider implements ImageProvider {
         }
         boolean namedEpisode = !epNames.isEmpty();
 
-        // Total-ref budget (MAX_TOTAL_REFS): props + episode anchors are kept,
-        // and the per-character ANGLE count shrinks to fit — i.e. an episode
+        // STYLE anchors (additive — scene.styleAnchors): images of the ORIGINAL
+        // design to recreate (e.g. the current overlay logo when regenerating it
+        // with a rebranded cast). Appended as the very LAST reference images so
+        // the prompt can point at them by number. Null/absent field = no-op.
+        List<byte[]> styleImgs = new ArrayList<>();
+        if (scene.styleAnchors() != null) {
+            for (String sp : scene.styleAnchors()) {
+                if (sp == null || sp.isBlank()) continue;
+                if (styleImgs.size() >= MAX_STYLE_ANCHORS) break;
+                Path pp = Paths.get(sp);
+                if (!Files.isReadable(pp)) continue;
+                try { styleImgs.add(Files.readAllBytes(pp)); }
+                catch (Exception e) { log.warn("gemini: failed reading style anchor {} — {}", pp, e.toString()); }
+            }
+        }
+
+        // Total-ref budget (MAX_TOTAL_REFS): props + episode + style anchors are
+        // kept, and the per-character ANGLE count shrinks to fit — i.e. an extra
         // anchor displaces an extra bible angle, never a character's primary
-        // anchor (minimum 1 per character) and never the episode canon itself.
+        // anchor (minimum 1 per character) and never the extra anchors themselves.
         // With the standard 3-character cast and no extra refs this resolves to
         // 3 angles per character — exactly the legacy behaviour.
-        int budget = MAX_TOTAL_REFS - propImgs.size() - epImgs.size();
+        int budget = MAX_TOTAL_REFS - propImgs.size() - epImgs.size() - styleImgs.size();
         int perChar = charSets.isEmpty() ? 0
                 : Math.max(1, Math.min(MAX_ANGLES, budget / Math.max(1, charSets.size())));
 
@@ -224,6 +246,7 @@ public class GeminiImageProvider implements ImageProvider {
         boolean multiAngle = orderedIds.size() > new java.util.HashSet<>(orderedIds).size();
         anchors.addAll(propImgs);
         anchors.addAll(epImgs);
+        anchors.addAll(styleImgs);
 
         int charCount = orderedIds.size();
         int episodeCount = epImgs.size();
@@ -231,6 +254,7 @@ public class GeminiImageProvider implements ImageProvider {
         int propEnd = charCount + propNames.size();
         int epStart = propEnd + 1;
         int epEnd = propEnd + episodeCount;
+        int styleStart = epEnd + 1;
 
         String prompt = thumbnail
                 ? prompts.composeThumbnail(scene, orderedIds, format)
@@ -293,6 +317,23 @@ public class GeminiImageProvider implements ImageProvider {
                     + "proportions and relative sizes between characters. The episode stills "
                     + "define this episode's look; do NOT redesign or restyle anything, only the "
                     + "scene, pose and camera change. ";
+        }
+        // Style anchors are the LAST reference images, so their numbering starts
+        // right after the episode block regardless of which extras are present.
+        // Aangescherpt (2026-06-12): de zachte "only the characters change"
+        // liet het model de OUDE kippen uit het design-beeld kopiëren i.p.v.
+        // ze te vervangen door de character-refs. Nu expliciet: design-beeld
+        // = ALLEEN layout/bord/letters; de personages erin zijn VEROUDERD.
+        for (int i = 0; i < styleImgs.size(); i++) {
+            prompt = prompt + " Reference image " + (styleStart + i)
+                    + " shows the ORIGINAL design ONLY for its composition, layout, "
+                    + "board, lettering and proportions — copy those exactly. WARNING: "
+                    + "the characters drawn inside that original design are OUTDATED "
+                    + "and must NOT be copied, traced or echoed in any way. Erase them "
+                    + "from your mind and REPAINT every character from scratch to match "
+                    + "ONLY the character reference images (the current designs): their "
+                    + "exact body shapes, sizes, proportions and details win over "
+                    + "anything the old design shows. ";
         }
         if (multiAngle) {
             prompt = prompt + " Where several reference images name the SAME character, "
