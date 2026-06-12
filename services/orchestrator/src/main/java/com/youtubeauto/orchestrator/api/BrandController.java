@@ -28,7 +28,9 @@ import java.util.Map;
  * the Cast editor change a character's scalar fields + upload a new reference
  * image (writes via {@link BibleEditor}; needs the read-WRITE bible mount),
  * and AI-generate reference CANDIDATES from the current bible DNA
- * (generate-ref / ref/approve — see the candidates section below).
+ * (generate-ref / ref/approve — see the candidates section below), plus extra
+ * multi-angle views conditioned on the approved primary ref
+ * (generate-angle / angle/approve — see the angles section below).
  */
 @RestController
 @RequestMapping("/api/v1/brand")
@@ -451,6 +453,239 @@ public class BrandController {
         }
     }
 
+    // ── Multi-angle hoeken, geconditioneerd op de primaire ref (Story G) ────
+    //
+    // Verschil met generate-ref hierboven: de scène-payload noemt het character
+    // WÉL (characters:[id]), zodat GeminiImageProvider.loadCharacterAnchors de
+    // primaire ref refs/{id}.png als BEELD-anchor meestuurt — de hoek wordt zo
+    // een rotatie van dat exacte individu i.p.v. een nieuw tekst-only ontwerp.
+    // Direct na ref/approve is refs/{id}/ leeg of afwezig (alleen eventueel de
+    // candidates/-submap, die de niet-recursieve *.png-scan van de provider
+    // nooit raakt), dus de anchor-set is dan precies de primaire ref. Zodra een
+    // eerste hoek is goedgekeurd anchort een vólgende hoek-generatie op de
+    // pngs in refs/{id}/ (provider-gedrag: map-met-pngs wint van de single
+    // ref); die hoeken zijn zelf op de primaire ref geconditioneerd, dus de
+    // identiteitsketen blijft intact.
+    //
+    // Hoeken-whitelist: "front" bestaat bewust niet (de primaire ref ÍS het
+    // vooraanzicht) en driekwart-VÓÓR bieden we bewust niet aan — die hoek gaf
+    // historisch wimper-drift bij Mo (de ogen kregen er lashes bij die daarna
+    // als canon doorsijpelden in episode-anchors).
+    private static final Map<String, String> ANGLE_VIEWS = Map.of(
+            "side", "side profile facing left",
+            "back34", "three-quarter view from behind");
+
+    /** Harde cap op het aantal hoek-refs in refs/{id}/ — gespiegeld aan
+     *  GeminiImageProvider.MAX_ANGLES (de provider leest er toch maar 3,
+     *  gesorteerd; meer toestaan zou alleen verwarren welke 3 meegaan). */
+    private static final int MAX_PROVIDER_ANGLES = 3;
+
+    /** Genereert 1-4 kandidaten voor één extra hoek van een character,
+     *  geconditioneerd op de primaire ref (zie het blok-comment hierboven).
+     *  Body: {"angle": "side"|"back34", "count": 3}. Kandidaten landen als
+     *  refs/{id}/candidates/candidate-{angle}-{i}.png — dezelfde map en
+     *  "candidate"-naamconventie als generate-ref, dus het bestaande
+     *  serve-/GET-/DELETE-candidates-pad lift gewoon mee. */
+    @PostMapping(value = "/cast/{id}/generate-angle", produces = "application/json")
+    public ResponseEntity<Map<String, Object>> generateAngle(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        if (!SAFE_ID.matcher(id).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid character id"));
+        }
+        String angle = String.valueOf(body == null ? "" : body.getOrDefault("angle", "")).trim();
+        if (!ANGLE_VIEWS.containsKey(angle)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "angle moet 'side' of 'back34' zijn (front = de primaire ref zelf; "
+                            + "driekwart-vóór bieden we bewust niet aan)"));
+        }
+        JsonNode ch = findCharacter(id);
+        if (ch == null) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "character '" + id + "' niet gevonden in de bible"));
+        }
+        // Zonder primaire ref is er niets om op te conditioneren — de provider
+        // zou tekst-only terugvallen en dat is precies wat we hier NIET willen.
+        // (.png expliciet: de single-anchor-fallback van de provider leest
+        // alleen refs/{id}.png, geen .jpg.)
+        if (!Files.isRegularFile(bibleDir().resolve("refs").resolve(id + ".png"))
+                && activeAngleFiles(id).isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "geen primaire referentie (refs/" + id + ".png) — genereer en keur eerst "
+                            + "een 🎨-referentie goed, dan pas hoeken"));
+        }
+        int count = 3;
+        try { count = Integer.parseInt(String.valueOf(body.get("count"))); }
+        catch (Exception ignore) { /* default */ }
+        count = Math.max(1, Math.min(MAX_REF_CANDIDATES, count));
+
+        String prompt = angleSheetPrompt(ch, angle);
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates");
+        try {
+            Files.createDirectories(candDir);
+            // Alleen de vorige batch van DEZE hoek opruimen — pending primaire
+            // of andere-hoek-kandidaten blijven staan.
+            deleteAngleCandidates(candDir, angle);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error",
+                    "kan kandidaten-map niet aanmaken: " + e.getMessage()));
+        }
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            java.util.UUID tempJob = java.util.UUID.randomUUID();
+            try {
+                Map<String, Object> scene = new LinkedHashMap<>();
+                scene.put("seq", 1);
+                scene.put("visualDesc", prompt);
+                // HET verschil met generate-ref: characters:[id] → de provider
+                // laadt refs/{id}.png (of reeds goedgekeurde hoeken) als anchor.
+                scene.put("characters", List.of(id));
+                scene.put("timeOfDay", "studio");
+                scene.put("cameraFraming",
+                        "full body shot, the whole character visible from head to feet, centered");
+                JsonNode resp = imageClient.generate(tempJob, List.of(scene), "landscape");
+                Path src = null;
+                for (JsonNode s : resp.path("scenes")) {
+                    String p = s.path("imagePath").asText("");
+                    if (!p.isBlank()) { src = Paths.get(p); break; }
+                }
+                if (src == null || !Files.isReadable(src)) {
+                    Path alt = Paths.get("/workdir", tempJob.toString(), "images", "scene_01.png");
+                    if (Files.isReadable(alt)) src = alt;
+                }
+                if (src == null || !Files.isReadable(src)) {
+                    throw new IllegalStateException(
+                            "gegenereerd bestand niet leesbaar via de gedeelde workdir");
+                }
+                Path dst = candDir.resolve("candidate-" + angle + "-" + i + ".png");
+                Files.copy(src, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                candidates.add(Map.of("file", id + "/candidates/" + dst.getFileName(),
+                        "angle", angle));
+            } catch (Exception e) {
+                errors.add("kandidaat " + i + ": " + e.getMessage());
+            } finally {
+                deleteTempWorkdir(tempJob);
+            }
+        }
+        if (candidates.isEmpty()) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("error", "geen enkele hoek-kandidaat gegenereerd");
+            err.put("details", errors);
+            return ResponseEntity.internalServerError().body(err);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", id);
+        out.put("angle", angle);
+        out.put("result", "GENERATED");
+        out.put("candidates", candidates);
+        if (!errors.isEmpty()) out.put("errors", errors);
+        out.put("note", "Hoek-kandidaten staan in bible/refs/" + id + "/candidates/ en worden "
+                + "door de pipeline genegeerd tot je er één goedkeurt via POST .../angle/approve.");
+        return ResponseEntity.ok(out);
+    }
+
+    /** Promoveert één hoek-kandidaat naar refs/{id}/{angle}.png. Body:
+     *  {"file": "{id}/candidates/candidate-side-1.png", "angle": "side"}.
+     *  ADDITIEF: de primaire ref blijft staan, er wordt geen map geleegd en
+     *  geen serie-anchor weggegooid — alleen de kandidaten van deze hoek
+     *  worden opgeruimd. Cap: het resultaat mag max {@link #MAX_PROVIDER_ANGLES}
+     *  hoek-refs opleveren (de provider leest er toch maar 3). */
+    @PostMapping(value = "/cast/{id}/angle/approve", consumes = "application/json")
+    public ResponseEntity<Map<String, Object>> approveAngle(@PathVariable String id,
+                                                            @RequestBody Map<String, String> body) {
+        if (!SAFE_ID.matcher(id).matches()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid character id"));
+        }
+        String angle = body == null ? null : body.get("angle");
+        if (angle == null || !ANGLE_VIEWS.containsKey(angle)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "angle moet 'side' of 'back34' zijn"));
+        }
+        String file = body.get("file");
+        Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates").normalize();
+        Path cand = file == null ? null : safeRefPath(id, file);
+        if (cand == null || !cand.startsWith(candDir) || !Files.isRegularFile(cand)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "file moet een bestaande kandidaat zijn (" + id + "/candidates/...)"));
+        }
+        if (!cand.getFileName().toString().startsWith("candidate-" + angle + "-")) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "file hoort niet bij angle '" + angle + "' — verwacht candidate-" + angle + "-*.png"));
+        }
+        List<String> existing = activeAngleFiles(id);
+        boolean replaces = existing.contains(angle + ".png");
+        int resulting = existing.size() + (replaces ? 0 : 1);
+        if (resulting > MAX_PROVIDER_ANGLES) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "refs/" + id + "/ zou dan " + resulting + " hoeken bevatten; de provider "
+                            + "gebruikt er maximaal " + MAX_PROVIDER_ANGLES + " — verwijder eerst "
+                            + "een hoek via de bestaande 🗑 in de refs-lijst "
+                            + "(DELETE /cast/" + id + "/ref?file=...)"));
+        }
+        try {
+            Path angleDir = bibleDir().resolve("refs").resolve(id);
+            Files.createDirectories(angleDir);
+            Path dst = angleDir.resolve(angle + ".png");
+            Files.copy(cand, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            int cleaned = deleteAngleCandidates(candDir, angle);   // incl. de gekozen kandidaat
+            try { Files.deleteIfExists(candDir); } catch (Exception ignore) { /* niet leeg */ }
+
+            Map<String, Object> reload = bibleReloadService.reloadAll();
+            List<String> angles = activeAngleFiles(id);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("id", id);
+            out.put("angle", angle);
+            out.put("result", "APPROVED");
+            out.put("path", dst.toString());
+            out.put("angles", angles);
+            out.put("angleCount", angles.size());
+            out.put("cleanedCandidates", cleaned);
+            out.put("bibleReload", reload);
+            out.put("note", "Hoek '" + angle + "' actief (bible hot-reloaded). " + id + " heeft nu "
+                    + angles.size() + " hoek-ref(s) in refs/" + id + "/ naast de primaire ref"
+                    + (replaces ? " (bestaande " + angle + ".png vervangen)" : "")
+                    + " — additief: primaire ref, overige hoeken en serie-anchors zijn ongemoeid.");
+            return ResponseEntity.ok(out);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Actieve hoek-refs DIRECT in refs/{id}/ (gesorteerd): .png/.jpg-bestanden,
+     *  kandidaten ("candidate" in de naam) en .rejected uitgesloten — dezelfde
+     *  selectie die de pipeline (en de cap-check) hanteert. */
+    private List<String> activeAngleFiles(String id) {
+        List<String> out = new ArrayList<>();
+        Path dir = bibleDir().resolve("refs").resolve(id);
+        if (!Files.isDirectory(dir)) return out;
+        try (var s = Files.list(dir)) {
+            s.filter(Files::isRegularFile)
+             .map(p -> p.getFileName().toString())
+             .filter(n -> SAFE_REF_FILE.matcher(n).matches())
+             .filter(n -> !n.toLowerCase().contains("candidate"))
+             .sorted()
+             .forEach(out::add);
+        } catch (Exception ignore) { /* best-effort */ }
+        return out;
+    }
+
+    /** Verwijdert alleen de kandidaten van één hoek (candidate-{angle}-*). */
+    private int deleteAngleCandidates(Path candDir, String angle) {
+        int n = 0;
+        if (!Files.isDirectory(candDir)) return 0;
+        try (var s = Files.list(candDir)) {
+            for (Path p : s.filter(Files::isRegularFile).toList()) {
+                if (p.getFileName().toString().startsWith("candidate-" + angle + "-")) {
+                    try { if (Files.deleteIfExists(p)) n++; } catch (Exception ignore) { }
+                }
+            }
+        } catch (Exception ignore) { /* best-effort */ }
+        return n;
+    }
+
     /** Het character-node uit channel.yml (live gelezen), of null. */
     private JsonNode findCharacter(String id) {
         try {
@@ -464,12 +699,9 @@ public class BrandController {
 
     /** Neutrale studio-referentiesheet-prompt. Het character wordt puur in
      *  TEKST beschreven (description + dna.*), zodat een geredesignde
-     *  silhouette/build in de bible het beeld bepaalt — veld-voor-veld
-     *  gespiegeld aan PromptComposer.dnaLine in de image-service (minus
-     *  weight: dat is een Veo-motion-cue, geen still-eigenschap). */
+     *  silhouette/build in de bible het beeld bepaalt. */
     private String refSheetPrompt(JsonNode ch) {
         String name = ch.path("name").asText(ch.path("id").asText(""));
-        JsonNode d = ch.path("dna");
         StringBuilder b = new StringBuilder();
         b.append("Character reference sheet: ").append(name)
          .append(" standing in a relaxed neutral three-quarter pose, full body visible from ")
@@ -477,6 +709,36 @@ public class BrandController {
          .append("no scene, no other characters, no props beyond the signature accessories. ")
          .append("Exactly ONE character in the whole image — no second character, no twin, ")
          .append("no clone, no reflection. ");
+        appendCharacterDna(b, ch);
+        return b.toString().trim();
+    }
+
+    /** Turnaround-prompt voor één extra hoek, GECONDITIONEERD op de primaire
+     *  ref: de scène-payload noemt het character (characters:[id]), dus de
+     *  image-service stuurt refs/{id}.png als beeld-anchor mee en deze tekst
+     *  instrueert een rotatie van dat exacte individu — geen nieuw ontwerp. */
+    private String angleSheetPrompt(JsonNode ch, String angle) {
+        StringBuilder b = new StringBuilder();
+        b.append("Character turnaround sheet: the EXACT SAME individual as the reference ")
+         .append("image, now seen in full ").append(ANGLE_VIEWS.get(angle))
+         .append(", full body head to feet, same relaxed neutral standing pose, plain soft ")
+         .append("warm cream background, even soft lighting, identical colours, accessories ")
+         .append("and proportions — this is the same character rotated, not a new design. ")
+         .append("Exactly ONE character in the whole image — no second character, no twin, ")
+         .append("no clone, no reflection. ");
+        appendCharacterDna(b, ch);
+        return b.toString().trim();
+    }
+
+    /** Gedeelde DNA-staart van de referentie-/turnaround-prompts: lifeStage,
+     *  description en de dna.*-velden — veld-voor-veld gespiegeld aan
+     *  PromptComposer.dnaLine in de image-service (minus weight: dat is een
+     *  Veo-motion-cue, geen still-eigenschap). Door refSheetPrompt en
+     *  angleSheetPrompt hier te laten delen kan de DNA-opsomming nooit
+     *  uiteenlopen tussen de primaire ref en de hoeken. */
+    private void appendCharacterDna(StringBuilder b, JsonNode ch) {
+        String name = ch.path("name").asText(ch.path("id").asText(""));
+        JsonNode d = ch.path("dna");
         String life = ch.path("lifeStage").asText("").trim();
         if (!life.isBlank()) b.append(name).append(" is ").append(life).append(". ");
         String desc = ch.path("description").asText("").trim();
@@ -494,7 +756,6 @@ public class BrandController {
         appendDna(b, "Eyes", d.path("eyeColor").asText(""));
         String anti = d.path("antiAccessory").asText("").trim();
         if (!anti.isBlank()) b.append(name).append(" must NEVER wear ").append(anti).append(". ");
-        return b.toString().trim();
     }
 
     private void appendDna(StringBuilder b, String label, String value) {

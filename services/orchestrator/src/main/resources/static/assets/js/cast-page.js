@@ -12,6 +12,14 @@
  * POST .../ref/approve promoveert er één naar refs/{id}.png en ruimt de stale
  * multi-angle refs + serie-anchors op.
  *
+ * Daarbovenop: "📐 Extra hoek" genereert extra HOEKEN (zijaanzicht /
+ * driekwart-achter) GECONDITIONEERD op de zojuist goedgekeurde primaire ref:
+ * POST .../generate-angle stuurt characters:[id] mee zodat de image-service
+ * refs/{id}.png als beeld-anchor laadt — dezelfde kandidaten-grid-flow, maar
+ * "✓ Gebruik als {hoek}" (POST .../angle/approve) schrijft ADDITIEF naar
+ * refs/{id}/{hoek}.png en laat de primaire ref met rust. Driekwart-vóór wordt
+ * bewust niet aangeboden (historisch wimper-drift bij Mo).
+ *
  * Data: GET /api/v1/brand/cast ; images: /api/v1/brand/character/{id}.png.
  */
 import api, { toast } from "/assets/js/api.js";
@@ -33,6 +41,21 @@ async function uploadImage(id, file) {
 /** Hoeveel AI-kandidaten één "🎨 Genereer"-klik aanvraagt (max 4 server-side). */
 const CANDIDATE_COUNT = 3;
 
+/** Aanbodbare extra hoeken — gespiegeld aan de server-whitelist (BrandController
+ *  ANGLE_VIEWS). "front" ontbreekt bewust (de primaire ref ÍS het vooraanzicht)
+ *  en driekwart-vóór ook (historisch wimper-drift bij Mo). */
+const ANGLES = {
+  side:   { label: "Zijaanzicht" },
+  back34: { label: "Driekwart-achter" },
+};
+
+/** Hoek-id uit een kandidaat-bestandsnaam (candidate-side-1.png → "side"),
+ *  of null voor een primaire-ref-kandidaat (candidate-1.png). */
+function candidateAngle(file) {
+  const m = /candidate-([a-z0-9]+)-\d+\.png$/i.exec(file || "");
+  return m && ANGLES[m[1]] ? m[1] : null;
+}
+
 function refImgUrl(id, file) {
   return `/api/v1/brand/cast/${encodeURIComponent(id)}/ref?file=` +
       encodeURIComponent(file) + "&t=" + Date.now();
@@ -48,12 +71,41 @@ function refImgUrl(id, file) {
 function renderGenerateRef(c, host, refreshCard) {
   host.replaceChildren();
 
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;align-items:center";
+  host.appendChild(row);
+
   const btn = document.createElement("button");
   btn.className = "btn sm";
   btn.textContent = "🎨 Genereer nieuwe referentie";
   btn.title = "Genereert " + CANDIDATE_COUNT + " AI-kandidaten vanuit de actuele bible-DNA " +
       "(tekst bepaalt de vorm — het oude referentiebeeld gaat NIET mee)";
-  host.appendChild(btn);
+  row.appendChild(btn);
+
+  // 📐 Extra hoek: zelfde kandidaten-flow, maar GECONDITIONEERD op de primaire
+  // ref (de server stuurt characters:[id] mee → refs/{id}.png gaat als anchor
+  // mee) en approve schrijft additief naar refs/{id}/{hoek}.png.
+  const angleBtn = document.createElement("button");
+  angleBtn.className = "btn sm";
+  angleBtn.textContent = "📐 Extra hoek";
+  angleBtn.title = "Genereert " + CANDIDATE_COUNT + " kandidaten voor één extra hoek, " +
+      "geconditioneerd op de huidige primaire referentie (die gaat als beeld-anchor mee)";
+  row.appendChild(angleBtn);
+
+  const angleMenu = document.createElement("div");
+  angleMenu.style.cssText = "display:none;gap:4px";
+  for (const [angle, def] of Object.entries(ANGLES)) {
+    const opt = document.createElement("button");
+    opt.className = "btn sm";
+    opt.style.cssText = "font-size:11px;padding:2px 8px";
+    opt.textContent = def.label;
+    opt.addEventListener("click", () => { angleMenu.style.display = "none"; generateAngle(angle); });
+    angleMenu.appendChild(opt);
+  }
+  row.appendChild(angleMenu);
+  angleBtn.addEventListener("click", () => {
+    angleMenu.style.display = angleMenu.style.display === "none" ? "flex" : "none";
+  });
 
   const strip = document.createElement("div");
   strip.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-start";
@@ -77,11 +129,42 @@ function renderGenerateRef(c, host, refreshCard) {
       img.title = cand.file + " — klik voor volledig formaat";
       img.addEventListener("click", () => window.open(img.src, "_blank"));
       cell.appendChild(img);
+      // Hoek-kandidaten (candidate-{angle}-N.png) krijgen een eigen approve-
+      // route (additief, refs/{id}/{angle}.png); primaire kandidaten houden
+      // de bestaande vervang-flow (refs/{id}.png + opruimen stale refs).
+      const angle = candidateAngle(cand.file);
+      if (angle) {
+        const cap = document.createElement("div");
+        cap.className = "small mono";
+        cap.style.cssText = "font-size:10px;color:var(--muted)";
+        cap.textContent = "hoek: " + ANGLES[angle].label.toLowerCase();
+        cell.appendChild(cap);
+      }
       const ok = document.createElement("button");
       ok.className = "btn approve sm";
       ok.style.cssText = "font-size:10px;padding:1px 6px";
-      ok.textContent = "✓ Gebruik als referentie";
+      ok.textContent = angle ? `✓ Gebruik als ${ANGLES[angle].label.toLowerCase()}`
+                             : "✓ Gebruik als referentie";
       ok.addEventListener("click", async () => {
+        if (angle) {
+          if (!confirm(`Deze kandidaat goedkeuren als ${ANGLES[angle].label.toLowerCase()} van ` +
+              `${c.name}?\n\nDit schrijft refs/${c.id}/${angle}.png (additief — de primaire ` +
+              `referentie en andere hoeken blijven staan) en ruimt alleen de kandidaten van ` +
+              `deze hoek op.`)) return;
+          ok.disabled = true;
+          try {
+            const resp = await api.post(
+                `/api/v1/brand/cast/${encodeURIComponent(c.id)}/angle/approve`,
+                { file: cand.file, angle }, { key: `approve-angle-${c.id}` });
+            toast(`Hoek '${ANGLES[angle].label}' van ${c.name} goedgekeurd — nu ` +
+                `${resp && resp.angleCount != null ? resp.angleCount : "?"} hoek-ref(s) ` +
+                `naast de primaire referentie`, "info", 8000);
+            refreshCard();   // kaart verversen: refs-strip toont de nieuwe hoek
+          } catch (e) {
+            ok.disabled = false;   // api.post toont de serverfout (bv. cap van 3) al als toast
+          }
+          return;
+        }
         if (!confirm(`Deze kandidaat promoveren tot canonieke referentie van ${c.name}?\n\n` +
             `Dit vervangt refs/${c.id}.png (oude versie → .bak), verwijdert de overige ` +
             `kandidaten, leegt de multi-angle map refs/${c.id}/ en verwijdert de ` +
@@ -147,6 +230,38 @@ function renderGenerateRef(c, host, refreshCard) {
       btn.textContent = oldText;
     }
   });
+
+  /** 📐-flow: genereert hoek-kandidaten, geconditioneerd op de primaire ref.
+   *  Na afloop wordt de VOLLEDIGE pending set opnieuw opgehaald, zodat een
+   *  eventueel nog openstaande 🎨-batch naast de hoek-kandidaten blijft staan
+   *  (de server ruimt alleen eerdere kandidaten van dezelfde hoek op). */
+  async function generateAngle(angle) {
+    if (!confirm(`${CANDIDATE_COUNT} kandidaten genereren voor de hoek ` +
+        `'${ANGLES[angle].label}' van ${c.name}?\n\n` +
+        `De huidige primaire referentie gaat als beeld-anchor mee (zelfde individu, ` +
+        `gedraaid). Kosten: ~€0,05-0,10 per kandidaat (~€0,15-0,30 totaal). Er verandert ` +
+        `niets tot je een kandidaat goedkeurt.`)) return;
+    angleBtn.disabled = true;
+    const oldText = angleBtn.textContent;
+    angleBtn.textContent = "⏳ Genereren… (±1-2 min)";
+    try {
+      const resp = await api.post(
+          `/api/v1/brand/cast/${encodeURIComponent(c.id)}/generate-angle`,
+          { angle, count: CANDIDATE_COUNT }, { key: `gen-angle-${c.id}` });
+      if (resp && Array.isArray(resp.errors) && resp.errors.length) {
+        toast(`Deels gelukt — ${resp.errors.length} kandidaat/kandidaten mislukt`, "info", 7000);
+      }
+      const all = await api.get(
+          `/api/v1/brand/cast/${encodeURIComponent(c.id)}/ref/candidates`,
+          { key: `ref-cands-${c.id}` }).catch(() => resp ? resp.candidates : []);
+      showCandidates(all);
+    } catch (e) {
+      /* api.post toont de serverfout al als toast */
+    } finally {
+      angleBtn.disabled = false;
+      angleBtn.textContent = oldText;
+    }
+  }
 }
 
 function castImg(id, cls) {
@@ -235,6 +350,11 @@ function renderCard(c, reload) {
       body.appendChild(strip);
       api.get(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/refs`, { key: `refs-${c.id}` })
         .then(refs => {
+          // Hoek-teller op de kaart: actieve "angle"-entries uit refs/{id}/
+          // (max 3 — de provider-cap; nieuwe hoeken via 📐 Extra hoek).
+          const angleCount = (refs || []).filter(r => r.kind === "angle").length;
+          lbl.textContent = "Referentiebeelden (anker voor Veo + QC)" +
+              (angleCount ? ` · ${angleCount}/3 extra hoek(en)` : "");
           if (!refs || !refs.length) {
             const warn = document.createElement("div");
             warn.className = "small";
