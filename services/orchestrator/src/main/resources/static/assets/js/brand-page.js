@@ -387,6 +387,96 @@ loadAudio();
   refreshCandidates();
 })();
 
+// ── 🐔 Overlay-logo (bible/logo.png — het transparante intro/outro-asset) ──
+// Preview op een geblokte donkere achtergrond (transparantie + evt. crème-halo
+// meteen zichtbaar), multipart-upload naar POST /api/v1/brand/branding/
+// logo-overlay (raw fetch — api.post forceert JSON, zelfde reden als
+// cast-page.js uploadImage), en twee snelkoppelingen die DEZELFDE
+// /recomposite-endpoints + confirm/poll-patronen gebruiken als wire() bovenin
+// — eigen knoppen, geen programmatisch geklik op de bestaande.
+(() => {
+  const img = document.getElementById("overlay-logo-preview");
+  const fileInput = document.getElementById("overlay-logo-file");
+  const upBtn = document.getElementById("overlay-logo-upload");
+  const st = document.getElementById("overlay-logo-status");
+  if (!img || !fileInput || !upBtn) return;
+
+  // Cache-buster: BrandController servet logo.png zonder no-store, en na een
+  // vervanging moet de preview het NIEUWE bestand tonen.
+  const refreshPreview = () => { img.src = "/api/v1/brand/logo.png?t=" + Date.now(); };
+  img.addEventListener("error", () => { img.style.display = "none"; });
+  refreshPreview();
+
+  upBtn.addEventListener("click", async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { toast("Kies eerst een PNG-bestand", "warn"); return; }
+    const ok = confirm(
+      "⚠️  Overlay-logo vervangen?\n\n" +
+      "Dit vervangt bible/logo.png — het logo dat in ÉLKE video gebakken wordt " +
+      "(intro-fly-in + outro). De oude versie gaat naar logo.previous.png.\n\n" +
+      "Daarna intro én outro re-compositen (gratis, geen Veo) om het nieuwe " +
+      "logo in de bumpers te bakken — knoppen hiernaast.");
+    if (!ok) return;
+    upBtn.disabled = true;
+    if (st) st.textContent = "uploaden…";
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/v1/brand/branding/logo-overlay", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      img.style.display = "";          // kan verborgen zijn na een eerdere 404
+      refreshPreview();
+      fileInput.value = "";
+      if (data.warning) toast("⚠ " + data.warning, "warn", 12000);
+      toast(data.note || "Overlay-logo vervangen ✓", "info", 9000);
+      if (st) st.textContent = "✓ vervangen — nu intro + outro re-compositen";
+    } catch (e) {
+      toast("Logo-upload mislukt: " + (e.message || e), "error", 9000);
+      if (st) st.textContent = "";
+    } finally {
+      upBtn.disabled = false;
+    }
+  });
+
+  // Snelkoppeling: zelfde POST + status-poll als de ♻-knoppen in wire(); de
+  // gedeelde dedupe-keys ({kind}-recomp / {kind}-status) voorkomen dat beide
+  // knoppen tegelijk dubbel werk starten.
+  function wireRecompShortcut(kind, btnId) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const ok = confirm(
+        `${kind.toUpperCase()} re-compositen met het huidige overlay-logo?\n\n` +
+        `Geen Veo-kosten — logo/titel/SFX worden opnieuw op de bestaande clip ` +
+        `gezet en ${kind}.mp4 wordt overschreven.`);
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        await api.post(`/api/v1/${kind}/recomposite`, undefined, { key: kind + "-recomp" });
+        toast(`${kind} re-composite gestart`, "info");
+        const poll = setInterval(async () => {
+          try {
+            const s = await api.get(`/api/v1/${kind}/status`, { key: kind + "-status" });
+            if (s && !s.running) {
+              clearInterval(poll);
+              btn.disabled = false;
+              const video = document.getElementById(`${kind}-video`);
+              if (video) {
+                video.src = `/api/v1/${kind}/current.mp4?t=` + Date.now();
+                video.load();
+              }
+              toast(`${kind} updated`, "info");
+            }
+          } catch (e) { /* poll best-effort (of door wire() afgebroken) — volgende tick */ }
+        }, 3000);
+      } catch (e) { btn.disabled = false; /* api.js toonde de fout al */ }
+    });
+  }
+  wireRecompShortcut("intro", "overlay-recomp-intro");
+  wireRecompShortcut("outro", "overlay-recomp-outro");
+})();
+
 // ── Scène-overgangen editor (bible assembly.transitions, hot-reload ≤1 min) ──
 async function loadTransitions() {
   const tHost = document.getElementById("transitions-host");

@@ -145,6 +145,7 @@ Refactor-schuld:
 - [x] 📐 "Front (nieuwe canon)"-optie: nieuwe primaire ref genereren geánkerd op bestaande hoeken; vervangt alleen de canon, hoeken + serie-anchors blijven. (Drie routes: 🎨 redesign / 📐 hoek erbij / 📐 front = canon verbeteren.)
 - [x] 📺 **Branding-studio** op de Brand-pagina: hoofdpersonage-checkboxes (localStorage), logo- en banner-kandidaten gegenereerd op de cast-refs (cirkel-safe avatar 800×800; banner 2560×1440 cover-crop, safe-strip-prompt), approve → `bible/branding/` + `youtube_banner.jpg` vervangen (oude → .previous), **banner-upload naar YouTube via `channelBanners.insert` + `channels.update`** (force-ssl-scope dekt het). Avatar/profielfoto: geen API — download-knop + Studio-link. `bible/logo.png` (overlay) blijft onaangeroerd.
 - [x] `generate-music.py --outro`: genereert het outro-bed (`bible/sfx/outro/calm.mp3`).
+- [x] 🐔 **Overlay-logo vervangen via de Brand-pagina**: upload met harde transparantie-validatie (PNG + alpha-kanaal + ≥2% echt transparante pixels — anders 400 met uitleg) en een zachte crème-halo-waarschuwing (het oude logo-probleem), backup naar `logo.previous.png`, preview op checkerboard, + ♻ re-composite-snelkoppelingen voor intro/outro.
 
 **Nachtbatch (2026-06-12, derde ronde — ook ongecompileerd tot build.bat):**
 - [x] Dashboard compleet: TikTok/IG-status persistent + metadata-edit/regenerate + zoeken/filters/bulk (zie P2 Frontend).

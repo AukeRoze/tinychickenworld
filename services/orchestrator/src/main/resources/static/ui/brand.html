@@ -110,6 +110,35 @@
     </div>
   </div>
 
+  <div class="brand-grid" style="margin-top:14px">
+    <div class="card" style="grid-column:1 / -1">
+      <h3 class="card-title">🐔 Overlay-logo (intro/outro)</h3>
+      <p class="sub small">Het transparante logo dat linksboven in de intro (fly-in) en de
+      outro gebakken wordt (bible/logo.png) — niet hetzelfde als de kanaal-avatar hierboven.
+      Vervangen kan alleen met een PNG <strong>met transparante achtergrond</strong>; de oude
+      versie blijft bewaard als logo.previous.png. Daarna intro + outro
+      <strong>re-compositen</strong> (gratis, geen Veo) om het nieuwe logo in de bumpers te bakken.</p>
+      <div class="filter-row" style="align-items:flex-start;gap:16px">
+        <!-- Geblokte donkere achtergrond zodat transparantie (en een evt. crème-halo)
+             meteen zichtbaar is — puur CSS, geen extra asset. -->
+        <div style="display:inline-flex;padding:14px;border:1px solid var(--border,#ccc);border-radius:10px;
+                    background:repeating-conic-gradient(#3b3b3b 0% 25%, #232323 0% 50%) 0 0 / 16px 16px">
+          <img id="overlay-logo-preview" alt="huidig overlay-logo"
+               style="max-width:200px;max-height:160px;display:block">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input type="file" id="overlay-logo-file" accept="image/png,.png">
+          <div class="filter-row">
+            <button class="btn" id="overlay-logo-upload">⬆ Vervang logo</button>
+            <button class="btn sm" id="overlay-recomp-intro" title="Zelfde actie als ♻ Re-composite bij de intro bovenaan — bakt o.a. het overlay-logo opnieuw in, geen Veo-kosten">♻ Re-composite intro</button>
+            <button class="btn sm" id="overlay-recomp-outro" title="Zelfde actie als ♻ Re-composite bij de outro bovenaan — bakt o.a. het overlay-logo opnieuw in, geen Veo-kosten">♻ Re-composite outro</button>
+            <span id="overlay-logo-status" class="small" style="color:var(--muted)"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-host"></div>
 
   <script src="/assets/js/nav.js"></script>

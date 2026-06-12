@@ -12,6 +12,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,7 +40,9 @@ import java.util.Map;
  * gedrag, geen extra zorg hier.
  *
  * Bestanden (bible/branding/, een NIEUWE map — bible/logo.png is het
- * TRANSPARANTE intro/outro-overlay-asset en blijft hier overal vanaf):
+ * TRANSPARANTE intro/outro-overlay-asset; de avatar/banner-flow blijft daar
+ * overal vanaf, alleen de expliciete upload-route {@code POST /logo-overlay}
+ * vervangt het, mét backup en alpha-validatie):
  * <ul>
  *   <li>candidates/{logo|banner}-N.png — pending kandidaten;</li>
  *   <li>avatar.png — goedgekeurd logo, 800×800 (YouTube-avatar-formaat). De
@@ -385,6 +388,157 @@ public class BrandingStudioController {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
+
+    // ── Overlay-logo (bible/logo.png — het transparante intro/outro-asset) ──
+
+    /** Minimaal aandeel pixels met alpha &lt; 255 om de upload als transparante
+     *  overlay te accepteren. Een overlay-logo is in de praktijk grotendeels
+     *  transparant (de hele achtergrond), dus 2% is al heel ruimhartig — maar
+     *  het vangt het klassieke geval af: een PNG mét alpha-kanaal dat overal
+     *  255 is (= effectief een rechthoekige plaat over de video). */
+    private static final double MIN_TRANSPARENT_FRACTION = 0.02;
+    /** Halo-note vanaf dit aandeel licht/crème binnen de half-transparante
+     *  randpixels (zie {@link #scanAlpha}). Bewust ruim — bij twijfel alleen
+     *  de note, nooit weigeren. */
+    private static final double HALO_LIGHT_SHARE = 0.40;
+    /** Onder dit absolute aantal half-transparante pixels is de halo-breuk
+     *  statistische ruis (een handvol AA-pixels) — dan geen note. */
+    private static final long HALO_MIN_SEMI_PIXELS = 500;
+
+    /** Vervangt bible/logo.png — het TRANSPARANTE overlay-logo dat IntroBuilder
+     *  (logo-fly-in linksboven) en OutroBuilder (top-left) bij de intro/outro-
+     *  (re)build in de bumpers compositen. Dit is de ENIGE route die dat
+     *  bestand schrijft; de avatar/banner-flow hierboven blijft er bewust vanaf.
+     *  <ul>
+     *    <li>validatie: PNG magic-bytes + ≤10MB (zelfde checks als
+     *        BrandController.uploadReference) én een échte alpha-check — een
+     *        alpha-KANAAL alleen is niet genoeg, zie comments;</li>
+     *    <li>soft-warning (nooit een block) bij een crème-halo-indicatie —
+     *        het bekende probleem van dit logo, zie {@link #scanAlpha};</li>
+     *    <li>oude versie → bible/logo.previous.png (bestaande backup wordt
+     *        overschreven), daarna de rauwe upload-bytes naar bible/logo.png
+     *        (geen her-encode — de PNG blijft byte-voor-byte wat de operator
+     *        exporteerde).</li>
+     *  </ul>
+     *  Het nieuwe logo zit pas in de bumpers na een ♻ Re-composite van intro
+     *  én outro (gratis, geen Veo) — de respons-note zegt dat er ook bij. */
+    @PostMapping(value = "/logo-overlay", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = "application/json")
+    public ResponseEntity<Map<String, Object>> replaceOverlayLogo(
+            @RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "no file"));
+        }
+        if (file.getSize() > 10 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "file too large (max 10MB)"));
+        }
+        try {
+            byte[] bytes = file.getBytes();
+            // Content-Type is client-supplied en triviaal te spoofen — check de
+            // echte PNG magic-bytes (\x89PNG), net als BrandController.uploadReference.
+            if (bytes.length < 8 || (bytes[0] & 0xFF) != 0x89
+                    || bytes[1] != 'P' || bytes[2] != 'N' || bytes[3] != 'G') {
+                return ResponseEntity.badRequest().body(Map.of("error", "not a valid PNG file"));
+            }
+            java.awt.image.BufferedImage img =
+                    javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (img == null) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "PNG kon niet gedecodeerd worden — bestand corrupt?"));
+            }
+            // Alpha-check in twee stappen: (1) is er überhaupt een alpha-kanaal,
+            // en (2) is er ook ÉCHT transparantie? Een PNG kán een alpha-kanaal
+            // hebben dat overal 255 is — dan komt er alsnog een dekkende
+            // rechthoek over de video te liggen.
+            String opaqueMsg = "dit logo komt óver de video — zonder transparantie "
+                    + "krijg je een rechthoekig vlak in beeld. Exporteer als PNG met "
+                    + "transparante achtergrond en upload opnieuw.";
+            if (!img.getColorModel().hasAlpha()) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "PNG heeft geen alpha-kanaal: " + opaqueMsg));
+            }
+            AlphaStats stats = scanAlpha(img);
+            if (stats.transparentFraction() < MIN_TRANSPARENT_FRACTION) {
+                return ResponseEntity.badRequest().body(Map.of("error", String.format(
+                        "PNG heeft wel een alpha-kanaal maar is vrijwel volledig dekkend "
+                                + "(%.1f%% van de pixels doorzichtig): %s",
+                        stats.transparentFraction() * 100, opaqueMsg)));
+            }
+            String warning = null;
+            if (stats.semiCount() >= HALO_MIN_SEMI_PIXELS
+                    && stats.lightShareOfSemi() > HALO_LIGHT_SHARE) {
+                warning = String.format(
+                        "mogelijk een crème-halo: %.0f%% van de half-transparante randpixels "
+                                + "is licht/crème — dat gaf eerder een lichte gloed rond het "
+                                + "logo over de video. Check de preview op de geblokte "
+                                + "achtergrond; het logo is gewoon vervangen (geen blokkade).",
+                        stats.lightShareOfSemi() * 100);
+            }
+
+            Path logo = bibleDir().resolve("logo.png");
+            Path backup = logo.resolveSibling("logo.previous.png");
+            boolean hadPrevious = Files.isRegularFile(logo);
+            if (hadPrevious) {
+                Files.copy(logo, backup, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Files.write(logo, bytes);
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("result", "REPLACED");
+            out.put("path", logo.toString());
+            if (hadPrevious) out.put("backup", backup.toString());
+            out.put("transparentPct", Math.round(stats.transparentFraction() * 100));
+            if (warning != null) out.put("warning", warning);
+            out.put("note", "Overlay-logo vervangen"
+                    + (hadPrevious ? " (oude → logo.previous.png)" : "")
+                    + ". Het zit pas in de bumpers na een ♻ Re-composite van intro én "
+                    + "outro (gratis, geen Veo).");
+            return ResponseEntity.ok(out);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Alpha-statistiek van de upload: aandeel doorzichtige pixels (alpha &lt;
+     *  255), het aantal half-transparante pixels en welk deel dáárvan licht is.
+     *
+     *  Crème-halo-heuristiek (bewust pragmatisch — levert hooguit een NOTE op,
+     *  nooit een weigering): dit logo had eerder half-transparante, lichte
+     *  crème randpixels — het residu van matting tegen een lichte achtergrond
+     *  bij het uitsnijden. Over de video gecomposit geeft dat een licht gloed-
+     *  randje rond het silhouet. De half-transparante pixels (20 &lt; alpha &lt;
+     *  235) zijn per definitie de anti-alias-rand van het silhouet — precies
+     *  waar een halo leeft. We samplen ze in het hele beeld in plaats van
+     *  alleen een band langs de bounding-box-rand: een rond silhouet raakt die
+     *  band maar op vier punten, terwijl de halo de hele omtrek volgt. Hoort
+     *  zo'n randpixel naar de logokleuren toe te mengen maar is hij licht/crème
+     *  (R, G én B ≥ 190), dan telt hij als halo-verdacht; een hoog aandeel
+     *  daarvan triggert de note. */
+    private static AlphaStats scanAlpha(java.awt.image.BufferedImage img) {
+        int w = img.getWidth(), h = img.getHeight();
+        long total = (long) w * h;
+        long transparent = 0, semi = 0, semiLight = 0;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int argb = img.getRGB(x, y);   // altijd ARGB, ook bij palette-PNG's
+                int a = argb >>> 24;
+                if (a < 255) transparent++;
+                if (a > 20 && a < 235) {
+                    semi++;
+                    int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+                    if (r >= 190 && g >= 190 && b >= 190) semiLight++;
+                }
+            }
+        }
+        return new AlphaStats(
+                total == 0 ? 0 : transparent / (double) total,
+                semi == 0 ? 0 : semiLight / (double) semi,
+                semi);
+    }
+
+    /** Resultaat van {@link #scanAlpha}. */
+    private record AlphaStats(double transparentFraction, double lightShareOfSemi,
+                              long semiCount) { }
 
     // ── Prompts ─────────────────────────────────────────────────────────────
 
