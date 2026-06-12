@@ -31,7 +31,10 @@ public class OverviewController {
                         "id", j.getId().toString(),
                         "topic", j.getTopic() == null ? "" : j.getTopic(),
                         "youtube", j.getYoutubeVideoId() != null,
-                        "facebook", j.getFacebookUrl() != null && !j.getFacebookUrl().isBlank()))
+                        "facebook", j.getFacebookUrl() != null && !j.getFacebookUrl().isBlank(),
+                        // V23: persisted by the distribution proxy after a push.
+                        "tiktok", j.getTiktokPublishId() != null && !j.getTiktokPublishId().isBlank(),
+                        "instagram", j.getInstagramMediaId() != null && !j.getInstagramMediaId().isBlank()))
                 .toList();
     }
 

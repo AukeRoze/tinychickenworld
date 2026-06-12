@@ -31,7 +31,7 @@ public class BibleLoader {
         if (!Files.exists(p)) {
             log.warn("Bible not found at {} — characters/locations will be empty", p.toAbsolutePath());
             bible = new ChannelBible("", "", List.of(), List.of(), List.of(),
-                    EpisodeStructure.empty(), "", "");
+                    EpisodeStructure.empty(), "", "", SeriesMythology.empty());
             return;
         }
         JsonNode root = yaml.readTree(p.toFile());
@@ -78,13 +78,36 @@ public class BibleLoader {
         String storyWriter = root.path("personas").path("storyWriter").asText("").trim();
         String humorSpecialist = root.path("personas").path("humorSpecialist").asText("").trim();
 
+        SeriesMythology mythology = parseSeriesMythology(root.path("seriesMythology"));
+
         bible = new ChannelBible(name, audience, chars, locs, arcs, structure,
-                storyWriter, humorSpecialist);
+                storyWriter, humorSpecialist, mythology);
         log.info("Loaded bible '{}': {} characters, {} locations, {} story arcs, {} episode phases, "
-                        + "personas[storyWriter={}, humorSpecialist={}]",
+                        + "personas[storyWriter={}, humorSpecialist={}], mythology[ritual={}, gags={}]",
                 name, chars.size(), locs.size(), arcs.size(), structure.phases().size(),
                 storyWriter.isBlank() ? "default" : "custom",
-                humorSpecialist.isBlank() ? "default" : "custom");
+                humorSpecialist.isBlank() ? "default" : "custom",
+                !mythology.openingRitual().isBlank(), mythology.runningGags().size());
+    }
+
+    /**
+     * Parses the optional {@code seriesMythology} block: an {@code openingRitual}
+     * scalar plus a {@code runningGags} map of characterId → gag description.
+     * Missing/empty block → {@link SeriesMythology#empty()} (older bibles keep
+     * working; PromptBuilder then skips the section entirely).
+     */
+    private SeriesMythology parseSeriesMythology(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return SeriesMythology.empty();
+        String ritual = node.path("openingRitual").asText("").trim();
+        java.util.Map<String, String> gags = new java.util.LinkedHashMap<>();
+        JsonNode gagsNode = node.path("runningGags");
+        if (gagsNode.isObject()) {
+            gagsNode.fields().forEachRemaining(e -> {
+                String v = e.getValue().asText("").trim();
+                if (!v.isEmpty()) gags.put(e.getKey(), v);
+            });
+        }
+        return new SeriesMythology(ritual, gags);
     }
 
     private EpisodeStructure parseEpisodeStructure(JsonNode node) {

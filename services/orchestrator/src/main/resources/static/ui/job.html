@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Job — Tiny Chicken World (new UI)</title>
   <link rel="stylesheet" href="/assets/css/dashboard.css">
-  <script>
-    (function () {
-      var saved = null;
-      try { saved = localStorage.getItem('theme'); } catch (e) {}
-      var sys = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.setAttribute('data-theme', saved || (sys ? 'dark' : 'light'));
-    })();
-  </script>
+  <!-- Sync (render-blocking) on purpose: theme.js sets data-theme pre-paint,
+       so dark mode doesn't flash white (replaces the old per-page inline bootstrap). -->
+  <script src="/assets/js/theme.js"></script>
 </head>
 <body class="ui-app">
   <div id="topbar"></div>
@@ -70,10 +65,9 @@
   <div id="review-host" class="sub small">—</div>
   </details>
 
-  <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
+  <div id="toast-host"></div>
 
   <script src="/assets/js/nav.js"></script>
-  <script src="/assets/js/theme.js"></script>
   <script type="module" src="/assets/js/job-page.js"></script>
 </body>
 </html>

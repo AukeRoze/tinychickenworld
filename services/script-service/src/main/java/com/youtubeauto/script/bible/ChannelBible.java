@@ -17,7 +17,11 @@ public record ChannelBible(
         String storyWriterPersona,
         /** Editable persona injected into the dialogue punch-up pass
          *  (bible personas.humorSpecialist). Empty = built-in comedy-doctor only. */
-        String humorSpecialistPersona
+        String humorSpecialistPersona,
+        /** Serie-mythologie (bible seriesMythology): vast openingsritueel +
+         *  running gag per personage. Nooit null — {@link SeriesMythology#empty()}
+         *  bij ontbrekend blok, zodat oudere bibles blijven werken. */
+        SeriesMythology seriesMythology
 ) {
     public Optional<BibleCharacter> mainCharacter() {
         return characters.stream().filter(c -> "main".equalsIgnoreCase(c.role())).findFirst();

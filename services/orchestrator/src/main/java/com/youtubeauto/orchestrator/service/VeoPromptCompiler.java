@@ -37,6 +37,23 @@ public class VeoPromptCompiler {
         return new com.fasterxml.jackson.dataformat.yaml.YAMLMapper().readTree(p.toFile());
     }
 
+    /**
+     * Leegt ALLE lazy bible-caches zodat de eerstvolgende prompt-compilatie
+     * de verse channel.yml leest. Aangeroepen door BibleReloadService na een
+     * bible-edit (Cast-pagina of handmatig). Nieuwe cache toevoegen? Hier ook
+     * nullen — anders blijft dat veld stale tot een herstart.
+     */
+    public void clearCaches() {
+        cameraBibleCache = null;
+        locationCache = null;
+        surfaceCache = null;
+        ticClauseCache = null;
+        dnaIdentityCache = null;
+        dnaScaleCache = null;
+        colorScriptCache = null;
+        veoLookCache = null;
+    }
+
     // ---- Camera-Bible + world -------------------------------------------------
 
     private volatile Map<String, String[]> cameraBibleCache;   // phase -> [angle, lens, movement, focus, depthOfField]

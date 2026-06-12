@@ -89,6 +89,10 @@ public class MultiPlatformController {
         resp.put("platform", "instagram");
         resp.put("mediaId", id == null ? "" : id);
         resp.put("success", id != null);
+        // Best-effort permalink (additive): GET /{mediaId}?fields=permalink.
+        // A failed lookup leaves it "" — the publish itself stays successful.
+        String permalink = id == null ? null : instagram.fetchPermalink(id);
+        resp.put("permalink", permalink == null ? "" : permalink);
         return ResponseEntity.ok(resp);
     }
 

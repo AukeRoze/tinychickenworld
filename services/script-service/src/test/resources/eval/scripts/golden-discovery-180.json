@@ -1,0 +1,260 @@
+{
+  "title": "The Sky-Splash Mystery",
+  "hook": "Whoosh — did you feel that?",
+  "cta": "Shout RAIN out loud — I'm listening! And ask a grown-up to subscribe.",
+  "scenes": [
+    {
+      "seq": 1, "phase": "hook", "locationId": "barnyard", "characters": ["pip"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Oh! Oh oh oh! Whoosh — did you feel that?" }],
+      "visualDesc": "Extreme close-up of Pip's surprised face, beak open mid-gasp, huge shining eyes, one wingtip touching the brim of her straw hat, the red barn soft behind her.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Pip feels the first mystery drop", "emotion": "surprise (5/5)", "motionSpeed": "natural",
+      "endPose": "leaning in, beak open in a gasp",
+      "motionDesc": "Camera pushes slowly in; Pip's eyes widen and she looks up, one wing rising toward her hat brim; a single drop plinks onto the straw."
+    },
+    {
+      "seq": 2, "phase": "hook", "locationId": "barnyard", "characters": ["pip"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Something went plip. From the SKY!" }],
+      "visualDesc": "Medium shot pulling back: Pip stares up wide-eyed at one small grey cloud above the windmill, a dark wet dot on her straw hat, hay bales and the picket fence behind her.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Reveal what Pip reacts to", "emotion": "wonder (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 3, "phase": "setup", "locationId": "porch", "characters": ["pip"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "The sky never plips. Does it?" }],
+      "visualDesc": "Wide shot of Pip pacing on the porch boards, curious head tilt, talking with open beak, the straw welcome mat and geranium pots around her.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Pip frames the mystery", "emotion": "curious (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 4, "phase": "setup", "locationId": "porch", "characters": ["pip"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "I will find that plip. Come on!" }],
+      "visualDesc": "Low angle of determined Pip marching off the porch step, wings pumping, beak open mid-call, a tin watering can glinting beside the door.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Decision that drives the episode", "emotion": "determined (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 5, "phase": "setup", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 7,
+      "lines": [
+        { "speaker": "pip", "text": "Mo! The sky made a sound!" },
+        { "speaker": "mo", "text": "Hmm. Show me where." }
+      ],
+      "visualDesc": "Medium two-shot among tall sunflowers: Pip gesturing skyward with an open beak, Mo thoughtful with a slow head tilt, blue butterflies drifting between them.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Mo joins the hunt", "emotion": "excited (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 6, "phase": "setup", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "It was a... a SKY-SPLASH!" }],
+      "visualDesc": "Close-up of Pip inventing the word, eyes squeezed with delight, wings flung wide, while Mo watches calmly behind a sunflower stem, a ladybug on a leaf.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Plant the made-up name gag", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 7, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "The pebbles are dark and shiny." }],
+      "visualDesc": "Over-the-shoulder shot past Pip: Mo crouched low, pointing a wing at glistening wet pebbles on the winding path, moss tufts at the edges.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "First clue", "emotion": "thoughtful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 8, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Wet! The path is wet!" }],
+      "visualDesc": "Close-up of Pip's foot tapping a shiny pebble, her gasping face reflected upside-down in it, Mo's legs blurred at the frame edge.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Clue confirmed", "emotion": "gasping (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 9, "phase": "development", "locationId": "pond", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Plop! There! Did you see?" }],
+      "visualDesc": "Wide shot of the pond: Pip mid-hop pointing at spreading rings on the water, cattails swaying, Mo studying the surface from the wooden footbridge.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "The mystery strikes again", "emotion": "wide-eyed (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 10, "phase": "development", "locationId": "pond", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "Rings in the water. Watch." }],
+      "visualDesc": "Close-up on the pond surface, perfect circles widening past a lily pad, Mo's calm reflected face watching, a dragonfly skimming through frame.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Mo gathers evidence", "emotion": "thoughtful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 11, "phase": "development", "locationId": "willowGrove", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "The leaves go pitter-patter." }],
+      "visualDesc": "Medium shot under the willow curtain: Pip listening with one wing cupped at her head, dappled light trembling on the mossy carpet around her and Mo.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "The sound gets a rhythm", "emotion": "curious (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 12, "phase": "development", "locationId": "willowGrove", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "I will check the coop roof. Wait here." }],
+      "visualDesc": "Wide shot: Mo walking off through the hanging willow branches with a small wave, Pip watching him go, a white owl feather lying on the moss.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Mo exits with a clear beat", "emotion": "content (2/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 13, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "bo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "bo", "text": "Pip! Why is your hat drippy?" }],
+      "visualDesc": "Medium shot on the pebble path: Bo wanders in pushing her round glasses up, beak open mid-question, pointing at the damp brim of Pip's straw hat.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Bo enters the story", "emotion": "mischievous (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 14, "phase": "development", "locationId": "garden", "characters": ["pip", "bo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "bo", "text": "A drip? A DRIP-TRIP?!" }],
+      "visualDesc": "Close-up of Bo striking a dramatic pose mid-wordplay, glasses flashing, while Pip giggles behind a daisy, dandelion seeds floating past.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Bo's wordplay gag", "emotion": "giggling (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 15, "phase": "development", "locationId": "garden", "characters": ["pip", "bo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Look! The flowers are drinking!" }],
+      "visualDesc": "Low angle through sunflower stems: Pip crouched beside a flower with a trembling water bead on its petal, Bo leaning in close behind her.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "The world responds to water", "emotion": "awestruck (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 16, "phase": "development", "locationId": "bigOak", "characters": ["pip", "bo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "The Big Oak is wet too." }],
+      "visualDesc": "Wide establishing shot of the Big Oak on its hill, bark glistening in patches, Pip and Bo tiny at its roots among scattered acorns.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "The clue trail grows", "emotion": "curious (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 17, "phase": "development", "locationId": "bigOak", "characters": ["pip", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "bo", "text": "The swing has tiny silver beads!" }],
+      "visualDesc": "Close-up of the wooden swing's braided rope strung with tiny water droplets, Bo's magnified amazed eyes behind her round glasses just beyond it.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Insert-style droplet detail", "emotion": "amazed (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 18, "phase": "development", "locationId": "hills", "characters": ["pip", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "The whole hill is sparkly. Why?" }],
+      "visualDesc": "Wide shot over the rolling hills, grass glittering with droplets, Pip and Bo small on the slope, the Big Oak silhouetted on a far hilltop.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Scale up the mystery", "emotion": "wonder (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 19, "phase": "development", "locationId": "hills", "characters": ["pip", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "bo", "text": "Maybe the clouds are crying happy tears?" }],
+      "visualDesc": "Medium two-shot on the hillside: Bo flopped on her back theorizing at the sky, Pip frowning thoughtfully beside her, clover and dandelions around them.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Silly theory beat", "emotion": "thoughtful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 20, "phase": "development", "locationId": "bigOak", "characters": ["pip", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Can YOU see the big grey cloud?" }],
+      "visualDesc": "Medium shot of Pip turning to look straight at the viewer, smiling, wing pointing up past the oak branches, waiting warmly for an answer.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Participation beat one", "emotion": "warm (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 21, "phase": "development", "locationId": "bigOak", "characters": ["pip", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Yes! There it is. So big and soft." }],
+      "visualDesc": "Over-the-shoulder shot past Pip and Bo looking up: one plump grey cloud drifting over the oak's canopy, the knot-face on the trunk seeming to watch too.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Viewer answer confirmed", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 22, "phase": "climax", "locationId": "hills", "characters": ["pip", "mo", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "mo", "text": "One... two... two-and-a-HALF..." }],
+      "visualDesc": "Wide shot of the trio together on the hilltop under the heavy grey cloud, Mo counting down with one raised wing, Pip and Bo frozen in anticipation.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Mo's stretched-count gag holds the moment", "emotion": "anticipation (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 23, "phase": "climax", "locationId": "hills", "characters": ["pip", "mo", "bo"], "durationSeconds": 6,
+      "lines": [],
+      "visualDesc": "Pip freezes mid-step on the hilltop, eyes enormous, as soft silver rain begins to fall all around; she slowly lifts both wings and turns her face up to the sky, breath held, tiny droplets sparkling past her beak while Mo and Bo go perfectly still behind her.",
+      "timeOfDay": "goldenHour", "weather": "lightRain",
+      "goal": "Silent visual beat: the rain arrives", "emotion": "awe (5/5)", "motionSpeed": "slow",
+      "endPose": "wings lifted wide, face up to the falling rain",
+      "motionDesc": "Camera pulls back slowly as rain drifts down; Pip lifts her wings and tips her face to the sky; Mo and Bo look up together; droplets catch the golden light."
+    },
+    {
+      "seq": 24, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "bo"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "It's my sky-splash! It's RAIN!" }],
+      "visualDesc": "Low angle of Pip shouting joyfully under the oak's dripping canopy, wings flung wide, Mo and Bo beaming beside her, rain sparkling like falling stars.",
+      "timeOfDay": "goldenHour", "weather": "lightRain",
+      "goal": "Callback payoff: sky-splash is rain", "emotion": "joy (5/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 25, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "bo"], "durationSeconds": 7,
+      "lines": [{ "speaker": "bo", "text": "Rain! Wheee! Rain rain rain!" }],
+      "visualDesc": "Medium shot of Bo spinning in the rain with wings out, glasses speckled with droplets, Pip and Mo laughing, puddle rings spreading at their feet.",
+      "timeOfDay": "goldenHour", "weather": "lightRain",
+      "goal": "Shared celebration", "emotion": "gleeful (5/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 26, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Dance with me! The rain tickles!" }],
+      "visualDesc": "Wide postcard shot: all three chicks dancing under the Big Oak in golden rain, the swing swaying gently, the valley glowing warm behind them.",
+      "timeOfDay": "goldenHour", "weather": "lightRain",
+      "goal": "Peak joy postcard moment", "emotion": "joy (5/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 27, "phase": "resolution", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "So clouds hold water. Then it falls." }],
+      "visualDesc": "Medium shot of Pip explaining with proud little gestures beside a dripping sunflower, Mo nodding warmly, the rain easing to a last few drops.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Pip restates the lesson in kid words", "emotion": "content (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 28, "phase": "resolution", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "It's a bit like when the watering can sprinkles." }],
+      "visualDesc": "Close-up of Mo gesturing gently toward the tin watering can by the fence, a calm knowing smile, raindrops still beaded on his red scarf.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Mo's everyday comparison lands", "emotion": "tender (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 29, "phase": "resolution", "locationId": "porch", "characters": ["pip", "mo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "What makes the rain fall down?" }],
+      "visualDesc": "Medium shot on the porch: Pip looking right at the viewer with a warm expectant smile, Mo settled on the bench, lanterns starting to glow.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Participation beat two: say the lesson", "emotion": "warm (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 30, "phase": "resolution", "locationId": "porch", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Yes! The clouds! You knew it!" }],
+      "visualDesc": "Close-up of Pip clapping her wingtips in delight at the viewer's answer, Mo giving one slow approving blink behind her, fireflies blinking on.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "React as if the viewer answered", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 31, "phase": "closer", "locationId": "barnyard", "characters": ["pip", "mo", "bo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "What a wonderful day! See you tomorrow!" }],
+      "visualDesc": "Slow pull-back of the trio waving by the barn at dusk, puddles mirroring the lantern light, the windmill turning gently as the world settles to sleep.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Warm signature goodbye", "emotion": "contented love (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    }
+  ]
+}

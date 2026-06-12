@@ -46,16 +46,28 @@ chicken, or change the world. See `bible/README.md` for details.
 
 ## Services and ports
 
-| Service | Port | Purpose |
-|---|---|---|
-| orchestrator | 8080 | Owns job state, drives the pipeline |
-| script-service | 8081 | Generates a script (structured JSON) from a topic via Claude (Anthropic Messages API, forced tool_use) |
-| video-assembly-service | 8082 | Wraps FFmpeg: scene clips → concat → mix → encode |
-| voice-service | 8083 | ElevenLabs TTS, one MP3 per scene |
-| image-service | 8084 | OpenAI image generation, one PNG per scene |
-| youtube-upload-service | 8085 | YouTube Data API v3 resumable upload |
-| thumbnail-service | 8086 | Dedicated AI thumbnail + AWT title overlay (4 layout templates) |
-| video-generation-service | 8087 | **Opt-in.** Image-to-video via Vertex AI Veo. Replaces Ken Burns per scene when `motionMode=veo`. |
+Only two ports are published on the host: **8080** (orchestrator — dashboard,
+REST API, the only entry point you need) and **8089** (the one-time YouTube
+OAuth callback, redirect URI `http://127.0.0.1:8089/Callback`). All other
+services are internal to the Docker network; containers reach each other via
+service names (`http://image-service:8084` etc.). To temporarily publish the
+internal ports for debugging or the direct-call scripts (`infra/eval/run-eval.py`,
+`tools/make-intro.sh`/`make-outro.sh`, the bridge's image whitelist):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+```
+
+| Service | Internal port | On host? | Purpose |
+|---|---|---|---|
+| orchestrator | 8080 | **yes — 8080** | Owns job state, drives the pipeline |
+| script-service | 8081 | no (dev override only) | Generates a script (structured JSON) from a topic via Claude (Anthropic Messages API, forced tool_use) |
+| video-assembly-service | 8082 | no | Wraps FFmpeg: scene clips → concat → mix → encode |
+| voice-service | 8083 | no | ElevenLabs TTS, one MP3 per scene |
+| image-service | 8084 | no (dev override only) | OpenAI image generation, one PNG per scene |
+| youtube-upload-service | 8085 (+8089 OAuth) | **only 8089** | YouTube Data API v3 resumable upload |
+| thumbnail-service | 8086 | no | Dedicated AI thumbnail + AWT title overlay (4 layout templates) |
+| video-generation-service | 8087 | no (dev override only) | **Opt-in.** Image-to-video via Vertex AI Veo. Replaces Ken Burns per scene when `motionMode=veo`. |
 
 ## Motion: Ken Burns (default) vs Veo image-to-video (opt-in)
 
@@ -126,7 +138,7 @@ curl -X POST 'http://localhost:8080/api/v1/videos/<jobId>/reject?reason=hook-too
 
 GET works on both endpoints too, so the mail buttons are one-click and don't need a form.
 
-Local mail capture: a `mailhog` container runs at `http://localhost:8025` (web UI) and listens for SMTP on `mailhog:1025`. All review mails land there during local development — no real SMTP needed.
+Note on mail: the e-mail notifications (and the MailHog container this README used to mention on `:8025`) were removed on 2026-06-11 — all review actions go through the dashboard (`/ui`) and the REST API. `REVIEW_EMAIL_TO` is kept for a possible reintroduction; see `ReviewMailer.java` for the do's-and-don'ts if mails ever come back.
 
 Without an `REVIEW_EMAIL_TO`, gates still pause the pipeline; the mail body is just logged at INFO. Useful for "review via the REST API only" setups.
 

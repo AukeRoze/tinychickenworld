@@ -15,5 +15,6 @@ public record JobSummary(
         String plannedPublishAt,
         String seriesId,
         Integer episodeNumber,
-        Integer qaScore
+        Integer qaScore,
+        String format          // landscape | vertical — drives the list's format filter
 ) {}

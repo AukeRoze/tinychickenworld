@@ -18,7 +18,10 @@ below 5 — so you can wire it into CI / a pre-commit hook and iterate the giant
 prompts safely. Text-only: no images, no Veo — cheap (just Haiku script calls).
 
 Usage:
-  # script-service must be running:  docker compose up -d script-service
+  # script-service must be running WITH its port published on the host.
+  # Since the port-mapping cleanup (2026-06-12) 8081 is internal-only in
+  # docker-compose.yml, so start with the dev-ports override:
+  #   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d script-service
   python infra/eval/run-eval.py
   python infra/eval/run-eval.py --runs 3            # average N runs/brief (stochastic)
   python infra/eval/run-eval.py --save-baseline     # set THIS run as the baseline
@@ -136,6 +139,8 @@ def main() -> int:
                 r = run_one(args.base_url, b, defaults, args.timeout)
             except urllib.error.URLError as e:
                 print(f"  ! {b['id']}: cannot reach script-service ({e}). Is it running?")
+                print("    NB: 8081 is no longer published by default. Start with the override:")
+                print("    docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d script-service")
                 return 2
             statuses.append(r["status"])
             if r["status"] == "COMPLETED":

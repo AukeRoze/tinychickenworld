@@ -5,7 +5,7 @@
  * side by side for the human eye. Read-only: the bench runs on the host
  * (golden-test.bat) and publishes into {workdir}/golden/.
  */
-import { api } from "/assets/js/api.js";
+import { api, esc } from "/assets/js/api.js";
 
 const host = document.getElementById("golden-host");
 
@@ -48,8 +48,9 @@ function verdictBanner(latest) {
   let icon = "✅", msg = "Geen regressies t.o.v. de baseline.";
   if (fails.length) { icon = "❌"; msg = `${fails.length} regressie(s) — niet shippen.`; }
   else if (warns.length) { icon = "⚠️"; msg = `${warns.length} kleine verslechtering(en) binnen tolerantie.`; }
-  b.innerHTML = `<h3 class="card-title">${icon} Run ${latest.ts || "?"} (${latest.motion || "?"})</h3>
-    <p class="sub">${msg}</p>`;
+  // ts/motion come from the published golden JSON — escape like any server data.
+  b.innerHTML = `<h3 class="card-title">${icon} Run ${esc(latest.ts || "?")} (${esc(latest.motion || "?")})</h3>
+    <p class="sub">${esc(msg)}</p>`;
   for (const f of fails) {
     const p = document.createElement("p");
     p.className = "sub small golden-worse";
@@ -76,8 +77,9 @@ function jobCard(tag, cur, base) {
   for (const k of keys) {
     const tr = document.createElement("tr");
     const cls = deltaClass(k, base?.[k], cur?.[k]);
-    tr.innerHTML = `<td class="mono">${k}</td><td>${fmt(base?.[k])}</td>
-                    <td class="${cls}">${fmt(cur?.[k])}</td>`;
+    // Metric keys/values come from the published JSON — escape them too.
+    tr.innerHTML = `<td class="mono">${esc(k)}</td><td>${esc(fmt(base?.[k]))}</td>
+                    <td class="${cls}">${esc(fmt(cur?.[k]))}</td>`;
     tb.appendChild(tr);
   }
   t.appendChild(tb);
@@ -105,23 +107,10 @@ function jobCard(tag, cur, base) {
   return c;
 }
 
-function injectStyles() {
-  const s = document.createElement("style");
-  s.textContent = `
-    .golden-table { width:100%; border-collapse:collapse; margin:8px 0; }
-    .golden-table th, .golden-table td { text-align:left; padding:4px 10px;
-      border-bottom:1px solid var(--border, #ddd); font-size:13px; }
-    .golden-better { color:#15803d; font-weight:600; }
-    .golden-worse  { color:#b91c1c; font-weight:600; }
-    .golden-sheets { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-    .golden-sheets figure { margin:0; flex:1 1 380px; }
-    .golden-sheets img { width:100%; border-radius:8px; }
-  `;
-  document.head.appendChild(s);
-}
+// Page styles live in /assets/css/dashboard.css ("Golden test page" section) —
+// no runtime <style> injection, the stylesheet is the single source of truth.
 
 async function load() {
-  injectStyles();
   let data;
   try {
     data = await api.get("/api/v1/golden", { key: "golden" });

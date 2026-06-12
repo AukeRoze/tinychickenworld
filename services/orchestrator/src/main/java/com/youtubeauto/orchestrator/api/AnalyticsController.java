@@ -78,6 +78,11 @@ public class AnalyticsController {
         out.put("topLessons", toInsights(snap.topLessons()));
         out.put("topSeries", toInsights(snap.topSeries()));
         out.put("topMotionModes", toInsights(snap.topMotionModes()));
+        // Story I: per-story-phase retention aggregation (additive; empty
+        // list + 0 until ≥1 video has a retention mapping — fail-safe).
+        var phaseRetention = insights.retentionByPhase();
+        out.put("retentionByPhase", SeriesStatsController.toPhaseMaps(phaseRetention.phases()));
+        out.put("retentionVideos", phaseRetention.videos());
         out.put("videos", videos);
         return out;
     }

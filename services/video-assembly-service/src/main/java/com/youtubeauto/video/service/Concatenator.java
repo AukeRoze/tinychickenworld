@@ -383,25 +383,6 @@ public class Concatenator {
             // Logo enabled but only one clip — overlay without crossfade.
             return concatSingleWithLogo(clips.get(0), output, workdir);
         }
-        // OOM guard: a single filtergraph with 29 decoder chains + overlays got
-        // the encoder OOM-killed (exit=137, ep-3 "Wobbly Egg" — which silently
-        // shipped with hard cuts, no grade, no title card). Big jobs are built
-        // in bounded passes instead: xfade per chunk → merge chunks (boundary
-        // xfades) → one single-input overlay pass. Same visual output, capped
-        // memory.
-        if (clips.size() > XFADE_CHUNK) {
-            try {
-                return concatChunked(clips, phases, output, workdir, title, outroPath);
-            } catch (RuntimeException e) {
-                log.warn("Chunked concat failed ({}). Falling back to bare xfade concat.",
-                        e.getMessage());
-                int fbFps = props.output().fps();
-                double[] fbDurs = new double[clips.size()];
-                for (int i = 0; i < clips.size(); i++) fbDurs[i] = probeDuration(clips.get(i), workdir);
-                return concatBare(clips, phases, output, workdir, fbFps, fbDurs);
-            }
-        }
-
         int fps = props.output().fps();
         double[] durs = new double[clips.size()];
         for (int i = 0; i < clips.size(); i++) durs[i] = probeDuration(clips.get(i), workdir);
@@ -538,27 +519,71 @@ public class Concatenator {
         args.add("-c:a"); args.add("pcm_s16le");
         args.add(output.toString());
 
-        // Resilience: the cosmetic overlays (color grade, title/end card, logo,
-        // whoosh) are "nice to have". If the full filtergraph fails for any
-        // reason, fall back to a bare concat so the video still ships rather
-        // than failing the whole job.
+        // Resilience ladder (backlog P3): the transitions and cosmetic overlays
+        // are "nice to have" — a failing layer must never sink the render.
+        //   1. FULL single filtergraph (best output: J/L-cut lead + overlays);
+        //   2. CHUNKED — same transitions in bounded passes of
+        //      app.assembly.concat-chunk-size clips, so memory scales with the
+        //      chunk size instead of the total (the monolithic graph over ~29
+        //      1080p clips was OOM-killed, exit=137, ep-3 "Wobbly Egg");
+        //   3. BARE — transitions only, no overlays (which itself stream-copy
+        //      concats as a last resort).
+        // PROACTIVE guard: boven de chunkgrootte proberen we de monolithische
+        // graph niet eens — die decodeert ALLE clips tegelijk en is daar in
+        // productie op OOM-gekilld. Een gedoemde poging kost in het slechtste
+        // geval de volle ffmpeg-timeout; chunked levert dezelfde look met
+        // begrensd geheugen, dus ga er direct heen.
+        if (concatChunkSize > 1 && clips.size() > concatChunkSize) {
+            try {
+                log.info("[concat] {} clips > chunk-size {} — CHUNKED directly (single-graph OOM guard)",
+                        clips.size(), concatChunkSize);
+                return concatChunked(clips, phases, output, workdir, title, outroPath);
+            } catch (RuntimeException e) {
+                log.warn("[concat level 2/3] Chunked transition concat failed ({}).",
+                        e.getMessage());
+                log.warn("[concat level 3/3] Retrying BARE — transitions only, no color "
+                        + "grade / title / end-card / logo / whoosh — so the video still ships.");
+                return concatBare(clips, phases, output, workdir, fps, durs);
+            }
+        }
         try {
             runner.runFfmpeg(args, workdir);
+            return output;
         } catch (RuntimeException e) {
-            log.warn("Concat with overlays failed ({}). Retrying bare — no color "
-                    + "grade / title / end-card / logo / whoosh — so the video still ships.",
+            log.warn("[concat level 1/3] Full transition filtergraph failed ({}).",
                     e.getMessage());
-            return concatBare(clips, phases, output, workdir, fps, durs);
         }
-        return output;
+        if (concatChunkSize > 1) {
+            try {
+                log.warn("[concat level 2/3] Retrying CHUNKED — same transitions in "
+                        + "bounded passes of ≤{} clips, overlays in a final single-input pass.",
+                        concatChunkSize);
+                return concatChunked(clips, phases, output, workdir, title, outroPath);
+            } catch (RuntimeException e) {
+                log.warn("[concat level 2/3] Chunked transition concat failed ({}).",
+                        e.getMessage());
+            }
+        } else {
+            log.warn("[concat level 2/3] Chunked concat disabled "
+                    + "(app.assembly.concat-chunk-size={} ≤ 1) — skipping to bare.",
+                    concatChunkSize);
+        }
+        log.warn("[concat level 3/3] Retrying BARE — transitions only, no color "
+                + "grade / title / end-card / logo / whoosh — so the video still ships.");
+        return concatBare(clips, phases, output, workdir, fps, durs);
     }
 
     // ── Chunked transition concat (OOM-safe) ───────────────────────────────
 
-    /** Max clip inputs per ffmpeg xfade pass. Above this the single-graph path
-     *  has been OOM-killed in production (exit=137 with 29 inputs on a 1080p
-     *  render); 6 inputs keeps each pass comfortably bounded. */
-    private static final int XFADE_CHUNK = 6;
+    /** Max clip inputs per ffmpeg xfade pass in the CHUNKED fallback. The
+     *  single-graph path has been OOM-killed in production (exit=137 with 29
+     *  inputs on a 1080p render); each chunked pass decodes at most this many
+     *  inputs, so memory scales with the chunk size instead of the total.
+     *  ≤ 1 disables the chunked level entirely (full graph falls straight
+     *  through to bare). Values < 2 are clamped to 2 inside the chunked path
+     *  itself, should it ever be reached. */
+    @org.springframework.beans.factory.annotation.Value("${app.assembly.concat-chunk-size:8}")
+    private int concatChunkSize;
 
     private static String fmt3(double v) {
         return String.format(java.util.Locale.ROOT, "%.3f", v);
@@ -580,7 +605,8 @@ public class Concatenator {
     /**
      * OOM-safe equivalent of the monolithic transition graph, in three bounded
      * passes:
-     *   1. xfade INSIDE chunks of ≤{@link #XFADE_CHUNK} clips → chunk files;
+     *   1. xfade INSIDE chunks of ≤{@code app.assembly.concat-chunk-size} clips
+     *      → chunk files;
      *   2. merge the chunk files, rendering each chunk BOUNDARY's transition
      *      (recursively, so any count of chunks stays bounded);
      *   3. ONE single-video-input overlay pass: colour grade → title card →
@@ -596,8 +622,9 @@ public class Concatenator {
                                Path workdir, String title, String outroPath) {
         int fps = props.output().fps();
         int n = clips.size();
+        int chunk = Math.max(2, concatChunkSize);   // a 1-clip "chunk" makes no sense
         log.info("Chunked concat: {} clips in passes of ≤{} inputs (single-graph OOM guard)",
-                n, XFADE_CHUNK);
+                n, chunk);
 
         double[] durs = new double[n];
         for (int i = 0; i < n; i++) durs[i] = probeDuration(clips.get(i), workdir);
@@ -635,7 +662,7 @@ public class Concatenator {
         List<Integer> firstClipOf = new ArrayList<>();   // global index of each chunk's first clip
         int start = 0, chunkNo = 0;
         while (start < n) {
-            int end = Math.min(start + XFADE_CHUNK, n);
+            int end = Math.min(start + chunk, n);
             if (n - end == 1) end = n;                   // no trailing 1-clip chunk
             Path out = tmpDir.resolve("chunk_" + (chunkNo++) + ".mkv");
             xfadeRange(clips, start, end, trs, xfs, durs, fps, out, workdir);
@@ -651,7 +678,7 @@ public class Concatenator {
             List<Path> next = new ArrayList<>();
             List<Integer> nextFirst = new ArrayList<>();
             for (int s = 0; s < level.size(); ) {
-                int e = Math.min(s + XFADE_CHUNK, level.size());
+                int e = Math.min(s + chunk, level.size());
                 if (level.size() - e == 1) e = level.size();
                 if (e - s == 1) {
                     next.add(level.get(s));

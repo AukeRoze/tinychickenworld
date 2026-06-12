@@ -8,6 +8,7 @@ import com.youtubeauto.orchestrator.api.dto.VideoJobResponse;
 import com.youtubeauto.orchestrator.client.*;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.domain.JobStatus;
+import com.youtubeauto.orchestrator.domain.SceneDto;
 import com.youtubeauto.orchestrator.domain.VideoJob;
 import com.youtubeauto.orchestrator.repository.VideoJobRepository;
 import com.youtubeauto.orchestrator.review.ReviewConfigLoader;
@@ -121,6 +122,12 @@ public class PipelineOrchestrator {
     private int autofixMaxIterations;
     @org.springframework.beans.factory.annotation.Value("${app.autofix.max-rerolls:8}")
     private int autofixMaxRerolls;
+    /** Per-axis lever threshold for the extended Auto-Fix. QA Board axes are
+     *  /10; this threshold is on the /100 scale (axis×10 &lt; threshold ⇒ the
+     *  axis lever fires). 0 disables every axis lever — which is also the
+     *  implicit value in plain unit tests without a Spring context. */
+    @org.springframework.beans.factory.annotation.Value("${app.autofix.axis-threshold:70}")
+    private int autofixAxisThreshold;
 
     /** Self-reference so stage-to-stage calls go through the @Async proxy
      *  (Spring otherwise short-circuits self-invocations). */
@@ -249,7 +256,7 @@ public class PipelineOrchestrator {
      */
     public void reassemble(UUID jobId) {
         VideoJob job = load(jobId);
-        List<Map<String, Object>> scenes = loadAssemblyScenes(job);
+        List<SceneDto> scenes = loadAssemblyScenes(job);
         if (!assetsComplete(scenes)) {
             throw new IllegalStateException(
                     "Job " + jobId + " has no complete scene assets to re-assemble.");
@@ -265,7 +272,7 @@ public class PipelineOrchestrator {
     private JobStatus resumePoint(VideoJob job) {
         // No script yet → start from the beginning.
         if (job.getScriptId() == null) return JobStatus.SCRIPT_GENERATING;
-        List<Map<String, Object>> scenes = loadAssemblyScenes(job);
+        List<SceneDto> scenes = loadAssemblyScenes(job);
         if (scenes.isEmpty()) return JobStatus.SCRIPT_GENERATING;
         // Any scene missing its image or voice → (re)run assets. The assets
         // stage itself reuses the scenes that DO already have files.
@@ -283,20 +290,20 @@ public class PipelineOrchestrator {
     }
 
     /** True when every scene already has an image AND a voice file on disk. */
-    private boolean assetsComplete(List<Map<String, Object>> scenes) {
+    private boolean assetsComplete(List<SceneDto> scenes) {
         if (scenes.isEmpty()) return false;
-        for (Map<String, Object> s : scenes) {
-            if (!fileExists(s.get("imagePath"))) return false;
-            if (!fileExists(s.get("audioPath"))) return false;
+        for (SceneDto s : scenes) {
+            if (!fileExists(s.getImagePath())) return false;
+            if (!fileExists(s.getAudioPath())) return false;
         }
         return true;
     }
 
     /** True when at least one scene already has a Veo clip (good enough to skip
      *  the Veo stage on retry; per-scene Veo failures fall back to Ken Burns). */
-    private boolean veoComplete(List<Map<String, Object>> scenes) {
-        for (Map<String, Object> s : scenes) {
-            if (s.get("clipPath") != null && !String.valueOf(s.get("clipPath")).isBlank()) {
+    private boolean veoComplete(List<SceneDto> scenes) {
+        for (SceneDto s : scenes) {
+            if (s.hasClip()) {
                 return true;
             }
         }
@@ -309,8 +316,15 @@ public class PipelineOrchestrator {
         return !p.isBlank() && java.nio.file.Files.exists(java.nio.file.Paths.get(p));
     }
 
-    @Transactional public void clearError(UUID id) {
-        repo.findById(id).ifPresent(j -> { j.setError(null); repo.save(j); });
+    /** Null-safe string: a missing (null) SceneDto field reads as "" — the same
+     *  result the legacy {@code String.valueOf(map.getOrDefault(key, ""))} gave
+     *  for an absent key. */
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    public void clearError(UUID id) {
+        retryOnConflict(id, j -> j.setError(null));
     }
 
     /** Regenerate the image for a single scene of an IMAGES_REVIEW_PENDING
@@ -327,9 +341,9 @@ public class PipelineOrchestrator {
                     + "COMPLETED (was " + job.getStatus() + ")");
         }
         VideoFormat format = VideoFormat.parse(job.getFormat());
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
 
@@ -349,6 +363,7 @@ public class PipelineOrchestrator {
             }
         }
         if (imgScene == null) throw new IllegalStateException("Scene " + seq + " not in script");
+        attachEpisodeAnchors(imgScene, job);   // Story B: re-roll matches episode canon
 
         JsonNode resp = imageClient.generate(jobId, List.of(imgScene), format.imageFormat);
         String newPath = null;
@@ -360,7 +375,7 @@ public class PipelineOrchestrator {
         }
         if (newPath == null) throw new IllegalStateException("image-service did not return scene " + seq);
 
-        scene.put("imagePath", newPath);
+        scene.setImagePath(newPath);
         saveAssemblyScenes(jobId, assembly);
         // Removing seq from locked set so the reviewer must re-approve.
         unlockScene(jobId, seq);
@@ -387,22 +402,23 @@ public class PipelineOrchestrator {
             throw new IllegalArgumentException("visualDesc must not be empty");
         }
         VideoFormat format = VideoFormat.parse(job.getFormat());
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
 
         // Persist the edit, then generate the image from the new text using the
         // scene's own cast/location/world fields (+ the per-episode motif).
-        scene.put("visualDesc", newVisualDesc.trim());
+        scene.setVisualDesc(newVisualDesc.trim());
         Map<String, Object> imgScene = new HashMap<>();
         imgScene.put("seq", seq);
         imgScene.put("visualDesc", withMotif(newVisualDesc.trim(), job));
-        imgScene.put("characters", scene.getOrDefault("characters", List.of()));
-        imgScene.put("locationId", scene.getOrDefault("locationId", ""));
-        imgScene.put("timeOfDay", scene.getOrDefault("timeOfDay", ""));
-        imgScene.put("weather", scene.getOrDefault("weather", ""));
+        imgScene.put("characters", scene.charactersOrEmpty());
+        imgScene.put("locationId", nz(scene.getLocationId()));
+        imgScene.put("timeOfDay", nz(scene.getTimeOfDay()));
+        imgScene.put("weather", nz(scene.getWeather()));
+        attachEpisodeAnchors(imgScene, job);   // Story B: edited re-roll matches episode canon
 
         JsonNode resp = imageClient.generate(jobId, List.of(imgScene), format.imageFormat);
         String newPath = null;
@@ -411,7 +427,7 @@ public class PipelineOrchestrator {
         }
         if (newPath == null) throw new IllegalStateException("image-service did not return scene " + seq);
 
-        scene.put("imagePath", newPath);
+        scene.setImagePath(newPath);
         saveAssemblyScenes(jobId, assembly);
         unlockScene(jobId, seq);
         log.info("Job {} scene {} edited + regenerated -> {}", jobId, seq, newPath);
@@ -432,12 +448,12 @@ public class PipelineOrchestrator {
     public String generateEndStillFor(UUID jobId, int seq, String endPoseOverride) {
         VideoJob job = load(jobId);
         VideoFormat format = VideoFormat.parse(job.getFormat());
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
         if (assembly.isEmpty()) {
             throw new IllegalStateException("No scenes yet — generate the storyboard first.");
         }
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
 
@@ -445,7 +461,7 @@ public class PipelineOrchestrator {
         // that resolves the action so the still is meaningfully different.
         String pose = endPoseOverride == null ? "" : endPoseOverride.trim();
         if (pose.isEmpty() || "null".equals(pose)) {
-            pose = String.valueOf(scene.getOrDefault("endPose", "")).trim();
+            pose = nz(scene.getEndPose()).trim();
         }
         if (pose.isEmpty() || "null".equals(pose)) {
             pose = "the natural resolved END of the action in this scene — the "
@@ -461,11 +477,12 @@ public class PipelineOrchestrator {
         Map<String, Object> endScene = new HashMap<>();
         endScene.put("seq", END_STILL_SEQ_OFFSET + seq);
         endScene.put("visualDesc", lockedDesc);
-        endScene.put("characters", scene.getOrDefault("characters", List.of()));
-        endScene.put("locationId", scene.getOrDefault("locationId", ""));
-        endScene.put("timeOfDay", scene.getOrDefault("timeOfDay", ""));
-        endScene.put("weather", scene.getOrDefault("weather", ""));
-        endScene.put("cameraFraming", scene.getOrDefault("cameraFraming", ""));
+        endScene.put("characters", scene.charactersOrEmpty());
+        endScene.put("locationId", nz(scene.getLocationId()));
+        endScene.put("timeOfDay", nz(scene.getTimeOfDay()));
+        endScene.put("weather", nz(scene.getWeather()));
+        endScene.put("cameraFraming", nz(scene.getCameraFraming()));
+        attachEpisodeAnchors(endScene, job);   // Story B: end-still matches episode canon
 
         JsonNode resp = imageClient.generate(jobId, List.of(endScene), format.imageFormat);
         String newPath = null;
@@ -479,7 +496,7 @@ public class PipelineOrchestrator {
             throw new IllegalStateException("image-service did not return end-still for scene " + seq);
         }
         // Persist the pose on the scene so a later full render reuses this intent.
-        scene.put("endPose", pose);
+        scene.setEndPose(pose);
         saveAssemblyScenes(jobId, assembly);
         log.info("Job {} manual end-still for scene {} -> {}", jobId, seq, newPath);
         return newPath;
@@ -499,9 +516,9 @@ public class PipelineOrchestrator {
         if (dialogueText == null || dialogueText.isBlank()) {
             throw new IllegalArgumentException("dialogue must not be empty");
         }
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
 
@@ -524,9 +541,9 @@ public class PipelineOrchestrator {
             Map<String, Object> lm = new HashMap<>();
             lm.put("speaker", speaker);
             lm.put("text", text);
-            String sceneEmotion = String.valueOf(scene.getOrDefault("emotion", ""));
+            String sceneEmotion = nz(scene.getEmotion());
             if (sceneEmotion.isBlank() || "null".equals(sceneEmotion)) {
-                sceneEmotion = phaseDefaultEmotion(String.valueOf(scene.getOrDefault("phase", "")));
+                sceneEmotion = phaseDefaultEmotion(nz(scene.getPhase()));
             }
             lm.put("emotion", sceneEmotion);
             lines.add(lm);
@@ -535,20 +552,21 @@ public class PipelineOrchestrator {
         }
         if (lines.isEmpty()) throw new IllegalArgumentException("No usable dialogue lines");
 
-        scene.put("lines", lines);
-        scene.put("narration", narration.toString());
+        scene.setLines(lines);
+        scene.setNarration(narration.toString());
 
         // Re-voice just this scene.
         Map<String, Object> voiceScene = new HashMap<>();
         voiceScene.put("seq", seq);
         voiceScene.put("lines", lines);
-        voiceScene.put("locationId", scene.getOrDefault("locationId", ""));
+        voiceScene.put("locationId", nz(scene.getLocationId()));
+        voiceScene.put("weather", nz(scene.getWeather()));
         JsonNode resp = voiceClient.synthesize(jobId, List.of(voiceScene));
         String newAudio = null;
         for (JsonNode n : resp.path("scenes")) {
             if (n.path("seq").asInt() == seq) { newAudio = n.path("audioPath").asText(); break; }
         }
-        if (newAudio != null && !newAudio.isBlank()) scene.put("audioPath", newAudio);
+        if (newAudio != null && !newAudio.isBlank()) scene.setAudioPath(newAudio);
         saveAssemblyScenes(jobId, assembly);
         log.info("Job {} scene {} dialogue edited + re-voiced -> {}", jobId, seq, newAudio);
         return newAudio;
@@ -728,9 +746,9 @@ public class PipelineOrchestrator {
     /** Lock every scene + advance the pipeline past IMAGES_REVIEW_PENDING. */
     public void lockAllAndContinue(UUID jobId) {
         VideoJob job = load(jobId);
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
         Set<Integer> all = assembly.stream()
-                .map(a -> ((Number) a.get("seq")).intValue())
+                .map(SceneDto::effectiveSeq)
                 .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
         saveLocked(jobId, all);
         approve(jobId);
@@ -745,12 +763,11 @@ public class PipelineOrchestrator {
                 .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
     }
 
-    @Transactional
     public void saveLocked(UUID jobId, Set<Integer> locked) {
         String csv = locked.stream().sorted()
                 .map(String::valueOf)
                 .collect(java.util.stream.Collectors.joining(","));
-        repo.findById(jobId).ifPresent(j -> { j.setLockedSceneSeqs(csv); repo.save(j); });
+        retryOnConflict(jobId, j -> j.setLockedSceneSeqs(csv));
     }
 
     /** Copy all scene images from oldJobId's workdir to newJobId's workdir.
@@ -852,10 +869,10 @@ public class PipelineOrchestrator {
 
             // Build initial assemblyScenes — only script-derived fields; voice/image come later.
             // Phase carried through so Veo hybrid routing can filter on it.
-            List<Map<String, Object>> assemblyScenes = new ArrayList<>();
+            List<SceneDto> assemblyScenes = new ArrayList<>();
             for (JsonNode s : scriptBody.path("scenes")) {
-                Map<String, Object> asm = new HashMap<>();
-                asm.put("seq", s.path("seq").asInt());
+                SceneDto asm = new SceneDto();
+                asm.setSeq(s.path("seq").asInt());
                 // PEAK-HOLD (board #14): the emotional summit — a climax beat
                 // scripted at maximum intensity "(5/5)" — gets 2 extra seconds
                 // of air. "Big sister." was cut short by the schedule; Pixar
@@ -869,8 +886,8 @@ public class PipelineOrchestrator {
                     log.info("Job {} scene {} peak-hold: +2s on a 5/5 climax beat", jobId,
                             s.path("seq").asInt());
                 }
-                asm.put("durationSeconds", durSec);
-                asm.put("narration", s.path("narration").asText(""));
+                asm.setDurationSeconds(durSec);
+                asm.setNarration(s.path("narration").asText(""));
                 // Carry the per-character dialogue lines so the dashboard can show
                 // + edit them, and a per-scene re-voice can rebuild the audio.
                 List<Map<String, Object>> lns = new ArrayList<>();
@@ -878,23 +895,23 @@ public class PipelineOrchestrator {
                     lns.add(Map.of("speaker", l.path("speaker").asText(""),
                                    "text",    l.path("text").asText("")));
                 }
-                asm.put("lines", lns);
-                asm.put("visualDesc", s.path("visualDesc").asText());
-                asm.put("phase", s.path("phase").asText(""));
-                asm.put("locationId", s.path("locationId").asText(""));
-                asm.put("timeOfDay", s.path("timeOfDay").asText(""));
-                asm.put("weather", s.path("weather").asText(""));
-                asm.put("goal", s.path("goal").asText(""));
-                asm.put("emotion", s.path("emotion").asText(""));
-                asm.put("motionSpeed", s.path("motionSpeed").asText(""));
-                asm.put("endPose", s.path("endPose").asText(""));
-                asm.put("motionDesc", s.path("motionDesc").asText(""));
-                // Carry the cast list on the assembly map: the vision-QC needs it
+                asm.setLines(lns);
+                asm.setVisualDesc(s.path("visualDesc").asText());
+                asm.setPhase(s.path("phase").asText(""));
+                asm.setLocationId(s.path("locationId").asText(""));
+                asm.setTimeOfDay(s.path("timeOfDay").asText(""));
+                asm.setWeather(s.path("weather").asText(""));
+                asm.setGoal(s.path("goal").asText(""));
+                asm.setEmotion(s.path("emotion").asText(""));
+                asm.setMotionSpeed(s.path("motionSpeed").asText(""));
+                asm.setEndPose(s.path("endPose").asText(""));
+                asm.setMotionDesc(s.path("motionDesc").asText(""));
+                // Carry the cast list on the assembly scene: the vision-QC needs it
                 // to verify accessories/colour, and the Veo tic-injection +
                 // per-character compiler read it too. Without this they ran blind.
                 List<String> chars = new ArrayList<>();
                 for (JsonNode c : s.path("characters")) chars.add(c.asText());
-                asm.put("characters", chars);
+                asm.setCharacters(chars);
                 assemblyScenes.add(asm);
             }
             saveScriptIdAndScenes(jobId, scriptId, assemblyScenes,
@@ -934,6 +951,10 @@ public class PipelineOrchestrator {
             List<PropAnchorService.Prop> propAnchors =
                     propAnchorService.buildAnchors(jobId, allVisualDescs, format.imageFormat);
 
+            // Board-audit — auto-establishing: track the previous scene's phase so
+            // the one setup scene that directly follows the hook can be framed as
+            // a wide establishing shot (geography after the close-up hook).
+            String prevPhase = null;
             for (JsonNode s : scriptBody.path("scenes")) {
                 int seq = s.path("seq").asInt();
                 // The scene's Shot-DNA emotion drives the voice delivery: each
@@ -959,6 +980,10 @@ public class PipelineOrchestrator {
                 voiceScene.put("seq", seq);
                 voiceScene.put("lines", lines);
                 voiceScene.put("locationId", s.path("locationId").asText(""));
+                // Weather travels with the voice payload too: the voice-service
+                // AmbientMixer lets an ambient/{weather}.mp3 bed override the
+                // location bed, matching the visual fx/weather overlay.
+                voiceScene.put("weather", s.path("weather").asText(""));
                 // Silent visual beats (lines: []) get a silent track sized to
                 // the scripted duration, so the edit holds the intended pause.
                 voiceScene.put("durationSeconds", s.path("durationSeconds").asInt(4));
@@ -973,6 +998,18 @@ public class PipelineOrchestrator {
                 img.put("locationId", s.path("locationId").asText(""));
                 img.put("timeOfDay", s.path("timeOfDay").asText(""));
                 img.put("weather", s.path("weather").asText(""));
+                // Board-audit — auto-establishing (image side): the FIRST setup
+                // scene right after the hook gets an explicit wide-establishing
+                // framing hint, mirroring the Veo-side rule in buildVeoScenes.
+                // Deterministic and once per video: phases are contiguous, so
+                // exactly one setup scene has a hook beat as its predecessor.
+                if ("setup".equalsIgnoreCase(phase) && "hook".equalsIgnoreCase(prevPhase)) {
+                    String locId = s.path("locationId").asText("");
+                    String locName = locId.isBlank() || "null".equals(locId)
+                            ? "the scene's location" : locId.replace('-', ' ');
+                    img.put("cameraFraming", "wide establishing shot of " + locName
+                            + ", the whole setting readable with the character small within it");
+                }
                 // Attach the prop anchors whose keyword appears in this scene's text.
                 if (!propAnchors.isEmpty()) {
                     String vd = s.path("visualDesc").asText("").toLowerCase();
@@ -985,19 +1022,26 @@ public class PipelineOrchestrator {
                     }
                     if (!refs.isEmpty()) img.put("propRefs", refs);
                 }
+                // Episode-ConsistencyState (Story B): on a RETRY/restart of this
+                // stage the episode anchors may already exist — re-attach them so
+                // the re-generated scenes keep the established canon. On the very
+                // first run there are no anchors yet (this batch IS the canon
+                // source) and this is a no-op.
+                attachEpisodeAnchors(img, job);
                 imageScenes.add(img);
+                prevPhase = phase;
             }
 
             // Retry-friendly reuse: if a previous attempt already produced an
             // image/voice file for a scene (still on disk), don't regenerate it.
             // This is what makes a retry skip re-paying for existing assets.
-            List<Map<String, Object>> existingScenes = loadAssemblyScenes(job);
+            List<SceneDto> existingScenes = loadAssemblyScenes(job);
             Set<Integer> haveImage = new java.util.HashSet<>();
             Set<Integer> haveAudio = new java.util.HashSet<>();
-            for (Map<String, Object> s : existingScenes) {
-                int seq = ((Number) s.get("seq")).intValue();
-                if (fileExists(s.get("imagePath"))) haveImage.add(seq);
-                if (fileExists(s.get("audioPath"))) haveAudio.add(seq);
+            for (SceneDto s : existingScenes) {
+                int seq = s.effectiveSeq();
+                if (fileExists(s.getImagePath())) haveImage.add(seq);
+                if (fileExists(s.getAudioPath())) haveAudio.add(seq);
             }
             final List<Map<String, Object>> voiceTodo = voiceScenes.stream()
                     .filter(v -> !haveAudio.contains(((Number) v.get("seq")).intValue())).toList();
@@ -1036,11 +1080,16 @@ public class PipelineOrchestrator {
                 pool.shutdown();
             }
 
-            List<Map<String, Object>> assemblyScenes = loadAssemblyScenes(job);
+            List<SceneDto> assemblyScenes = loadAssemblyScenes(job);
             mergeAssets(assemblyScenes, voiceResp, imageResp);
             // Automated vision-QC: reroll weak scene images (missing accessory,
             // cut-off subject, duplicate cast) before the gate / Veo spend.
             autoQcImages(jobId, assemblyScenes, imageFormat);
+            // Episode-ConsistencyState (Story B): AFTER the QC pass — so only
+            // approved stills qualify — elect per character the best still of
+            // THIS episode and persist it as the job's visual canon. Every
+            // later re-roll is conditioned on these exemplars.
+            collectEpisodeAnchors(jobId, assemblyScenes, propAnchors);
             saveAssemblyScenes(jobId, assemblyScenes);
 
             ReviewProperties rp = reviewConfig.getReview();
@@ -1106,15 +1155,15 @@ public class PipelineOrchestrator {
                     jobId, lyrics.lyrics(), lyrics.style(), null);
 
             // Persist whether or not Suno was enabled — keeps lyrics for audit.
-            VideoJob fresh = load(jobId);
-            fresh.setSongTitle(lyrics.title());
-            fresh.setSongStyle(lyrics.style());
-            fresh.setSongLyrics(lyrics.lyrics());
-            if (song != null && song.path("enabled").asBoolean(false)) {
-                fresh.setSongPath(song.path("songPath").asText(null));
-                fresh.setKaraokePath(song.path("karaokePath").asText(null));
-            }
-            repo.save(fresh);
+            retryOnConflict(jobId, j -> {
+                j.setSongTitle(lyrics.title());
+                j.setSongStyle(lyrics.style());
+                j.setSongLyrics(lyrics.lyrics());
+                if (song != null && song.path("enabled").asBoolean(false)) {
+                    j.setSongPath(song.path("songPath").asText(null));
+                    j.setKaraokePath(song.path("karaokePath").asText(null));
+                }
+            });
             return song;
         } catch (Exception e) {
             log.warn("Job {} song-mode generation failed; falling back to royalty-free: {}",
@@ -1130,13 +1179,13 @@ public class PipelineOrchestrator {
             VideoFormat format = VideoFormat.parse(job.getFormat());
             mark(jobId, JobStatus.VEO_GENERATING, "veo image-to-video");
 
-            List<Map<String, Object>> assemblyScenes = loadAssemblyScenes(job);
+            List<SceneDto> assemblyScenes = loadAssemblyScenes(job);
             // Hybrid mode: only HOOK + CLIMAX scenes get cinematic Veo motion.
             // Everything else stays as Ken Burns on the still image, saving
             // ~70% of the Veo cost while keeping the algorithm-critical
             // opening and the emotional peak cinematic.
             boolean hybrid = isHybrid(job.getMotionMode());
-            List<Map<String, Object>> veoCandidates = hybrid
+            List<SceneDto> veoCandidates = hybrid
                     ? assemblyScenes.stream().filter(this::isHeroPhase).toList()
                     : assemblyScenes;
             if (hybrid) {
@@ -1157,7 +1206,10 @@ public class PipelineOrchestrator {
             // bible routing for EVERY Veo scene in this job. Blank = auto
             // (bible routing per sceneType). The cost cap still wins.
             applyModelOverride(veoScenes, job.getVeoModel());
-            JsonNode clipsResp = videoGenClient.generate(jobId, format.imageFormat, veoScenes);
+            // Submit + poll (generateAsync): same result shape as the old
+            // blocking call, but no 15-min-open HTTP connection to the
+            // video-generation-service anymore.
+            JsonNode clipsResp = videoGenClient.generateAsync(jobId, format.imageFormat, veoScenes);
             applyClipPaths(assemblyScenes, clipsResp);
             // Output-side QC gate: judge what Veo ACTUALLY produced (headcount,
             // disappearance, accessory drift across frames). One re-roll for a
@@ -1354,29 +1406,48 @@ public class PipelineOrchestrator {
 
     /** Returns true if the scene's phase qualifies as a hero scene
      *  (HOOK or CLIMAX) — the ones that get Veo in hybrid mode. */
-    private boolean isHeroPhase(Map<String, Object> scene) {
-        Object p = scene.get("phase");
+    private boolean isHeroPhase(SceneDto scene) {
+        String p = scene.getPhase();
         if (p == null) return false;
-        String phase = p.toString().toLowerCase();
+        String phase = p.toLowerCase();
         return phase.equals("hook") || phase.equals("climax");
     }
 
     /** Picks up to 3 scene stills to seed the thumbnail, preferring shots with
      *  the MOST characters (cast/group shots make the best thumbnails). */
-    private List<String> pickCastStills(List<Map<String, Object>> assembly) {
+    private List<String> pickCastStills(List<SceneDto> assembly) {
         return assembly.stream()
-                .filter(a -> {
-                    Object ip = a.get("imagePath");
-                    return ip != null && !String.valueOf(ip).isBlank();
-                })
+                .filter(SceneDto::hasImage)
                 .sorted((x, y) -> Integer.compare(castSize(y), castSize(x)))
-                .map(a -> String.valueOf(a.get("imagePath")))
+                .map(SceneDto::getImagePath)
                 .limit(3)
                 .toList();
     }
 
-    private int castSize(Map<String, Object> a) {
-        return (a.get("characters") instanceof List<?> l) ? l.size() : 0;
+    private int castSize(SceneDto a) {
+        return a.getCharacters() == null ? 0 : a.getCharacters().size();
+    }
+
+    /** Ground truth voor de thumbnail-keuze: bible character ids die
+     *  SUBSTANTIEEL in deze aflevering zitten (≥35% van de scènes, minimaal 2
+     *  scènes). De host haalt dat altijd (staat per regel in elke scène); een
+     *  sidekick alleen als die echt een rol heeft — één cameo-scène triggert
+     *  dus geen groeps-thumbnail en een afwezig castlid wordt nooit gerenderd. */
+    private List<String> presentCast(List<SceneDto> assembly) {
+        if (assembly == null || assembly.isEmpty()) return List.of();
+        Map<String, Integer> counts = new HashMap<>();
+        for (SceneDto a : assembly) {
+            for (String c : a.charactersOrEmpty()) {
+                String id = String.valueOf(c).trim().toLowerCase();
+                if (!id.isBlank()) counts.merge(id, 1, Integer::sum);
+            }
+        }
+        int threshold = Math.max(2, (int) Math.ceil(assembly.size() * 0.35));
+        return counts.entrySet().stream()
+                .filter(e -> e.getValue() >= threshold)
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
     }
 
     @Async("pipelineExecutor")
@@ -1386,7 +1457,7 @@ public class PipelineOrchestrator {
             VideoFormat format = VideoFormat.parse(job.getFormat());
             mark(jobId, JobStatus.ASSEMBLING, "ffmpeg assembly");
 
-            List<Map<String, Object>> assemblyScenes = loadAssemblyScenes(job);
+            List<SceneDto> assemblyScenes = loadAssemblyScenes(job);
 
             // ─── Song Mode ───────────────────────────────────────────────
             // motionMode=song → lyrics + Suno vocal track become the primary
@@ -1433,8 +1504,14 @@ public class PipelineOrchestrator {
             String title = job.getMetadataTitle();
             if (title == null || title.isBlank()) title = job.getTopic();
 
-            JsonNode assembled = assemblyClient.assemble(
-                    jobId, job.getScriptId(), assemblyScenes,
+            // HTTP boundary: the assembly-service request keeps its exact legacy
+            // shape — List<Map<String,Object>> with identical keys/value types.
+            // Submit + poll (assembleAsync): same result shape as the old
+            // blocking call, but no long-open HTTP connection that a Netty
+            // responseTimeout can kill mid-render (incident 2026-06-12,
+            // job e2ec9448 — >20-min ffmpeg render, connection dropped).
+            JsonNode assembled = assemblyClient.assembleAsync(
+                    jobId, job.getScriptId(), SceneDto.toMapList(assemblyScenes),
                     musicPath,
                     props.brand().introPath(),
                     props.brand().outroPath(),
@@ -1459,7 +1536,8 @@ public class PipelineOrchestrator {
             // REGENERATE the metadata and silently degraded an approved title
             // ("Pip Found a Wobbly Egg!" → "Pip Found an Egg!"). Anything that
             // passed a gate is frozen: existing metadata is reused verbatim.
-            // Want a fresh take? Clear the title via PATCH /metadata first.
+            // Want a fresh take? Clear the title (empty string) via
+            // POST /api/v1/videos/{id}/metadata first (PATCH delegates there).
             if (job.getMetadataTitle() != null && !job.getMetadataTitle().isBlank()) {
                 List<String> lockedTags = job.getMetadataTags() == null || job.getMetadataTags().isBlank()
                         ? List.of()
@@ -1493,7 +1571,8 @@ public class PipelineOrchestrator {
             List<String> castStills = pickCastStills(assemblyScenes);
             JsonNode thumb = thumbnailClient.generate(
                     jobId, job.getTopic(), meta.title(), scriptBody.path("hook").asText(), castStills,
-                    performanceLoop.bestThumbnailLayout());
+                    performanceLoop.bestThumbnailLayout(),
+                    null, presentCast(assemblyScenes));
             String thumbPath = thumb.path("thumbnailPath").asText();
             // Persist the winning layout so analytics can score layout styles.
             saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
@@ -1519,7 +1598,8 @@ public class PipelineOrchestrator {
             // /100 verdict + publish gate. Best-effort; never blocks the pipeline.
             QaBoard.Result qa = null;
             try {
-                qa = qaBoard.evaluate(load(jobId), scriptBody, assemblyScenes, audit, thumbPath);
+                qa = qaBoard.evaluate(load(jobId), scriptBody,
+                        SceneDto.toMapList(assemblyScenes), audit, thumbPath);
                 saveQaBoard(jobId, qa.total(), qa.json());
             } catch (Exception qaErr) {
                 log.warn("Job {} QA Board failed (non-fatal): {}", jobId, qaErr.getMessage());
@@ -1597,6 +1677,19 @@ public class PipelineOrchestrator {
     // re-assemble, re-audit, and repeat until the score hits the target or the
     // hard caps run out — then pause for review. Never auto-uploads. Image-gen is
     // stochastic so it's best-effort; the caps bound the spend.
+    //
+    // EXTENDED (backlog P2): the pass also automates the QA Board's per-axis
+    // levers when an axis drops below app.autofix.axis-threshold (default 70):
+    //   Thumbnail            → regenerate via the existing thumbnail path +
+    //                          squint-test preselect (max 1× per run, and only
+    //                          when no re-assembly runs — assembly regenerates
+    //                          the thumbnail itself);
+    //   Characters/Animation → broaden the scene-reroll selection with the
+    //                          weakest hero beats, inside the existing caps;
+    //   Sound                → advisory only (assets are user-domain);
+    //   Story                → advisory only (a rewrite = full re-render,
+    //                          outside the caps — see the inline comment).
+    // All within the SAME iteration/reroll caps; no new cost paths without a brake.
 
     /** Triggers Auto-Fix. {@code target} null → {@link #autofixDefaultTarget};
      *  {@code iterations} null → the configured max, else clamped to [1, max]
@@ -1632,6 +1725,20 @@ public class PipelineOrchestrator {
     private final java.util.concurrent.ConcurrentHashMap<UUID, java.util.concurrent.atomic.AtomicBoolean> rerollDirty =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    // ── Per-RUN guards for the Auto-Fix axis levers ──────────────────────────
+    // Cleared on init/clear of a run. The direct thumbnail regeneration may run
+    // at most ONCE per Auto-Fix run (its own small cost brake, on top of the
+    // existing iteration/reroll caps), and the sound/story advisories are
+    // recorded once per run instead of on every pass. In-memory on purpose: a
+    // JVM restart mid-run resets them, which at worst repeats one advisory or
+    // one thumbnail regen — same best-effort level as the loop itself.
+    private final java.util.Set<UUID> autofixThumbRegenDone =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<UUID> autofixSoundAdvised =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<UUID> autofixStoryNoted =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private void rerollStarted(UUID jobId) {
         rerollsInFlight.computeIfAbsent(jobId, k -> new java.util.concurrent.atomic.AtomicInteger())
                 .incrementAndGet();
@@ -1660,13 +1767,13 @@ public class PipelineOrchestrator {
      *  parallel reroll may have saved meanwhile) and apply only THIS scene's
      *  changes — no lost updates. */
     private void mergeSceneUpdate(UUID jobId, int seq,
-                                  java.util.function.Consumer<Map<String, Object>> patch,
+                                  java.util.function.Consumer<SceneDto> patch,
                                   JsonNode clipsResp) {
         synchronized (rerollLocks.computeIfAbsent(jobId, k -> new Object())) {
-            List<Map<String, Object>> fresh = loadAssemblyScenes(load(jobId));
+            List<SceneDto> fresh = loadAssemblyScenes(load(jobId));
             if (patch != null) {
-                for (Map<String, Object> a : fresh) {
-                    if (((Number) a.get("seq")).intValue() == seq) patch.accept(a);
+                for (SceneDto a : fresh) {
+                    if (a.effectiveSeq() == seq) patch.accept(a);
                 }
             }
             if (clipsResp != null) applyClipPaths(fresh, clipsResp);
@@ -1707,9 +1814,9 @@ public class PipelineOrchestrator {
                     + job.getMotionMode() + ") — nothing to re-roll.");
         }
         VideoFormat format = VideoFormat.parse(job.getFormat());
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Scene " + seq + " not found on job " + jobId));
 
@@ -1719,7 +1826,7 @@ public class PipelineOrchestrator {
             Map<Integer, String> endStills = generateEndStills(jobId, format.imageFormat, List.of(scene));
             List<Map<String, Object>> veoScenes = buildVeoScenes(List.of(scene), endStills);
             applyModelOverride(veoScenes, modelOverride);
-            JsonNode clipsResp = videoGenClient.generate(jobId, format.imageFormat, veoScenes);
+            JsonNode clipsResp = videoGenClient.generateAsync(jobId, format.imageFormat, veoScenes);
             requireClipOk(clipsResp, seq); // fallback/quota → loud error, no silent reassemble
             mergeSceneUpdate(jobId, seq, null, clipsResp);
             log.info("Job {} re-rolled VEO clip for scene {} (cost=€{})",
@@ -1751,27 +1858,28 @@ public class PipelineOrchestrator {
     public Map<String, Object> regenAndRerollScene(UUID jobId, int seq, String newVisualDesc, String modelOverride) {
         VideoJob job = load(jobId);
         VideoFormat format = VideoFormat.parse(job.getFormat());
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
         if (assembly.isEmpty()) {
             throw new IllegalStateException("Job " + jobId + " has no assembled scenes yet.");
         }
-        Map<String, Object> scene = assembly.stream()
-                .filter(a -> ((Number) a.get("seq")).intValue() == seq)
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Scene " + seq + " not found on job " + jobId));
 
         // 1) New still — from the edited description if given, else the scene's own.
         String vd = (newVisualDesc != null && !newVisualDesc.isBlank())
                 ? newVisualDesc.trim()
-                : String.valueOf(scene.getOrDefault("visualDesc", ""));
-        if (newVisualDesc != null && !newVisualDesc.isBlank()) scene.put("visualDesc", vd);
+                : nz(scene.getVisualDesc());
+        if (newVisualDesc != null && !newVisualDesc.isBlank()) scene.setVisualDesc(vd);
         Map<String, Object> imgScene = new HashMap<>();
         imgScene.put("seq", seq);
         imgScene.put("visualDesc", withMotif(vd, job));
-        imgScene.put("characters", scene.getOrDefault("characters", List.of()));
-        imgScene.put("locationId", scene.getOrDefault("locationId", ""));
-        imgScene.put("timeOfDay", scene.getOrDefault("timeOfDay", ""));
-        imgScene.put("weather", scene.getOrDefault("weather", ""));
+        imgScene.put("characters", scene.charactersOrEmpty());
+        imgScene.put("locationId", nz(scene.getLocationId()));
+        imgScene.put("timeOfDay", nz(scene.getTimeOfDay()));
+        imgScene.put("weather", nz(scene.getWeather()));
+        attachEpisodeAnchors(imgScene, job);   // Story B: regen+reroll matches episode canon
         rerollStarted(jobId);
         try {
             JsonNode imgResp = imageClient.generate(jobId, List.of(imgScene), format.imageFormat);
@@ -1782,7 +1890,7 @@ public class PipelineOrchestrator {
             if (newPath == null || newPath.isBlank()) {
                 throw new IllegalStateException("image-service returned no new still for scene " + seq);
             }
-            scene.put("imagePath", newPath); // local copy → end-still/Veo prompt uses the new still
+            scene.setImagePath(newPath); // local copy → end-still/Veo prompt uses the new still
 
             // 2) Veo job → re-roll this scene's clip FROM THE NEW STILL.
             double cost = 0.0;
@@ -1791,7 +1899,7 @@ public class PipelineOrchestrator {
                 Map<Integer, String> endStills = generateEndStills(jobId, format.imageFormat, List.of(scene));
                 List<Map<String, Object>> veoScenes = buildVeoScenes(List.of(scene), endStills);
                 applyModelOverride(veoScenes, modelOverride);
-                clipsResp = videoGenClient.generate(jobId, format.imageFormat, veoScenes);
+                clipsResp = videoGenClient.generateAsync(jobId, format.imageFormat, veoScenes);
                 requireClipOk(clipsResp, seq); // fallback/quota → loud error
                 cost = clipsResp.path("totalCostEur").asDouble();
             }
@@ -1801,8 +1909,8 @@ public class PipelineOrchestrator {
             final String vdFinal = vd, pathFinal = newPath;
             final boolean vdEdited = newVisualDesc != null && !newVisualDesc.isBlank();
             mergeSceneUpdate(jobId, seq, a -> {
-                if (vdEdited) a.put("visualDesc", vdFinal);
-                a.put("imagePath", pathFinal);
+                if (vdEdited) a.setVisualDesc(vdFinal);
+                a.setImagePath(pathFinal);
             }, clipsResp);
             log.info("Job {} regen+reroll scene {} -> new still {} (Veo cost=€{})",
                     jobId, seq, newPath, cost);
@@ -1829,39 +1937,110 @@ public class PipelineOrchestrator {
                 finishAutoFix(jobId, "budget exhausted at " + score + "/" + target); return;
             }
 
-            // Locate weak scenes two ways: (1) the per-scene vision QC, and
+            // Locate weak scenes three ways: (1) the per-scene vision QC,
             // (2) the AI-Critic's own critical/major findings mapped to the
             // scenes containing the character the Critic complained about — so
             // Auto-Fix acts on what the Critic actually flagged, not only what
-            // the localizer QC happens to catch.
+            // the localizer QC happens to catch — and (3) when the QA Board's
+            // Characters/Animation axis sags below app.autofix.axis-threshold,
+            // the weakest hero (hook/climax) beats are ADDED to the selection.
+            // QC + Critic stay leading; the axis only BROADENS the set, always
+            // inside the same reroll caps (no new budget).
             VideoFormat format = VideoFormat.parse(job.getFormat());
-            List<Map<String, Object>> assembly = loadAssemblyScenes(job);
+            List<SceneDto> assembly = loadAssemblyScenes(job);
             Map<String, String> dna = dnaAccessoryLines();
             Set<Integer> criticTargets = criticTargetedSeqs(jobId, assembly);
+
+            // ── QA Board axis levers (extended Auto-Fix) ─────────────────────
+            // Axes come from the persisted QA Board JSON written by the last
+            // assembly pass; no QA Board → empty map → every lever stays off.
+            Map<String, Integer> axes = qaAxes(job);         // name → 0-100
+            int thr = autofixAxisThreshold;
+            boolean charsLow = axes.getOrDefault("Characters", 100) < thr;
+            boolean animLow  = axes.getOrDefault("Animation", 100) < thr;
+            Set<Integer> axisTargets = (charsLow || animLow)
+                    ? weakestHeroSeqs(assembly, parseLocked(job.getLockedSceneSeqs()), rrLeft)
+                    : Set.of();
+            if (!axisTargets.isEmpty()) {
+                log.info("Job {} Auto-Fix: {} axis low — broadening reroll selection with hero scenes {}",
+                        jobId, charsLow ? (animLow ? "Characters+Animation" : "Characters") : "Animation",
+                        axisTargets);
+            }
+
+            // Sound axis low → ADVISE ONLY (once per run). Music/ambient/sting
+            // assets are user-domain — Auto-Fix never generates audio. The QA
+            // Board details say exactly WHAT is missing; surface that to the
+            // reviewer via a QC insight + the job step/log.
+            int soundAxis = axes.getOrDefault("Sound", 100);
+            if (soundAxis < thr && autofixSoundAdvised.add(jobId)) {
+                List<String> gaps = qaSoundGaps(job);
+                String what = gaps.isEmpty()
+                        ? "check the music bed, ambient loops (bible/sfx/ambient), foley (bible/sfx), "
+                          + "brand sting (bible/sting.mp3) and the voice/music mix"
+                        : String.join("; ", gaps);
+                String msg = "Sound axis low (" + (soundAxis / 10) + "/10): " + what
+                        + " — sound assets are user-domain, Auto-Fix does not generate them.";
+                qcInsights.record(jobId, null, List.of(msg), "autofix-sound");
+                log.info("Job {} Auto-Fix sound advice: {}", jobId, msg);
+            }
+
+            // Story axis low → existing behaviour ON PURPOSE: the Critic rewrite
+            // lives in the SCRIPT stage. Here the master is already rendered, so
+            // a script rewrite would force a full re-render (voice + images +
+            // Veo + assembly) — far outside the Auto-Fix caps. Log + insight
+            // only (once per run); the human can re-run the script stage.
+            int storyAxis = axes.getOrDefault("Story", 100);
+            if (storyAxis < thr && autofixStoryNoted.add(jobId)) {
+                String msg = "Story axis low (" + (storyAxis / 10) + "/10): a script rewrite means a "
+                        + "full re-render and is outside the Auto-Fix caps — review the script stage manually.";
+                qcInsights.record(jobId, null, List.of(msg), "autofix-story");
+                log.info("Job {} Auto-Fix story note: {}", jobId, msg);
+            }
+
             int rerolled = 0;
-            for (Map<String, Object> a : assembly) {
+            for (SceneDto a : assembly) {
                 if (rrLeft - rerolled <= 0) break;
-                Object ip = a.get("imagePath");
-                if (ip == null || String.valueOf(ip).isBlank()) continue;
-                int seq = ((Number) a.get("seq")).intValue();
-                @SuppressWarnings("unchecked")
-                List<String> charIds = (a.get("characters") instanceof List<?> l)
-                        ? (List<String>) (List<?>) l : List.of();
+                if (!a.hasImage()) continue;
+                int seq = a.effectiveSeq();
+                List<String> charIds = a.charactersOrEmpty();
                 List<String> expected = new ArrayList<>();
                 for (String id : charIds) expected.add(dna.getOrDefault(id == null ? "" : id.toLowerCase(), id));
                 SceneImageQc.Result r = sceneImageQc.check(
-                        java.nio.file.Paths.get(String.valueOf(ip)), expected, charIds);
+                        java.nio.file.Paths.get(a.getImagePath()), expected, charIds);
                 boolean qcWeak = !r.ok();
                 boolean criticWeak = criticTargets.contains(seq);
-                if (!qcWeak && !criticWeak) continue;
-                String why = qcWeak ? ("QC: " + r.issues()) : "AI-Critic flagged a character in this scene";
+                boolean axisWeak = axisTargets.contains(seq);
+                if (!qcWeak && !criticWeak && !axisWeak) continue;
+                String why = qcWeak ? ("QC: " + r.issues())
+                        : criticWeak ? "AI-Critic flagged a character in this scene"
+                        : "QA Board Characters/Animation axis low — weakest hero beat";
                 log.info("Job {} Auto-Fix rerolling scene {} ({})", jobId, seq, why);
                 if (qcWeak) qcInsights.record(jobId, seq, r.issues(), "auto-fix");
                 String newPath = regenScene(jobId, a, format.imageFormat);
-                if (newPath != null && !newPath.isBlank()) { a.put("imagePath", newPath); rerolled++; }
+                if (newPath != null && !newPath.isBlank()) { a.setImagePath(newPath); rerolled++; }
             }
 
             if (rerolled == 0) {
+                // Thumbnail axis lever — applied ONLY here, on the finishing
+                // pass: when scenes DID reroll, the re-assembly below already
+                // regenerates the thumbnail (and re-runs the squint-test
+                // preselect), so a direct regen would just double the cost.
+                // Hard brake: at most once per Auto-Fix run.
+                int thumbAxis = axes.getOrDefault("Thumbnail", 100);
+                if (thumbAxis < thr && autofixThumbRegenDone.add(jobId)) {
+                    try {
+                        log.info("Job {} Auto-Fix: Thumbnail axis low ({}/10) — regenerating thumbnail",
+                                jobId, thumbAxis / 10);
+                        // Existing path (cast stills + presentCast), no reviewer hint.
+                        regenerateThumbnail(jobId, null);
+                        String title = job.getMetadataTitle();
+                        if (title == null || title.isBlank()) title = job.getTopic();
+                        preselectBestThumbnail(jobId, title);
+                    } catch (Exception te) {
+                        log.warn("Job {} Auto-Fix thumbnail regen failed (non-fatal): {}",
+                                jobId, te.getMessage());
+                    }
+                }
                 finishAutoFix(jobId, "no image-fixable issues at " + score + "/" + target); return;
             }
 
@@ -1879,7 +2058,7 @@ public class PipelineOrchestrator {
      *  names a character (pip/mo/bo) targets every scene that contains that
      *  character, so Auto-Fix re-rolls the shots the Critic actually complained
      *  about even when the per-scene QC didn't flag them. Best-effort. */
-    private Set<Integer> criticTargetedSeqs(UUID jobId, List<Map<String, Object>> assembly) {
+    private Set<Integer> criticTargetedSeqs(UUID jobId, List<SceneDto> assembly) {
         Set<Integer> out = new HashSet<>();
         try {
             var audit = auditRepo.findTopByVideoJobIdOrderByCreatedAtDesc(jobId).orElse(null);
@@ -1895,13 +2074,10 @@ public class PipelineOrchestrator {
                 if (msg.matches("(?s).*\\bbo\\b.*"))  chars.add("bo");
             }
             if (chars.isEmpty()) return out;
-            for (Map<String, Object> a : assembly) {
-                @SuppressWarnings("unchecked")
-                List<String> charIds = (a.get("characters") instanceof List<?> l)
-                        ? (List<String>) (List<?>) l : List.of();
-                for (String id : charIds) {
+            for (SceneDto a : assembly) {
+                for (String id : a.charactersOrEmpty()) {
                     if (id != null && chars.contains(id.toLowerCase())) {
-                        out.add(((Number) a.get("seq")).intValue());
+                        out.add(a.effectiveSeq());
                         break;
                     }
                 }
@@ -1913,37 +2089,111 @@ public class PipelineOrchestrator {
         return out;
     }
 
+    /** Per-axis QA Board scores on the /100 scale (axis is /10 in the JSON,
+     *  ×10 here so it compares against app.autofix.axis-threshold). Empty map
+     *  when no QA Board ran or the JSON is unreadable — every axis lever then
+     *  stays off (fail-safe). */
+    private Map<String, Integer> qaAxes(VideoJob job) {
+        Map<String, Integer> out = new HashMap<>();
+        if (job.getQaBoardJson() == null || job.getQaBoardJson().isBlank()) return out;
+        try {
+            for (JsonNode ax : mapper.readTree(job.getQaBoardJson()).path("axes")) {
+                String name = ax.path("name").asText("");
+                if (!name.isBlank()) out.put(name, ax.path("score").asInt(10) * 10);
+            }
+        } catch (Exception e) {
+            log.warn("Job {} qaAxes parse failed (levers off): {}", job.getId(), e.getMessage());
+        }
+        return out;
+    }
+
+    /** The QA Board's sound-design gap notes ("Sound: Music bed MISSING → …",
+     *  "Sound: Ambient library empty → …") from the persisted details array —
+     *  so the autofix-sound advisory says exactly WHAT is missing instead of a
+     *  generic "sound is weak". Best-effort, empty on any parse problem. */
+    private List<String> qaSoundGaps(VideoJob job) {
+        List<String> out = new ArrayList<>();
+        if (job.getQaBoardJson() == null || job.getQaBoardJson().isBlank()) return out;
+        try {
+            for (JsonNode d : mapper.readTree(job.getQaBoardJson()).path("details")) {
+                String s = d.asText("");
+                if (s.startsWith("Sound: ") && (s.contains("MISSING") || s.contains("empty"))) {
+                    out.add(s.substring("Sound: ".length()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Job {} qaSoundGaps parse failed: {}", job.getId(), e.getMessage());
+        }
+        return out;
+    }
+
+    /** Hero (hook/climax) scenes ranked weakest-first on the same motion
+     *  signals the QA Board's Animation axis rewards (motionDesc with real
+     *  content, an endPose, a pacing cue), excluding locked scenes; at most
+     *  {@code limit} seqs. Used to BROADEN the Auto-Fix reroll selection when
+     *  the Characters/Animation axis sags — bounded by the EXISTING reroll
+     *  caps, never a budget of its own. */
+    private Set<Integer> weakestHeroSeqs(List<SceneDto> assembly, Set<Integer> locked, int limit) {
+        record Cand(int seq, int richness) {}
+        List<Cand> cands = new ArrayList<>();
+        for (SceneDto a : assembly) {
+            String phase = nz(a.getPhase()).toLowerCase();
+            if (!phase.equals("hook") && !phase.equals("climax")) continue;
+            if (!a.hasImage() || locked.contains(a.effectiveSeq())) continue;
+            int rich = 0;                                       // mirrors QaBoard.motionRichness weights
+            if (!nz(a.getMotionDesc()).isBlank())   rich += 40;
+            if (!nz(a.getEndPose()).isBlank())      rich += 30;
+            if (!nz(a.getMotionSpeed()).isBlank())  rich += 15;
+            if (nz(a.getMotionDesc()).length() >= 40) rich += 15;
+            cands.add(new Cand(a.effectiveSeq(), rich));
+        }
+        cands.sort(java.util.Comparator.comparingInt(Cand::richness));
+        Set<Integer> out = new LinkedHashSet<>();
+        for (Cand c : cands) {
+            if (out.size() >= Math.max(0, limit)) break;
+            out.add(c.seq());
+        }
+        return out;
+    }
+
     /** Ends the loop: clears state and always pauses at the upload review gate
      *  (the human reviews the result — Auto-Fix never uploads on its own). */
     private void finishAutoFix(UUID jobId, String reason) {
+        // Surface the axis-lever actions in the step note the reviewer sees.
+        if (autofixThumbRegenDone.contains(jobId)) reason += "; thumbnail regenerated (Thumbnail axis was low)";
+        if (autofixSoundAdvised.contains(jobId))   reason += "; sound advice recorded (see QC insights)";
         clearAutoFix(jobId);
         pauseForReview(jobId, JobStatus.UPLOAD_REVIEW_PENDING, "Auto-Fix done (" + reason + ") — review");
         log.info("Job {} Auto-Fix finished: {}", jobId, reason);
     }
 
-    @Transactional public void initAutoFix(UUID id, int target, int iters, int rerolls) {
-        repo.findById(id).ifPresent(j -> {
+    public void initAutoFix(UUID id, int target, int iters, int rerolls) {
+        // Fresh run → fresh per-run axis-lever guards.
+        autofixThumbRegenDone.remove(id);
+        autofixSoundAdvised.remove(id);
+        autofixStoryNoted.remove(id);
+        retryOnConflict(id, j -> {
             j.setAutofixTarget(target);
             j.setAutofixIterationsLeft(iters);
             j.setAutofixRerollsLeft(rerolls);
-            repo.save(j);
         });
     }
-    @Transactional public void decrementAutoFix(UUID id, int rerolled) {
-        repo.findById(id).ifPresent(j -> {
+    public void decrementAutoFix(UUID id, int rerolled) {
+        retryOnConflict(id, j -> {
             int it = j.getAutofixIterationsLeft() == null ? 0 : j.getAutofixIterationsLeft();
             int rr = j.getAutofixRerollsLeft() == null ? 0 : j.getAutofixRerollsLeft();
             j.setAutofixIterationsLeft(Math.max(0, it - 1));
             j.setAutofixRerollsLeft(Math.max(0, rr - rerolled));
-            repo.save(j);
         });
     }
-    @Transactional public void clearAutoFix(UUID id) {
-        repo.findById(id).ifPresent(j -> {
+    public void clearAutoFix(UUID id) {
+        autofixThumbRegenDone.remove(id);
+        autofixSoundAdvised.remove(id);
+        autofixStoryNoted.remove(id);
+        retryOnConflict(id, j -> {
             j.setAutofixTarget(null);
             j.setAutofixIterationsLeft(null);
             j.setAutofixRerollsLeft(null);
-            repo.save(j);
         });
     }
 
@@ -1980,11 +2230,10 @@ public class PipelineOrchestrator {
                         + "re-upload the SRT via YouTube Studio or re-consent.",
                         jobId, ytId);
                 try {
-                    VideoJob fresh = load(jobId);
-                    fresh.setError("Caption upload failed — video is live, but YouTube "
+                    retryOnConflict(jobId, j -> j.setError(
+                            "Caption upload failed — video is live, but YouTube "
                             + "shows auto-captions. Upload " + job.getCaptionsPath()
-                            + " manually in Studio, or fix the OAuth scope and re-run.");
-                    repo.save(fresh);
+                            + " manually in Studio, or fix the OAuth scope and re-run."));
                 } catch (Exception ignore) { /* never block the upload flow */ }
             }
 
@@ -2020,10 +2269,10 @@ public class PipelineOrchestrator {
                 if (fb != null && fb.path("success").asBoolean(false)) {
                     String fbId = fb.path("postId").asText(null);
                     if (fbId != null && !fbId.isBlank()) {
-                        VideoJob fresh = load(jobId);
-                        fresh.setFacebookVideoId(fbId);
-                        fresh.setFacebookUrl(fb.path("url").asText("https://www.facebook.com/" + fbId));
-                        repo.save(fresh);
+                        retryOnConflict(jobId, j -> {
+                            j.setFacebookVideoId(fbId);
+                            j.setFacebookUrl(fb.path("url").asText("https://www.facebook.com/" + fbId));
+                        });
                         log.info("Job {} cross-posted to Facebook: {}", jobId, fbId);
                     }
                 }
@@ -2084,25 +2333,22 @@ public class PipelineOrchestrator {
      * re-generated up to {@code qcMaxRerollsPerScene}, bounded by a per-video
      * {@code qcMaxTotalRerolls} cost cap. Best-effort: never throws, never blocks.
      */
-    private void autoQcImages(UUID jobId, List<Map<String, Object>> assembly, String imageFormat) {
+    private void autoQcImages(UUID jobId, List<SceneDto> assembly, String imageFormat) {
         if (!qcEnabled) return;
         Map<String, String> dna = dnaAccessoryLines();
         int totalRerolls = 0;
-        for (Map<String, Object> a : assembly) {
-            Object ip = a.get("imagePath");
-            if (ip == null || String.valueOf(ip).isBlank()) continue;
-            int seq = ((Number) a.get("seq")).intValue();
-            @SuppressWarnings("unchecked")
-            List<String> charIds = (a.get("characters") instanceof List<?> l)
-                    ? (List<String>) (List<?>) l : List.of();
+        for (SceneDto a : assembly) {
+            if (!a.hasImage()) continue;
+            int seq = a.effectiveSeq();
+            List<String> charIds = a.charactersOrEmpty();
             List<String> expected = new ArrayList<>();
             for (String id : charIds) {
                 expected.add(dna.getOrDefault(id == null ? "" : id.toLowerCase(), id));
             }
             // Weather/time continuity (ep-2 audit: sunshine rendered during a
             // scripted rain beat). The QC fails hard contradictions only.
-            String weather = String.valueOf(a.getOrDefault("weather", "")).trim();
-            String tod = String.valueOf(a.getOrDefault("timeOfDay", "")).trim();
+            String weather = nz(a.getWeather()).trim();
+            String tod = nz(a.getTimeOfDay()).trim();
             if (!weather.isEmpty() || !tod.isEmpty()) {
                 expected.add("Scene weather/time of day: "
                         + (weather.isEmpty() ? "unspecified" : weather)
@@ -2110,7 +2356,7 @@ public class PipelineOrchestrator {
             }
             for (int attempt = 0; attempt <= qcMaxRerollsPerScene; attempt++) {
                 SceneImageQc.Result r = sceneImageQc.check(
-                        java.nio.file.Paths.get(String.valueOf(a.get("imagePath"))), expected, charIds);
+                        java.nio.file.Paths.get(a.getImagePath()), expected, charIds);
                 if (r.ok()) break;
                 log.info("Job {} scene {} QC fail (attempt {}/{}): {}",
                         jobId, seq, attempt + 1, qcMaxRerollsPerScene + 1, r.issues());
@@ -2121,24 +2367,152 @@ public class PipelineOrchestrator {
                 }
                 String newPath = regenScene(jobId, a, imageFormat);
                 if (newPath == null || newPath.isBlank()) break;
-                a.put("imagePath", newPath);
+                a.setImagePath(newPath);
                 totalRerolls++;
             }
         }
         if (totalRerolls > 0) log.info("Job {} QC rerolled {} scene image(s)", jobId, totalRerolls);
     }
 
-    /** Re-generate a single scene's still from its current assembly fields. */
-    private String regenScene(UUID jobId, Map<String, Object> a, String imageFormat) {
+    /**
+     * Episode-ConsistencyState (Story B) — canon election. Runs ONCE per
+     * episode, right after the image vision-QC pass in runAssetsStage, so only
+     * QC-APPROVED stills can become canon. Per character the best scene still
+     * of THIS episode is elected ({@link PropAnchorService#selectEpisodeAnchors}:
+     * fewest characters in frame = least occlusion, hero phases preferred) and
+     * persisted in {@code video_jobs.episode_anchors} (V27) together with the
+     * rendered prop anchors — so every later re-roll (QC, Auto-Fix, manual,
+     * end-stills) is conditioned on the same canon, even after a JVM restart.
+     *
+     * <p>Fail-safe by design: any failure or an empty selection (e.g. the image
+     * paths don't exist, as in plain unit tests) leaves the column NULL and
+     * every downstream path behaves exactly as before. An EXISTING canon is
+     * never overwritten — a retry/restart keeps the episode's first-established
+     * look stable instead of re-electing against re-rolled stills.
+     */
+    private void collectEpisodeAnchors(UUID jobId, List<SceneDto> assembly,
+                                       List<PropAnchorService.Prop> propAnchors) {
         try {
-            int seq = ((Number) a.get("seq")).intValue();
+            VideoJob job = load(jobId);
+            if (job.getEpisodeAnchorsJson() != null && !job.getEpisodeAnchorsJson().isBlank()) {
+                return; // canon already established — keep it stable
+            }
+            Map<String, String> chars = PropAnchorService.selectEpisodeAnchors(
+                    assembly, this::fileExists);
+            boolean haveProps = propAnchors != null && propAnchors.stream()
+                    .anyMatch(p -> p != null && p.anchorPath() != null && !p.anchorPath().isBlank());
+            if (chars.isEmpty() && !haveProps) return;
+            com.fasterxml.jackson.databind.node.ObjectNode root = mapper.createObjectNode();
+            com.fasterxml.jackson.databind.node.ObjectNode cn = root.putObject("characters");
+            chars.forEach(cn::put);
+            com.fasterxml.jackson.databind.node.ArrayNode pn = root.putArray("props");
+            if (haveProps) {
+                for (PropAnchorService.Prop p : propAnchors) {
+                    if (p == null || p.anchorPath() == null || p.anchorPath().isBlank()) continue;
+                    com.fasterxml.jackson.databind.node.ObjectNode o = pn.addObject();
+                    o.put("name", p.name() == null ? "" : p.name());
+                    o.put("keyword", p.keyword() == null ? "" : p.keyword());
+                    o.put("imagePath", p.anchorPath());
+                }
+            }
+            String json = mapper.writeValueAsString(root);
+            retryOnConflict(jobId, j -> j.setEpisodeAnchorsJson(json));
+            log.info("Job {} episode anchors registered: characters {} + {} prop ref(s)",
+                    jobId, chars.keySet(), pn.size());
+        } catch (Exception e) {
+            log.warn("Job {} episode-anchor collection failed (non-fatal): {}",
+                    jobId, e.getMessage());
+        }
+    }
+
+    /**
+     * Episode-ConsistencyState (Story B) — canon attachment. Decorates an
+     * image-service scene payload with this episode's persisted canon:
+     * <ul>
+     *   <li>{@code episodeAnchors}: per in-scene character the QC-approved
+     *       episode still (the provider attaches it as an extra reference image
+     *       NEXT TO the bible refs);</li>
+     *   <li>{@code propRefs}: the persisted prop anchors whose keyword occurs in
+     *       this scene's text — so re-rolls keep prop canon too (the original
+     *       batch attaches these itself; this only fills the gap when absent);</li>
+     *   <li>a compact EPISODE CANON prompt clause on the scene text.</li>
+     * </ul>
+     * No canon on the job (null/blank column) → strict no-op, byte-identical
+     * payload to today. Anchor files that no longer exist are skipped. Never
+     * throws — a failure here only means a re-roll without episode anchors.
+     */
+    private void attachEpisodeAnchors(Map<String, Object> imgScene, VideoJob job) {
+        try {
+            if (imgScene == null || job == null) return;
+            String json = job.getEpisodeAnchorsJson();
+            if (json == null || json.isBlank()) return;
+            JsonNode root = mapper.readTree(json);
+
+            // 1) Character anchors for THIS scene's cast (file must still exist).
+            Set<String> sceneChars = new HashSet<>();
+            if (imgScene.get("characters") instanceof Collection<?> col) {
+                for (Object c : col) {
+                    if (c != null) sceneChars.add(c.toString().trim().toLowerCase());
+                }
+            }
+            List<Map<String, String>> eps = new ArrayList<>();
+            var charFields = root.path("characters").fields();
+            while (charFields.hasNext()) {
+                var e = charFields.next();
+                String path = e.getValue().asText("");
+                if (sceneChars.contains(e.getKey().toLowerCase()) && fileExists(path)) {
+                    eps.add(Map.of("characterId", e.getKey(), "imagePath", path));
+                }
+            }
+            if (!eps.isEmpty()) imgScene.put("episodeAnchors", eps);
+
+            // 2) Prop canon on re-rolls: re-attach the persisted prop refs whose
+            // keyword occurs in this scene's text (same match rule as the batch).
+            String vd = String.valueOf(imgScene.getOrDefault("visualDesc", ""));
+            if (!imgScene.containsKey("propRefs")) {
+                String vdLower = vd.toLowerCase();
+                List<Map<String, String>> refs = new ArrayList<>();
+                for (JsonNode p : root.path("props")) {
+                    String kw = p.path("keyword").asText("").toLowerCase();
+                    String ip = p.path("imagePath").asText("");
+                    if (!kw.isBlank() && !ip.isBlank() && vdLower.contains(kw) && fileExists(ip)) {
+                        refs.add(Map.of("name", p.path("name").asText(""), "imagePath", ip));
+                    }
+                }
+                if (!refs.isEmpty()) imgScene.put("propRefs", refs);
+            }
+
+            // 3) Compact episode-canon clause: identity/props match the episode,
+            // lighting follows the NEW scene (the per-phase light arc must keep
+            // working — canon locks WHAT things look like, not HOW they are lit).
+            if (!vd.isBlank() && !vd.contains("EPISODE CANON:")) {
+                imgScene.put("visualDesc", vd.trim()
+                        + " EPISODE CANON: earlier scenes of this exact episode are canon — "
+                        + "every character keeps the exact look already established in this "
+                        + "episode's stills, and recurring props and set dressing keep exactly "
+                        + "the colour, material and design they had earlier in this episode. "
+                        + "Lighting and mood follow THIS scene's own time of day and weather.");
+            }
+        } catch (Exception e) {
+            log.warn("attachEpisodeAnchors failed (continuing without canon): {}", e.getMessage());
+        }
+    }
+
+    /** Re-generate a single scene's still from its current assembly fields. */
+    private String regenScene(UUID jobId, SceneDto a, String imageFormat) {
+        try {
+            int seq = a.effectiveSeq();
             Map<String, Object> m = new HashMap<>();
             m.put("seq", seq);
-            m.put("visualDesc", a.getOrDefault("visualDesc", ""));
-            m.put("characters", a.getOrDefault("characters", List.of()));
-            m.put("locationId", a.getOrDefault("locationId", ""));
-            m.put("timeOfDay", a.getOrDefault("timeOfDay", ""));
-            m.put("weather", a.getOrDefault("weather", ""));
+            m.put("visualDesc", nz(a.getVisualDesc()));
+            m.put("characters", a.charactersOrEmpty());
+            m.put("locationId", nz(a.getLocationId()));
+            m.put("timeOfDay", nz(a.getTimeOfDay()));
+            m.put("weather", nz(a.getWeather()));
+            // Episode-ConsistencyState: a QC/Auto-Fix re-roll must match the
+            // episode's canon. During the first batch (autoQcImages before the
+            // canon is collected) there are no anchors yet — no-op.
+            attachEpisodeAnchors(m, repo.findById(jobId).orElse(null));
             JsonNode resp = imageClient.generate(jobId, List.of(m), imageFormat);
             for (JsonNode n : resp.path("scenes")) {
                 if (n.path("seq").asInt() == seq) return n.path("imagePath").asText(null);
@@ -2230,14 +2604,17 @@ public class PipelineOrchestrator {
      * @return map of scene seq -> generated end-still path.
      */
     private Map<Integer, String> generateEndStills(UUID jobId, String imageFormat,
-                                                   List<Map<String, Object>> veoCandidates) {
+                                                   List<SceneDto> veoCandidates) {
         Map<Integer, String> out = new HashMap<>();
-        for (Map<String, Object> a : veoCandidates) {
+        // Story B: end-stills are conditioned on the episode canon too (null-safe
+        // — without a job/canon attachEpisodeAnchors is a no-op).
+        VideoJob epJob = repo.findById(jobId).orElse(null);
+        for (SceneDto a : veoCandidates) {
             // P6 — gericht: only hero (hook/climax) beats earn a directed end frame.
             if (!isHeroPhase(a)) continue;
-            String endPose = String.valueOf(a.getOrDefault("endPose", "")).trim();
+            String endPose = nz(a.getEndPose()).trim();
             if (endPose.isEmpty() || "null".equals(endPose)) continue;
-            int seq = ((Number) a.get("seq")).intValue();
+            int seq = a.effectiveSeq();
             try {
                 // P6 — identity lock: keep EVERYTHING the start still nailed
                 // (character, outfit, colours, background, framing) and change only
@@ -2250,12 +2627,13 @@ public class PipelineOrchestrator {
                 Map<String, Object> endScene = new HashMap<>();
                 endScene.put("seq", END_STILL_SEQ_OFFSET + seq);
                 endScene.put("visualDesc", lockedDesc);
-                endScene.put("characters", a.getOrDefault("characters", List.of()));
-                endScene.put("locationId", a.getOrDefault("locationId", ""));
-                endScene.put("timeOfDay", a.getOrDefault("timeOfDay", ""));
-                endScene.put("weather", a.getOrDefault("weather", ""));
+                endScene.put("characters", a.charactersOrEmpty());
+                endScene.put("locationId", nz(a.getLocationId()));
+                endScene.put("timeOfDay", nz(a.getTimeOfDay()));
+                endScene.put("weather", nz(a.getWeather()));
                 // Match the start's framing so only the pose differs, not the shot.
-                endScene.put("cameraFraming", a.getOrDefault("cameraFraming", ""));
+                endScene.put("cameraFraming", nz(a.getCameraFraming()));
+                attachEpisodeAnchors(endScene, epJob);   // Story B: episode canon
                 JsonNode resp = imageClient.generate(jobId, List.of(endScene), imageFormat);
                 for (JsonNode n : resp.path("scenes")) {
                     String pth = n.path("imagePath").asText("");
@@ -2270,15 +2648,21 @@ public class PipelineOrchestrator {
         return out;
     }
 
-    private List<Map<String, Object>> buildVeoScenes(List<Map<String, Object>> assembly,
+    /** Builds the video-generation-service request maps (HTTP payload shape —
+     *  stays {@code Map<String,Object>}) from the typed assembly scenes. */
+    private List<Map<String, Object>> buildVeoScenes(List<SceneDto> assembly,
                                                      Map<Integer, String> endStills) {
-        int last = assembly.stream().mapToInt(a -> (int) a.get("seq")).max().orElse(1);
+        int last = assembly.stream().mapToInt(SceneDto::effectiveSeq).max().orElse(1);
         List<Map<String, Object>> out = new ArrayList<>();
         // G5 — inter-clip continuity: remember the previous scene's type + end
         // pose so two back-to-back hero clips flow instead of jumping. Null on a
         // single-scene reroll, so the continuity clause is simply never emitted.
         String prevType = null;
         String prevEndPose = null;
+        // Board-audit — auto-establishing: the previous scene's PHASE identifies
+        // the one setup beat that directly follows the hook. Null on a
+        // single-scene reroll, so the establishing rule never fires there.
+        String prevPhase = null;
         // Frame-chaining state: DIRECTLY consecutive scenes (seq N, N+1) in the
         // SAME location with the SAME cast form a chain group. The video-gen
         // service renders a group sequentially and starts each next clip on the
@@ -2289,13 +2673,13 @@ public class PipelineOrchestrator {
         String prevLoc = null;
         Set<String> prevCast = null;
         Map<String, Object> prevM = null;
-        for (Map<String, Object> a : assembly) {
-            int seq = (int) a.get("seq");
+        for (SceneDto a : assembly) {
+            int seq = a.effectiveSeq();
             // Scene-type routing for Veo model selection. First/last scenes are
             // intro/outro; in between we use the episode PHASE so the climax (and
             // any hook beyond scene 1) gets the high-quality "hero" model instead
             // of defaulting everything to "standard" (lite).
-            String phase = String.valueOf(a.getOrDefault("phase", "")).toLowerCase();
+            String phase = nz(a.getPhase()).toLowerCase();
             String type;
             if (seq == 1) type = "intro";
             else if (seq == last) type = "outro";
@@ -2307,28 +2691,26 @@ public class PipelineOrchestrator {
             Map<String, Object> m = new HashMap<>();
             m.put("seq", seq);
             m.put("sceneType", type);
-            m.put("startImagePath", a.get("imagePath"));
+            m.put("startImagePath", a.getImagePath());
             // Veo is image-to-video: the still is frame 1, so the prompt must
             // describe MOTION, not a static composition. Prefer the script's
             // dedicated motionDesc (start→end movement, written for hero scenes);
             // fall back to the static visualDesc/narration when there's no motion
             // brief. veoPromptCompiler.compile wraps it with camera/world/tics/identity.
-            String motionDesc = String.valueOf(a.getOrDefault("motionDesc", ""));
+            String motionDesc = nz(a.getMotionDesc());
             String vd = (!motionDesc.isBlank() && !"null".equals(motionDesc))
                     ? motionDesc
-                    : String.valueOf(a.getOrDefault("visualDesc", a.getOrDefault("narration", "")));
+                    : (a.getVisualDesc() != null ? a.getVisualDesc() : nz(a.getNarration()));
             // Inject each present character's signature tic (bible dna.tic) so the
             // animation is characteristic — Bo pushes his glasses up, Pip tips her
             // hat back, Mo gives a slow blink.
-            @SuppressWarnings("unchecked")
-            List<String> sceneChars = (a.get("characters") instanceof List<?> l)
-                    ? (List<String>) (List<?>) l : List.of();
-            String locationId = String.valueOf(a.getOrDefault("locationId", ""));
-            String timeOfDay = String.valueOf(a.getOrDefault("timeOfDay", ""));
-            String weather = String.valueOf(a.getOrDefault("weather", ""));
-            String goal = String.valueOf(a.getOrDefault("goal", ""));
-            String emotion = String.valueOf(a.getOrDefault("emotion", ""));
-            String motionSpeed = String.valueOf(a.getOrDefault("motionSpeed", ""));
+            List<String> sceneChars = a.charactersOrEmpty();
+            String locationId = nz(a.getLocationId());
+            String timeOfDay = nz(a.getTimeOfDay());
+            String weather = nz(a.getWeather());
+            String goal = nz(a.getGoal());
+            String emotion = nz(a.getEmotion());
+            String motionSpeed = nz(a.getMotionSpeed());
             String compiled = veoPromptCompiler.compile(vd, phase, sceneChars, locationId,
                     timeOfDay, weather, goal, emotion, motionSpeed);
             // G5 — when this hero clip directly follows another hero clip, tell
@@ -2340,20 +2722,38 @@ public class PipelineOrchestrator {
                         + ". Begin on that same pose, lighting and framing, then carry the "
                         + "motion forward — no jump, no reset. ";
             }
+            // Board-audit — auto-establishing: the FIRST setup scene (the one
+            // beat that directly follows the hook) is a wide establishing shot,
+            // so right after the intimate extreme-close-up hook the viewer gets
+            // the geography. Deterministic and once per video: phases are
+            // contiguous, so exactly one setup scene has a hook as predecessor.
+            boolean firstSetupScene = "setup".equals(phase) && "hook".equals(prevPhase);
             // Story C (shot-size variation) — the camera-bible is keyed per phase,
             // so consecutive bulk (setup/development) beats would otherwise share
             // the SAME framing and read as an "AI preset". Rotate the shot size by
             // seq so the montage breathes establish → medium → close. Hero
             // (hook/climax) and intro/outro keep their deliberate cinematic framing.
+            // The first setup scene skips the rotation: its framing is the
+            // mandatory wide establishing shot.
             if ("standard".equals(type)) {
-                String[] sizes = {
-                        "a wider shot that lets the setting read around the character",
-                        "a medium shot framing the character from the chest up",
-                        "a closer shot favouring the character's face and expression"
-                };
-                compiled = compiled + "Shot framing for rhythm: make this beat "
-                        + sizes[Math.floorMod(seq, sizes.length)] + " (vary the framing from the "
-                        + "neighbouring shots so the cut feels edited, not a fixed camera). ";
+                if (firstSetupScene) {
+                    String locName = (locationId.isBlank() || "null".equals(locationId))
+                            ? "the scene's location"
+                            : locationId.replace('-', ' ');
+                    compiled = compiled + "Framing: wide establishing shot of " + locName
+                            + " — show the whole setting and where the character is within "
+                            + "it, so the viewer instantly understands the geography after "
+                            + "the close-up hook. ";
+                } else {
+                    String[] sizes = {
+                            "a wider shot that lets the setting read around the character",
+                            "a medium shot framing the character from the chest up",
+                            "a closer shot favouring the character's face and expression"
+                    };
+                    compiled = compiled + "Shot framing for rhythm: make this beat "
+                            + sizes[Math.floorMod(seq, sizes.length)] + " (vary the framing from the "
+                            + "neighbouring shots so the cut feels edited, not a fixed camera). ";
+                }
             }
             // Story C (eyeline / 180° staging) — when two or more chicks share the
             // frame, give Veo explicit screen-direction so they actually look AT
@@ -2374,7 +2774,10 @@ public class PipelineOrchestrator {
             }
             // Board #21 — auto-establishing: on a LOCATION CHANGE the first shot
             // breathes wider for a beat so a child instantly knows where we are.
-            if (prevLoc != null && !locationId.isBlank() && !"null".equals(locationId)
+            // Skipped when the full wide-establishing rule above already fired —
+            // two framing instructions on one shot contradict each other.
+            if (!firstSetupScene
+                    && prevLoc != null && !locationId.isBlank() && !"null".equals(locationId)
                     && !locationId.equalsIgnoreCase(prevLoc)) {
                 compiled = compiled + "New location: open this shot a touch WIDER for the "
                         + "first beat so the setting reads instantly (a brief establishing "
@@ -2388,11 +2791,12 @@ public class PipelineOrchestrator {
             // frozen last frame for the overhang. Order the clip at the REAL
             // voice length (known exactly via lineTimings) instead, capped at
             // Veo's 8s. Scenes without timing keep the scripted duration.
-            int veoDur = ((Number) a.get("durationSeconds")).intValue();
-            if (a.get("lineTimings") instanceof List<?> lts && !lts.isEmpty()) {
+            int veoDur = a.getDurationSeconds().intValue();
+            List<Map<String, Object>> lts = a.getLineTimings();
+            if (lts != null && !lts.isEmpty()) {
                 long endMs = 0;
-                for (Object o : lts) {
-                    if (o instanceof Map<?, ?> mm) {
+                for (Map<String, Object> mm : lts) {
+                    if (mm != null) {
                         long ls = (mm.get("startMs") instanceof Number n1) ? n1.longValue() : 0;
                         long ld = (mm.get("durMs") instanceof Number n2) ? n2.longValue() : 0;
                         endMs = Math.max(endMs, ls + ld);
@@ -2441,7 +2845,8 @@ public class PipelineOrchestrator {
             prevCast = cast;
             prevM = m;
             prevType = type;
-            prevEndPose = String.valueOf(a.getOrDefault("endPose", ""));
+            prevPhase = phase;
+            prevEndPose = nz(a.getEndPose());
         }
         return out;
     }
@@ -2493,16 +2898,16 @@ public class PipelineOrchestrator {
     }
 
 
-    private void applyClipPaths(List<Map<String, Object>> assembly, JsonNode clipsResp) {
+    private void applyClipPaths(List<SceneDto> assembly, JsonNode clipsResp) {
         Map<Integer, String> clipBySeq = new HashMap<>();
         for (JsonNode c : clipsResp.path("clips")) {
             if ("OK".equals(c.path("status").asText())) {
                 clipBySeq.put(c.path("seq").asInt(), c.path("clipPath").asText());
             }
         }
-        for (Map<String, Object> a : assembly) {
-            String p = clipBySeq.get((int) a.get("seq"));
-            if (p != null) a.put("clipPath", p);
+        for (SceneDto a : assembly) {
+            String p = clipBySeq.get(a.effectiveSeq());
+            if (p != null) a.setClipPath(p);
         }
     }
 
@@ -2521,7 +2926,7 @@ public class PipelineOrchestrator {
      * QC errors pass, never block.
      */
     private void clipQcGate(UUID jobId, VideoFormat format,
-                            List<Map<String, Object>> assemblyScenes,
+                            List<SceneDto> assemblyScenes,
                             List<Map<String, Object>> veoScenes) {
         Map<Integer, Map<String, Object>> veoBySeq = new HashMap<>();
         for (Map<String, Object> v : veoScenes) {
@@ -2529,18 +2934,15 @@ public class PipelineOrchestrator {
         }
         Map<String, String> dna = dnaAccessoryLines();
         int rerolls = 0;
-        for (Map<String, Object> a : assemblyScenes) {
-            Object cp = a.get("clipPath");
-            if (cp == null || String.valueOf(cp).isBlank()) continue;
-            int seq = ((Number) a.get("seq")).intValue();
-            @SuppressWarnings("unchecked")
-            List<String> charIds = (a.get("characters") instanceof List<?> l)
-                    ? (List<String>) (List<?>) l : List.of();
+        for (SceneDto a : assemblyScenes) {
+            if (!a.hasClip()) continue;
+            int seq = a.effectiveSeq();
+            List<String> charIds = a.charactersOrEmpty();
             List<String> expected = new ArrayList<>();
             for (String id : charIds) {
                 expected.add(dna.getOrDefault(id == null ? "" : id.toLowerCase(), id));
             }
-            java.nio.file.Path clip = java.nio.file.Paths.get(String.valueOf(cp));
+            java.nio.file.Path clip = java.nio.file.Paths.get(a.getClipPath());
 
             ClipQc.Result r = clipQc.check(clip, expected, charIds);
             if (r.ok()) continue;
@@ -2554,12 +2956,12 @@ public class PipelineOrchestrator {
                 try {
                     log.info("Job {} scene {} clip QC re-roll {}/{}", jobId, seq,
                             rerolls, CLIP_QC_MAX_REROLLS);
-                    JsonNode resp = videoGenClient.generate(
+                    JsonNode resp = videoGenClient.generateAsync(
                             jobId, format.imageFormat, List.of(veoScene));
                     applyClipPaths(assemblyScenes, resp);
-                    if (a.get("clipPath") != null) {
+                    if (a.getClipPath() != null) {
                         ClipQc.Result r2 = clipQc.check(
-                                java.nio.file.Paths.get(String.valueOf(a.get("clipPath"))),
+                                java.nio.file.Paths.get(a.getClipPath()),
                                 expected, charIds);
                         if (r2.ok()) {
                             log.info("Job {} scene {} clip QC re-roll PASSED", jobId, seq);
@@ -2576,7 +2978,8 @@ public class PipelineOrchestrator {
             }
 
             // Still bad → drop the clip; assembly uses the QC'd still instead.
-            a.remove("clipPath");
+            // (null field = absent key on serialisation, same as map.remove)
+            a.setClipPath(null);
             try {
                 java.nio.file.Files.deleteIfExists(clip);
             } catch (Exception e) {
@@ -2597,7 +3000,7 @@ public class PipelineOrchestrator {
         return n;
     }
 
-    private void mergeAssets(List<Map<String, Object>> assembly, JsonNode voice, JsonNode image) {
+    private void mergeAssets(List<SceneDto> assembly, JsonNode voice, JsonNode image) {
         Map<Integer, String> audio = new HashMap<>();
         Map<Integer, String> imgs = new HashMap<>();
         Map<Integer, JsonNode> timings = new HashMap<>();
@@ -2607,38 +3010,40 @@ public class PipelineOrchestrator {
             if (lt.isArray() && lt.size() > 0) timings.put(n.path("seq").asInt(), lt);
         });
         image.path("scenes").forEach(n -> imgs.put(n.path("seq").asInt(), n.path("imagePath").asText()));
-        for (Map<String, Object> a : assembly) {
-            int seq = (int) a.get("seq");
+        for (SceneDto a : assembly) {
+            int seq = a.effectiveSeq();
             // Per-line voice timing → flows into the assembly request so the
             // SRT gets one cue per LINE instead of one per scene (audit #3).
             JsonNode lt = timings.get(seq);
             if (lt != null) {
-                try { a.put("lineTimings", mapper.convertValue(lt, java.util.List.class)); }
-                catch (Exception ignore) { /* timing is an enhancement, never fatal */ }
+                try {
+                    a.setLineTimings(mapper.convertValue(lt,
+                            new TypeReference<List<Map<String, Object>>>() {}));
+                } catch (Exception ignore) { /* timing is an enhancement, never fatal */ }
             }
             // Non-destructive: only overwrite when the response actually carries
             // a value for this scene, so reused (skipped) scenes keep their
             // existing image/voice paths on a retry.
             String newAudio = audio.get(seq);
             String newImg = imgs.get(seq);
-            if (newAudio != null && !newAudio.isBlank()) a.put("audioPath", newAudio);
-            if (newImg != null && !newImg.isBlank())     a.put("imagePath", newImg);
+            if (newAudio != null && !newAudio.isBlank()) a.setAudioPath(newAudio);
+            if (newImg != null && !newImg.isBlank())     a.setImagePath(newImg);
         }
     }
 
-    private List<Map<String, Object>> loadAssemblyScenes(VideoJob job) {
+    private List<SceneDto> loadAssemblyScenes(VideoJob job) {
         if (job.getAssemblyScenesJson() == null || job.getAssemblyScenesJson().isBlank()) {
             return new ArrayList<>();
         }
         try {
             return mapper.readValue(job.getAssemblyScenesJson(),
-                    new TypeReference<List<Map<String, Object>>>() {});
+                    new TypeReference<List<SceneDto>>() {});
         } catch (Exception e) {
             throw new IllegalStateException("Could not read assemblyScenes JSON", e);
         }
     }
 
-    private String serialise(List<Map<String, Object>> scenes) {
+    private String serialise(List<SceneDto> scenes) {
         try { return mapper.writeValueAsString(scenes); }
         catch (Exception e) { throw new IllegalStateException("Could not write assemblyScenes JSON", e); }
     }
@@ -2650,24 +3055,65 @@ public class PipelineOrchestrator {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown job " + id));
     }
 
-    @Transactional public void mark(UUID id, JobStatus s, String step) {
-        repo.findById(id).ifPresent(j -> { j.setStatus(s); j.setStep(step); repo.save(j); });
+    /** Max attempts for {@link #retryOnConflict}: 1 initial try + 2 retries. */
+    private static final int OPTIMISTIC_RETRY_MAX_ATTEMPTS = 3;
+
+    /**
+     * Optimistic-lock-aware load→mutate→save (V26, @Version on VideoJob).
+     * Every attempt reloads the FRESHEST row and re-applies the mutation, so a
+     * concurrent writer's committed changes are preserved instead of lost.
+     *
+     * Deliberately NOT @Transactional: repo.save() runs in its own short
+     * transaction (SimpleJpaRepository.save is @Transactional), so the version
+     * check fires inside the save call where this loop can catch
+     * OptimisticLockingFailureException and retry. With an outer transaction
+     * the conflict would only surface at commit, after the catch.
+     *
+     * A missing row is a silent no-op — the same contract the old
+     * {@code repo.findById(id).ifPresent(...)} helpers had. After
+     * {@value #OPTIMISTIC_RETRY_MAX_ATTEMPTS} conflicting attempts the
+     * exception propagates to the caller (stage catch-blocks fail the job
+     * loudly; controllers surface a 500 the user can retry).
+     */
+    void retryOnConflict(UUID id, java.util.function.Consumer<VideoJob> mutation) {
+        for (int attempt = 1; ; attempt++) {
+            Optional<VideoJob> found = repo.findById(id);
+            if (found.isEmpty()) return;
+            try {
+                VideoJob j = found.get();
+                mutation.accept(j);
+                repo.save(j);
+                return;
+            } catch (org.springframework.dao.OptimisticLockingFailureException e) {
+                if (attempt >= OPTIMISTIC_RETRY_MAX_ATTEMPTS) {
+                    log.warn("Job {} optimistic-lock conflict persisted after {} attempts — rethrowing",
+                            id, attempt);
+                    throw e;
+                }
+                log.info("Job {} optimistic-lock conflict (attempt {}/{}) — reloading and retrying",
+                        id, attempt, OPTIMISTIC_RETRY_MAX_ATTEMPTS);
+            }
+        }
     }
-    @Transactional public void pauseForReview(UUID id, JobStatus s, String step) {
-        repo.findById(id).ifPresent(j -> { j.setStatus(s); j.setStep(step); repo.save(j); });
+
+    public void mark(UUID id, JobStatus s, String step) {
+        retryOnConflict(id, j -> { j.setStatus(s); j.setStep(step); });
+    }
+    public void pauseForReview(UUID id, JobStatus s, String step) {
+        retryOnConflict(id, j -> { j.setStatus(s); j.setStep(step); });
         log.info("Job {} paused at {}", id, s);
     }
-    @Transactional public void saveBackgroundMusicPath(UUID id, String path) {
-        repo.findById(id).ifPresent(j -> { j.setBackgroundMusicPath(path); repo.save(j); });
+    public void saveBackgroundMusicPath(UUID id, String path) {
+        retryOnConflict(id, j -> j.setBackgroundMusicPath(path));
     }
 
-    @Transactional public void savePlannedPublishAt(UUID id, java.time.OffsetDateTime at) {
-        repo.findById(id).ifPresent(j -> { j.setPlannedPublishAt(at); repo.save(j); });
+    public void savePlannedPublishAt(UUID id, java.time.OffsetDateTime at) {
+        retryOnConflict(id, j -> j.setPlannedPublishAt(at));
     }
 
-    @Transactional public void saveStoryArc(UUID id, String arc) {
+    public void saveStoryArc(UUID id, String arc) {
         if (arc == null || arc.isBlank()) return;
-        repo.findById(id).ifPresent(j -> { j.setStoryArc(arc); repo.save(j); });
+        retryOnConflict(id, j -> j.setStoryArc(arc));
     }
 
     /**
@@ -2680,7 +3126,7 @@ public class PipelineOrchestrator {
      */
     public Map<String, Object> regenerateThumbnail(UUID jobId, String hint) {
         VideoJob job = load(jobId);
-        List<Map<String, Object>> assembly = loadAssemblyScenes(job);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
         if (assembly.isEmpty()) {
             throw new IllegalStateException(
                     "Job " + jobId + " has no assembled scenes yet — nothing to base a thumbnail on.");
@@ -2701,7 +3147,7 @@ public class PipelineOrchestrator {
                 jobId, job.getTopic(), title, hook,
                 pickCastStills(assembly),
                 performanceLoop.bestThumbnailLayout(),
-                hint);
+                hint, presentCast(assembly));
         String thumbPath = thumb.path("thumbnailPath").asText();
         saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
         saveThumbnailPath(jobId, thumbPath);
@@ -2711,36 +3157,35 @@ public class PipelineOrchestrator {
                 "result", "THUMBNAIL_REGENERATED");
     }
 
-    @Transactional public void saveThumbnailPath(UUID id, String path) {
+    public void saveThumbnailPath(UUID id, String path) {
         if (path == null || path.isBlank()) return;
-        repo.findById(id).ifPresent(j -> { j.setThumbnailPath(path); repo.save(j); });
+        retryOnConflict(id, j -> j.setThumbnailPath(path));
     }
 
-    @Transactional public void saveThumbnailLayout(UUID id, String layout) {
+    public void saveThumbnailLayout(UUID id, String layout) {
         if (layout == null || layout.isBlank()) return;
-        repo.findById(id).ifPresent(j -> { j.setThumbnailLayout(layout); repo.save(j); });
+        retryOnConflict(id, j -> j.setThumbnailLayout(layout));
     }
 
-    @Transactional public void saveScriptJobId(UUID id, UUID sjId) {
-        repo.findById(id).ifPresent(j -> { j.setScriptJobId(sjId); repo.save(j); });
+    public void saveScriptJobId(UUID id, UUID sjId) {
+        retryOnConflict(id, j -> j.setScriptJobId(sjId));
     }
-    @Transactional public void saveScriptIdAndScenes(UUID id, UUID sId, List<Map<String, Object>> scenes,
-                                                     Integer structureScore, Integer criticScore) {
-        repo.findById(id).ifPresent(j -> {
+    public void saveScriptIdAndScenes(UUID id, UUID sId, List<SceneDto> scenes,
+                                      Integer structureScore, Integer criticScore) {
+        retryOnConflict(id, j -> {
             j.setScriptId(sId);
             j.setAssemblyScenesJson(serialise(scenes));
             j.setStructureScore(structureScore);
             j.setCriticScore(criticScore);
-            repo.save(j);
         });
     }
-    @Transactional public void saveAssemblyScenes(UUID id, List<Map<String, Object>> scenes) {
-        repo.findById(id).ifPresent(j -> { j.setAssemblyScenesJson(serialise(scenes)); repo.save(j); });
+    public void saveAssemblyScenes(UUID id, List<SceneDto> scenes) {
+        retryOnConflict(id, j -> j.setAssemblyScenesJson(serialise(scenes)));
     }
-    @Transactional public void saveAssemblyResults(UUID id, String videoPath, String thumbPath,
-                                                   MetadataGenerator.Metadata meta, String captionsPath,
-                                                   String shortPath) {
-        repo.findById(id).ifPresent(j -> {
+    public void saveAssemblyResults(UUID id, String videoPath, String thumbPath,
+                                    MetadataGenerator.Metadata meta, String captionsPath,
+                                    String shortPath) {
+        retryOnConflict(id, j -> {
             j.setVideoPath(videoPath);
             j.setThumbnailPath(thumbPath);
             j.setMetadataTitle(meta.title());
@@ -2748,7 +3193,6 @@ public class PipelineOrchestrator {
             j.setMetadataTags(String.join(",", meta.tags()));
             j.setCaptionsPath(captionsPath);
             if (shortPath != null && !shortPath.isBlank()) j.setShortPath(shortPath);
-            repo.save(j);
         });
     }
 
@@ -2827,12 +3271,12 @@ public class PipelineOrchestrator {
      *  loudly when the render overshoots — the ep-3 audit found +28% growth that
      *  nobody saw because the two numbers never sat side by side. Best-effort. */
     private void recordDurationMetrics(UUID jobId, double masterSeconds,
-                                       List<Map<String, Object>> assemblyScenes) {
+                                       List<SceneDto> assemblyScenes) {
         try {
             int scripted = 0;
-            for (Map<String, Object> s : assemblyScenes) {
-                Object d = s.get("durationSeconds");
-                if (d instanceof Number n) scripted += n.intValue();
+            for (SceneDto s : assemblyScenes) {
+                Number d = s.getDurationSeconds();
+                if (d != null) scripted += d.intValue();
             }
             if (scripted <= 0 || masterSeconds <= 0) return;
             double stretch = masterSeconds / scripted;
@@ -2845,6 +3289,48 @@ public class PipelineOrchestrator {
             m.put("scriptedSeconds", scripted);
             m.put("masterSeconds", Math.round(masterSeconds * 10.0) / 10.0);
             m.put("stretchFactor", Math.round(stretch * 100.0) / 100.0);
+            // Render-duur-gate (board): compare the RENDERED master against the
+            // REQUESTED target plus the intro/outro bumpers assembly adds around
+            // the scenes. Off by more than 10% of the target → loud warning +
+            // QC-insight + a "withinTarget" flag in metricsJson that the
+            // QualityScorer surfaces as a soft polish check. Deliberately a
+            // SOFT signal: nothing fails or blocks here — the human review
+            // gate stays the backstop.
+            int target = fresh.getTargetSeconds();
+            if (target > 0) {
+                double bumpers = introOutroMarginSeconds();
+                double expected = target + bumpers;
+                double offBy = Math.abs(masterSeconds - expected);
+                double tolerance = 0.10 * target;
+                m.put("targetSeconds", target);
+                m.put("introOutroMarginSeconds", Math.round(bumpers * 10.0) / 10.0);
+                m.put("targetDeltaSeconds", Math.round((masterSeconds - expected) * 10.0) / 10.0);
+                m.put("withinTarget", offBy <= tolerance);
+                if (offBy > tolerance) {
+                    log.warn("Job {} DURATION OFF TARGET: master {}s vs target {}s "
+                            + "(+{}s intro/outro = {}s expected) — off by {}s, more than "
+                            + "10% of target ({}s). Soft QA signal only; the human gate decides.",
+                            jobId,
+                            String.format(java.util.Locale.ROOT, "%.1f", masterSeconds),
+                            target,
+                            String.format(java.util.Locale.ROOT, "%.1f", bumpers),
+                            String.format(java.util.Locale.ROOT, "%.1f", expected),
+                            String.format(java.util.Locale.ROOT, "%.1f", offBy),
+                            String.format(java.util.Locale.ROOT, "%.1f", tolerance));
+                    try {
+                        qcInsights.record(jobId, null, List.of(
+                                "Master duration off target: rendered "
+                                + String.format(java.util.Locale.ROOT, "%.1f", masterSeconds)
+                                + "s vs expected " + String.format(java.util.Locale.ROOT, "%.1f", expected)
+                                + "s (target " + target + "s + "
+                                + String.format(java.util.Locale.ROOT, "%.1f", bumpers)
+                                + "s intro/outro), off by "
+                                + String.format(java.util.Locale.ROOT, "%.1f", offBy)
+                                + "s (> 10% of target)"),
+                                "duration-gate");
+                    } catch (Exception ignore) { /* insights best-effort */ }
+                }
+            }
             fresh.setMetricsJson(mapper.writeValueAsString(m));
             repo.save(fresh);
             if (stretch > stretchMax) {
@@ -2865,34 +3351,53 @@ public class PipelineOrchestrator {
             log.warn("Job {} duration metrics failed (non-fatal): {}", jobId, e.getMessage());
         }
     }
-    @Transactional public void saveQaBoard(UUID id, int score, String json) {
-        repo.findById(id).ifPresent(j -> {
+
+    /** Intro+outro bumper seconds the assembly wraps around the scenes — the
+     *  margin the render-duur-gate allows on top of the requested target.
+     *  Read from the bible (brand.intro/outro.durationSeconds), falling back
+     *  to 3s+3s when the bible or those fields are missing. Never throws. */
+    private double introOutroMarginSeconds() {
+        double intro = 3.0, outro = 3.0;
+        try {
+            java.nio.file.Path p = java.nio.file.Paths.get(props.bible().path());
+            if (java.nio.file.Files.exists(p)) {
+                com.fasterxml.jackson.databind.JsonNode brand =
+                        new com.fasterxml.jackson.dataformat.yaml.YAMLMapper()
+                                .readTree(p.toFile()).path("brand");
+                intro = brand.path("intro").path("durationSeconds").asDouble(intro);
+                outro = brand.path("outro").path("durationSeconds").asDouble(outro);
+            }
+        } catch (Exception e) {
+            log.debug("introOutroMarginSeconds: bible read failed ({}) — using defaults", e.getMessage());
+        }
+        return intro + outro;
+    }
+
+    public void saveQaBoard(UUID id, int score, String json) {
+        retryOnConflict(id, j -> {
             j.setQaBoardScore(score);
             j.setQaBoardJson(json);
-            repo.save(j);
         });
     }
-    @Transactional public void complete(UUID id, String videoId, String url) {
-        repo.findById(id).ifPresent(j -> {
+    public void complete(UUID id, String videoId, String url) {
+        retryOnConflict(id, j -> {
             j.setStatus(JobStatus.COMPLETED);
             j.setStep("done");
             j.setYoutubeVideoId(videoId);
             j.setYoutubeUrl(url);
-            repo.save(j);
         });
     }
     /** Records the YouTube result and parks the job at the distribution gate. */
-    @Transactional public void enterDistribution(UUID id, String videoId, String url) {
-        repo.findById(id).ifPresent(j -> {
+    public void enterDistribution(UUID id, String videoId, String url) {
+        retryOnConflict(id, j -> {
             j.setStatus(JobStatus.DISTRIBUTION_PENDING);
             j.setStep("uploaded — awaiting distribution");
             j.setYoutubeVideoId(videoId);
             j.setYoutubeUrl(url);
-            repo.save(j);
         });
     }
-    @Transactional public void fail(UUID id, String err) {
-        repo.findById(id).ifPresent(j -> { j.setStatus(JobStatus.FAILED); j.setError(err); repo.save(j); });
+    public void fail(UUID id, String err) {
+        retryOnConflict(id, j -> { j.setStatus(JobStatus.FAILED); j.setError(err); });
     }
 
     @Transactional(readOnly = true)
@@ -2921,6 +3426,8 @@ public class PipelineOrchestrator {
 
     private VideoJobResponse toResponse(VideoJob j) {
         return new VideoJobResponse(j.getId(), j.getTopic(), j.getStatus(), j.getStep(),
-                j.getError(), j.getVideoPath(), j.getYoutubeVideoId(), j.getYoutubeUrl());
+                j.getError(), j.getVideoPath(), j.getYoutubeVideoId(), j.getYoutubeUrl(),
+                j.getFacebookVideoId(), j.getFacebookUrl(),
+                j.getTiktokPublishId(), j.getInstagramMediaId(), j.getInstagramUrl());
     }
 }

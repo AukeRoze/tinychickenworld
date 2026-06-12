@@ -50,6 +50,17 @@ public class GeminiImageProvider implements ImageProvider {
      *  Capped so a big folder can't balloon the request payload. */
     private static final int MAX_ANGLES = 3;
 
+    /** Max episode-canon stills attached per scene (Story B) — one per
+     *  in-scene character is the normal case; the standard cast is 3. */
+    private static final int MAX_EPISODE_ANCHORS = 3;
+
+    /** Hard cap on the TOTAL reference images per request. 9 = the legacy
+     *  worst case (3 characters × MAX_ANGLES), so without episode/prop refs
+     *  nothing changes; with them, extra bible ANGLES are displaced first
+     *  (each character always keeps ≥1 anchor) — more refs than this dilutes
+     *  Gemini's conditioning and balloons the payload. */
+    private static final int MAX_TOTAL_REFS = 9;
+
     public GeminiImageProvider(
             BibleLoader bibleLoader,
             PromptComposer prompts,
@@ -109,10 +120,12 @@ public class GeminiImageProvider implements ImageProvider {
         }
         var bible = bibleLoader.getBible();
 
-        // Resolve in-scene characters → ordered (name, anchorBytes), preserving
-        // scene order so the prompt's "Reference image N is X" lines line up.
-        List<String> orderedIds = new ArrayList<>();
-        List<byte[]> anchors = new ArrayList<>();
+        // Resolve in-scene characters → per-character anchor SETS (each ≤
+        // MAX_ANGLES), preserving scene order. Sets are flattened after the
+        // total-ref budget below is known, so episode/prop refs can displace
+        // EXTRA bible angles without ever dropping a character's hero anchor.
+        List<String> charIds = new ArrayList<>();
+        List<List<byte[]>> charSets = new ArrayList<>();
         List<String> missing = new ArrayList<>();
         if (scene.characters() != null) {
             for (String charId : scene.characters()) {
@@ -121,48 +134,96 @@ public class GeminiImageProvider implements ImageProvider {
                         .orElse(charId);
                 List<byte[]> charAnchors = loadCharacterAnchors(charId);
                 if (!charAnchors.isEmpty()) {
-                    // One orderedIds entry PER image so the prompt's
-                    // "Reference image N is X" lines stay aligned — a multi-angle
-                    // set just yields several lines naming the same character.
-                    for (byte[] a : charAnchors) { anchors.add(a); orderedIds.add(charId); }
+                    charIds.add(charId);
+                    charSets.add(charAnchors);
                 } else {
                     log.warn("gemini: no anchor for character '{}' in {} — relying on text", charId, refsDir);
                     missing.add(displayName);
                 }
             }
         }
-        // When a character contributed more than one reference image (a multi-angle
-        // set), tell the model those are the SAME character from different angles.
-        boolean multiAngle = orderedIds.size() > new java.util.HashSet<>(orderedIds).size();
 
         // Recurring-prop anchors — appended AFTER the character anchors so they are
         // the trailing reference images. Locks a prop's colour/design across scenes.
         List<String> propNames = new ArrayList<>();
+        List<byte[]> propImgs = new ArrayList<>();
         if (scene.propRefs() != null) {
             for (var p : scene.propRefs()) {
                 if (p == null || p.imagePath() == null || p.imagePath().isBlank()) continue;
                 Path pp = Paths.get(p.imagePath());
                 if (Files.isReadable(pp)) {
-                    try { anchors.add(Files.readAllBytes(pp)); propNames.add(p.name()); }
+                    try { propImgs.add(Files.readAllBytes(pp)); propNames.add(p.name()); }
                     catch (Exception e) { log.warn("gemini: failed reading prop ref {} — {}", pp, e.toString()); }
                 }
             }
         }
 
         // ConsistencyState (Story B): stills already rendered for THIS episode,
-        // appended as the final reference images. They lock how this episode
+        // appended as the FINAL reference images. They lock how this episode
         // has drawn the cast, so scene 14's Pip matches scene 1's Pip — not
-        // just the bible's Pip. Indexes are tracked so the prompt can address
-        // each reference-image group by explicit position.
-        int episodeCount = 0;
-        if (episodeAnchors != null) {
+        // just the bible's Pip. Two sources, explicit one wins:
+        //   1. NAMED anchors on the request (scene.episodeAnchors) — the
+        //      orchestrator's per-character, QC-approved canon election;
+        //   2. the service's generic disk-scan stills (episodeAnchors param) as
+        //      the fallback when the request carries none.
+        List<String> epNames = new ArrayList<>();   // stays empty for the generic source
+        List<byte[]> epImgs = new ArrayList<>();
+        if (scene.episodeAnchors() != null && !scene.episodeAnchors().isEmpty()) {
+            for (var ea : scene.episodeAnchors()) {
+                if (ea == null || ea.imagePath() == null || ea.imagePath().isBlank()) continue;
+                if (epImgs.size() >= MAX_EPISODE_ANCHORS) break;
+                Path pp = Paths.get(ea.imagePath());
+                if (!Files.isReadable(pp)) continue;
+                try {
+                    epImgs.add(Files.readAllBytes(pp));
+                    epNames.add(bible.character(ea.characterId())
+                            .map(com.youtubeauto.image.bible.Character::name)
+                            .orElse(ea.characterId() == null ? "the cast" : ea.characterId()));
+                } catch (Exception e) {
+                    log.warn("gemini: failed reading episode anchor {} — {}", pp, e.toString());
+                }
+            }
+        } else if (episodeAnchors != null) {
             for (Path ep : episodeAnchors) {
                 if (ep == null || !Files.isReadable(ep)) continue;
-                try { anchors.add(Files.readAllBytes(ep)); episodeCount++; }
+                if (epImgs.size() >= MAX_EPISODE_ANCHORS) break;
+                try { epImgs.add(Files.readAllBytes(ep)); }
                 catch (Exception e) { log.warn("gemini: failed reading episode anchor {} — {}", ep, e.toString()); }
             }
         }
+        boolean namedEpisode = !epNames.isEmpty();
+
+        // Total-ref budget (MAX_TOTAL_REFS): props + episode anchors are kept,
+        // and the per-character ANGLE count shrinks to fit — i.e. an episode
+        // anchor displaces an extra bible angle, never a character's primary
+        // anchor (minimum 1 per character) and never the episode canon itself.
+        // With the standard 3-character cast and no extra refs this resolves to
+        // 3 angles per character — exactly the legacy behaviour.
+        int budget = MAX_TOTAL_REFS - propImgs.size() - epImgs.size();
+        int perChar = charSets.isEmpty() ? 0
+                : Math.max(1, Math.min(MAX_ANGLES, budget / Math.max(1, charSets.size())));
+
+        // Flatten: one orderedIds entry PER image so the prompt's
+        // "Reference image N is X" lines stay aligned — a multi-angle
+        // set just yields several lines naming the same character.
+        List<String> orderedIds = new ArrayList<>();
+        List<byte[]> anchors = new ArrayList<>();
+        for (int i = 0; i < charSets.size(); i++) {
+            List<byte[]> set = charSets.get(i);
+            int take = Math.min(perChar, set.size());
+            for (int k = 0; k < take; k++) {
+                anchors.add(set.get(k));
+                orderedIds.add(charIds.get(i));
+            }
+        }
+        // When a character contributed more than one reference image (a multi-angle
+        // set), tell the model those are the SAME character from different angles.
+        boolean multiAngle = orderedIds.size() > new java.util.HashSet<>(orderedIds).size();
+        anchors.addAll(propImgs);
+        anchors.addAll(epImgs);
+
         int charCount = orderedIds.size();
+        int episodeCount = epImgs.size();
         int propStart = charCount + 1;
         int propEnd = charCount + propNames.size();
         int epStart = propEnd + 1;
@@ -184,7 +245,24 @@ public class GeminiImageProvider implements ImageProvider {
                     + "reference image — keep them identical to the reference and consistent "
                     + "across every scene. Only show a prop if the scene text mentions it. ";
         }
-        if (episodeCount > 0) {
+        if (namedEpisode) {
+            StringBuilder ep = new StringBuilder();
+            ep.append(" Reference image(s) ").append(epStart).append("-").append(epEnd)
+              .append(" are QC-APPROVED STILLS FROM EARLIER IN THIS EXACT EPISODE. ");
+            for (int i = 0; i < epNames.size(); i++) {
+                ep.append("Reference image ").append(epStart + i).append(" shows ")
+                  .append(epNames.get(i))
+                  .append(" — the SAME individual character earlier in this exact episode. ");
+            }
+            ep.append("Match each character EXACTLY as in these episode stills: identical "
+                    + "feather colours and markings, identical accessories and accessory "
+                    + "state, identical proportions and relative size — this episode's "
+                    + "already-rendered look overrides any other interpretation of the "
+                    + "design. Do NOT copy the lighting, background or pose from the episode "
+                    + "stills: light and stage the character for THIS scene's own time of "
+                    + "day, weather and action. ");
+            prompt = prompt + ep;
+        } else if (episodeCount > 0) {
             prompt = prompt + " Reference image(s) " + epStart + "-" + epEnd
                     + " are APPROVED STILLS FROM THIS SAME EPISODE, showing the cast as already "
                     + "rendered. Keep every character PIXEL-CONSISTENT with how they appear in "

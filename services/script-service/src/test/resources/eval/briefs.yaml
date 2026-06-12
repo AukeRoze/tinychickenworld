@@ -1,0 +1,99 @@
+# ── Vaste eval-briefs voor PromptEvalHarness ────────────────────────────────
+# BEVRIES DEZE SET. Een meetlat die meebeweegt meet niets: het rapport
+# (target/eval-report.md) is alleen diff-baar tussen promptwijzigingen als de
+# briefs identiek blijven. Brief TOEVOEGEN mag altijd (extra dekking);
+# bestaande briefs wijzigen reset de vergelijkbaarheid.
+#
+# Velden (zie EvalSupport.EvalBrief): id, topic, audience, targetSeconds,
+# mood, arc (MOET een bestaand bible storyArcs-id zijn — het harnas faalt
+# anders bewust), optioneel styleHint / lesson / brief.
+#
+# De set dekt bewust de bandbreedte van het kanaal: mystery, first_time,
+# song-achtig, kort (60s), lang (240s), met en zonder Duckling.
+
+- id: mystery-night-tap
+  topic: "A mysterious tap-tap sound in the night"
+  audience: kids_3_6
+  targetSeconds: 180
+  mood: "curious, a little hushed, warm"
+  arc: mystery
+  lesson: "strange sounds usually have a friendly explanation"
+  brief: >
+    A soft tap-tap-tap wakes the chicks. They follow the sound through the
+    dusk (cozy, never scary) and discover a willow branch tapping the coop
+    window in the breeze. Bravery rewarded, giggles at the end.
+
+- id: first-time-rain
+  topic: "Pip feels rain for the very first time"
+  audience: kids_3_6
+  targetSeconds: 180
+  mood: "wonder, cozy"
+  arc: first_time
+  lesson: "rain is water that falls from clouds"
+  brief: >
+    Pip has never seen rain. One drop lands on her straw hat, then another.
+    She hesitates one breath, then curiosity wins and the whole world turns
+    sparkly. The silent visual beat is the first real rainfall.
+
+- id: song-echo-hills
+  topic: "The hills sing back: discovering echoes"
+  audience: kids_3_6
+  targetSeconds: 120
+  mood: "playful, musical, bouncy"
+  arc: discovery
+  styleHint: >
+    Song-like and rhythmic: a short repeating call-and-answer refrain the
+    viewer can chant along with ("Hello hill! ... hello-hill-hill-hill").
+  lesson: "an echo is your own sound bouncing back"
+
+- id: short-bedtime-fireflies
+  topic: "Counting fireflies before bed"
+  audience: kids_3_6
+  targetSeconds: 60
+  mood: "calm, sleepy, soft"
+  arc: comparison
+  styleHint: "Bedtime pacing: slow, gentle, hushed — a wind-down video."
+  lesson: "the day ends quietly and that feels safe"
+
+- id: long-berry-mess
+  topic: "Bo spills the berry basket and tries to hide it"
+  audience: kids_3_6
+  targetSeconds: 240
+  mood: "warm, gently funny"
+  arc: mistake
+  lesson: "asking for help makes things better"
+  brief: >
+    Bo carries the berry basket alone to surprise everyone, trips on the
+    pebble path, and tries increasingly silly ways to hide the spill.
+    Pip notices berry footprints. The fix is a team job and more fun
+    than the surprise would have been.
+
+- id: duckling-first-float
+  topic: "Duckling floats and the chicks cannot"
+  audience: kids_3_6
+  targetSeconds: 180
+  mood: "tender, giggly"
+  arc: discovery
+  lesson: "duck feet and feathers are made for water"
+  brief: >
+    Feature Duckling, the baby duck of the flock: he bobs on the pond like
+    a tiny boat while the chicks watch amazed from the shore. Comedy from
+    the species mismatch (KWAK vs peep, webbed vs pointy toes) — always
+    affectionate, never mocking.
+
+- id: shadow-long-short
+  topic: "Why is my shadow long and then short?"
+  audience: kids_3_6
+  targetSeconds: 150
+  mood: "curious, thoughtful, warm"
+  arc: comparison
+  lesson: "shadows change as the sun moves"
+
+- id: silly-bo-hiccups
+  topic: "Bo gets the hiccups and every cure goes wrong"
+  audience: kids_3_6
+  targetSeconds: 90
+  mood: "silly, bouncy, warm"
+  arc: first_time
+  styleHint: "Physical comedy forward: rule of three, the viewer sees each cure fail coming."
+  lesson: "hiccups go away by themselves — laughing helps"

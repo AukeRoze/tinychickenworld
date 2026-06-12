@@ -3,6 +3,13 @@ spring:
     name: thumbnail-service
   main:
     headless: true
+  # Virtual threads: a thumbnail request generates multiple variants via
+  # OpenAI / image-service (120s timeout per call) on the request thread.
+  # Synchronized code (LayoutPicker.pick, BibleLoader.load) is in-memory or
+  # one quick file read — no meaningful pinning risk.
+  threads:
+    virtual:
+      enabled: true
 
 server:
   port: 8086

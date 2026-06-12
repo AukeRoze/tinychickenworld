@@ -41,13 +41,34 @@ public class DistributionController {
 
         JsonNode res;
         switch (platform.toLowerCase()) {
-            case "tiktok" -> res = uploadClient.distributeTikTok(job.getVideoPath(), caption);
+            case "tiktok" -> {
+                res = uploadClient.distributeTikTok(job.getVideoPath(), caption);
+                // Persist the TikTok publish-id so the job page can show an
+                // honest status chip (best-effort; the push already succeeded).
+                if (res != null && res.path("success").asBoolean(false)) {
+                    try {
+                        job.setTiktokPublishId(blankToNull(res.path("publishId").asText(null)));
+                        repo.save(job);
+                    } catch (Exception ignore) { /* status chip only — never fail the push */ }
+                }
+            }
             case "instagram" -> {
                 if (job.getYoutubeUrl() == null || job.getYoutubeUrl().isBlank()) {
                     return ResponseEntity.badRequest().body(Map.of(
                             "error", "Instagram needs a public URL — upload to YouTube first"));
                 }
                 res = uploadClient.distributeInstagram(job.getYoutubeUrl(), caption);
+                // Persist the Instagram media-id + the best-effort permalink the
+                // upload-service now looks up after publish (V25). A missing
+                // permalink ("" in the response) stays null — the push itself
+                // already succeeded, the chip just won't be a link.
+                if (res != null && res.path("success").asBoolean(false)) {
+                    try {
+                        job.setInstagramMediaId(blankToNull(res.path("mediaId").asText(null)));
+                        job.setInstagramUrl(blankToNull(res.path("permalink").asText(null)));
+                        repo.save(job);
+                    } catch (Exception ignore) { /* status chip only — never fail the push */ }
+                }
             }
             case "facebook" -> {
                 res = uploadClient.distributeFacebook(job.getVideoPath(), caption, description, null);
@@ -66,6 +87,11 @@ public class DistributionController {
                     "platform", platform));
         }
         return ResponseEntity.ok(Map.of("platform", platform, "result", res));
+    }
+
+    /** The upload-service sends "" for a missing id — store null, not "". */
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     @GetMapping("/community-posts")

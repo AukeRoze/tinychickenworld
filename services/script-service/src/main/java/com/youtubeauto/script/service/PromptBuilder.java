@@ -8,6 +8,7 @@ import com.youtubeauto.script.bible.BibleLocation;
 import com.youtubeauto.script.bible.ChannelBible;
 import com.youtubeauto.script.bible.EpisodePhase;
 import com.youtubeauto.script.bible.EpisodeStructure;
+import com.youtubeauto.script.bible.SeriesMythology;
 import com.youtubeauto.script.dedupe.VariationProfile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -338,7 +339,7 @@ public class PromptBuilder {
               "Whoosh!", "Plop!") in visualDesc — those belong ONLY in dialogue
               lines. visualDesc is purely what is SEEN; any quoted SFX there gets
               rendered as literal comic text in the image, which we must avoid.
-            - Sum of scene durationSeconds must approximately match targetSeconds (±15%%).
+            - Sum of scene durationSeconds must approximately match targetSeconds (±15%).
             - Open with a 1-sentence hook from the main character. End with a friendly
               CTA (like/subscribe) from the main character.
             - CTA REALITY CHECK (Made for Kids): comments are DISABLED on kids
@@ -480,14 +481,19 @@ public class PromptBuilder {
         }).orElse("");
 
         String structureSection = renderEpisodeStructure(bible.episodeStructure());
+        String mythologySection = renderSeriesMythology(bible);
 
         String emotionalCurve =
                 "=== EMOTIONAL CURVE (assign each scene a phase) ===\n" +
-                "Phase 1 (opening 20%%):  Calm curiosity, easy energy.\n" +
-                "Phase 2 (rising 30%%):   Building wonder or tension.\n" +
-                "Phase 3 (peak 20%%):     Surprise, gasp, laugh-out-loud.\n" +
-                "Phase 4 (release 20%%):  Joy, play, characters interact.\n" +
-                "Phase 5 (closing 10%%):  Quiet warmth, satisfying close.\n" +
+                // Let op: deze string gaat NIET door formatted() (het is een
+                // argument), en SYSTEM_BASE hierboven evenmin (concatenatie) —
+                // dus gewone "%" gebruiken, geen "%%" (anders ziet het model
+                // letterlijk "20%%"; gevonden door het prompt-eval-harnas).
+                "Phase 1 (opening 20%):  Calm curiosity, easy energy.\n" +
+                "Phase 2 (rising 30%):   Building wonder or tension.\n" +
+                "Phase 3 (peak 20%):     Surprise, gasp, laugh-out-loud.\n" +
+                "Phase 4 (release 20%):  Joy, play, characters interact.\n" +
+                "Phase 5 (closing 10%):  Quiet warmth, satisfying close.\n" +
                 "Match scene visualDesc emotion words to the phase.\n";
 
         // Editable story-writer persona (bible personas.storyWriter) sits at the
@@ -512,6 +518,7 @@ public class PromptBuilder {
                 %s
                 %s
                 %s
+                %s
                 === VARIATION DIRECTIVES (apply but stay in cast) ===
                 - HOOK STYLE: %s
                 - STRUCTURE:  %s
@@ -523,6 +530,7 @@ public class PromptBuilder {
                 mainId,
                 locations.isBlank() ? "(no locations defined)" : locations,
                 structureSection,
+                mythologySection,
                 arcSection,
                 emotionalCurve,
                 profile.hook().instruction,
@@ -585,6 +593,38 @@ public class PromptBuilder {
         user.append("\nCall the emit_script tool with the result.");
 
         return new BuiltPrompt(system, List.of(new ChatMessage("user", user.toString())), chosenArcId);
+    }
+
+    /**
+     * Renders the bible's {@code seriesMythology} as a prompt section: the
+     * mandatory opening ritual + per-character running gags. Empty mythology
+     * (older bibles) → blank string, the section simply disappears. Gag keys
+     * are resolved to character names for readability; gags for unknown ids
+     * are skipped (typo-/stale-id-proof).
+     */
+    private String renderSeriesMythology(ChannelBible bible) {
+        SeriesMythology m = bible.seriesMythology();
+        if (m == null || m.isEmpty()) return "";
+        StringBuilder b = new StringBuilder();
+        b.append("=== SERIES MYTHOLOGY (recognisable rituals — the same every episode) ===\n");
+        b.append("Regular viewers wait for these familiar moments; they make episodes\n");
+        b.append("collectable. They must never slow the story down.\n");
+        if (m.openingRitual() != null && !m.openingRitual().isBlank()) {
+            b.append("OPENING RITUAL (mandatory, every episode): ")
+             .append(m.openingRitual().trim()).append('\n');
+        }
+        if (m.runningGags() != null && !m.runningGags().isEmpty()) {
+            b.append("RUNNING GAGS — use a gag ONLY when it genuinely serves the current\n");
+            b.append("beat, AT MOST ONE gag-moment per character per episode, and at most\n");
+            b.append("TWO gags total per episode. Skip a gag sooner than force it. A verbal\n");
+            b.append("gag counts toward the verbal-tic-dosing budget (it REPLACES that\n");
+            b.append("character's tic moment, never adds to it):\n");
+            m.runningGags().forEach((id, gag) -> bible.characters().stream()
+                    .filter(c -> c.id().equalsIgnoreCase(id)).findFirst()
+                    .ifPresent(c -> b.append("- ").append(c.name()).append(": ")
+                            .append(gag.trim()).append('\n')));
+        }
+        return b.toString();
     }
 
     private String renderCharacter(BibleCharacter c) {

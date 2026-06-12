@@ -43,12 +43,17 @@ public class BibleLoader {
     @Getter private final java.util.List<String> castIds = new java.util.ArrayList<>();
 
     @PostConstruct
-    public void load() throws IOException {
+    public synchronized void load() throws IOException {
         Path p = Paths.get(biblePath);
         if (!Files.exists(p)) {
             log.warn("Bible not found at {} — thumbnails will use generic cast", p.toAbsolutePath());
             return;
         }
+        // Re-callable (POST /api/v1/bible/reload): the final collections are
+        // mutated in-place below, so clear them first or a reload duplicates
+        // every cast entry.
+        castNames.clear();
+        castIds.clear();
         JsonNode root = yaml.readTree(p.toFile());
         style = root.path("visualStyle").path("description").asText("").trim();
 

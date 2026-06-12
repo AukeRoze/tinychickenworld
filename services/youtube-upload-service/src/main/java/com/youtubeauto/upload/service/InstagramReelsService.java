@@ -108,4 +108,37 @@ public class InstagramReelsService {
             return null;
         }
     }
+
+    /**
+     * Best-effort permalink lookup for a published media id:
+     * {@code GET /{mediaId}?fields=permalink} on the same Graph API client,
+     * version and access token as the publish flow above. Returns the public
+     * {@code https://www.instagram.com/reel/...} URL, or null when the lookup
+     * fails or the field is absent — the publish itself stays successful
+     * either way; callers must treat null as "no link available", not as an
+     * error.
+     */
+    public String fetchPermalink(String mediaId) {
+        if (!enabled || mediaId == null || mediaId.isBlank()) return null;
+        try {
+            JsonNode media = client.get()
+                    .uri(uri -> uri.path("/" + mediaId)
+                            .queryParam("fields", "permalink")
+                            .queryParam("access_token", accessToken)
+                            .build())
+                    .retrieve().bodyToMono(JsonNode.class)
+                    .timeout(Duration.ofSeconds(30))
+                    .block();
+            String permalink = media == null ? "" : media.path("permalink").asText("");
+            if (permalink.isBlank()) {
+                log.info("Instagram permalink lookup for {} returned no permalink", mediaId);
+                return null;
+            }
+            return permalink;
+        } catch (Exception e) {
+            log.warn("Instagram permalink lookup failed for {} (publish itself succeeded): {}",
+                    mediaId, e.getMessage());
+            return null;
+        }
+    }
 }

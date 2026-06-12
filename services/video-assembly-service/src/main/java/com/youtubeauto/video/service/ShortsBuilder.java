@@ -230,34 +230,63 @@ public class ShortsBuilder {
 
     /**
      * Finds the start (seconds) of the most ENERGETIC {@code clipLen}-second
-     * window by scanning short-term loudness (ebur128). Kept after the hook
+     * WINDOW by scanning short-term loudness (ebur128) and sliding a window of
+     * the full clip length over the per-second mean. This picks the segment
+     * with the highest sustained energy — a laugh-and-celebration run — instead
+     * of the single loudest sample (the old behaviour), which one gasp or
+     * music sting in an otherwise quiet stretch could hijack. Seconds without
+     * a loudness reading count as silence (-70 LUFS), so pauses and the outro
+     * fade genuinely pull a window's score down. Kept after the hook
      * ({@code minStart}). Falls back to ~55%% of the master on any failure so a
      * loudness-scan hiccup never breaks the Short.
      */
     private int energeticStart(Path master, int totalSeconds, int clipLen, int minStart, Path workdir) {
         int fallback = Math.max(minStart, Math.min((int) (totalSeconds * 0.55),
                 Math.max(minStart, totalSeconds - clipLen)));
+        if (totalSeconds <= clipLen || minStart >= totalSeconds) return fallback;
         try {
             String out = runner.runFfmpegCaptured(List.of(
                     "-hide_banner", "-i", master.toString(),
                     "-af", "ebur128=metadata=1", "-f", "null", "-"), workdir);
             java.util.regex.Matcher m = java.util.regex.Pattern
                     .compile("t:\\s*([0-9.]+).*?S:\\s*(-?[0-9.]+)").matcher(out);
-            double bestT = -1, bestS = -1e9;
-            double latestStart = totalSeconds - clipLen / 2.0;
+            // Bucket short-term loudness per second of the master.
+            double[] sum = new double[totalSeconds + 1];
+            int[] cnt = new int[totalSeconds + 1];
+            int samples = 0;
             while (m.find()) {
                 double t = Double.parseDouble(m.group(1));
                 double s = Double.parseDouble(m.group(2));
-                if (s < -70) continue;          // silence / start-up ramp
-                if (t < minStart) continue;     // keep it after the hook
-                if (t > latestStart) continue;  // leave room for the full clip
-                if (s > bestS) { bestS = s; bestT = t; }
+                int sec = (int) t;
+                if (sec < 0 || sec > totalSeconds) continue;
+                sum[sec] += Math.max(s, -70.0);   // floor: treat ultra-quiet as silence
+                cnt[sec]++;
+                samples++;
             }
-            if (bestT < 0) return fallback;
-            int start = (int) Math.round(bestT - clipLen / 2.0);
-            start = Math.max(minStart, Math.min(start, Math.max(minStart, totalSeconds - clipLen)));
-            log.info("Short: loudest moment at {}s (S={} LUFS) -> climax start {}s", bestT, bestS, start);
-            return start;
+            if (samples == 0) return fallback;
+            double[] energy = new double[totalSeconds + 1];
+            for (int i = 0; i <= totalSeconds; i++) {
+                energy[i] = cnt[i] > 0 ? sum[i] / cnt[i] : -70.0; // no reading = silence
+            }
+            // Slide the FULL clip window; highest mean wins. O(total*clipLen), tiny.
+            int lastStart = Math.max(minStart, totalSeconds - clipLen);
+            double bestAvg = -1e9;
+            int best = -1;
+            for (int start = minStart; start <= lastStart; start++) {
+                double acc = 0;
+                int n = 0;
+                for (int t = start; t < start + clipLen && t <= totalSeconds; t++) {
+                    acc += energy[t];
+                    n++;
+                }
+                if (n == 0) continue;
+                double avg = acc / n;
+                if (avg > bestAvg) { bestAvg = avg; best = start; }
+            }
+            if (best < 0) return fallback;
+            log.info("Short: most energetic {}s window starts at {}s (mean {} LUFS)",
+                    clipLen, best, String.format(java.util.Locale.ROOT, "%.1f", bestAvg));
+            return best;
         } catch (Exception e) {
             log.warn("Short: loudness scan failed ({}), using {}s", e.getMessage(), fallback);
             return fallback;

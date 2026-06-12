@@ -1,0 +1,15 @@
+-- V27 — Episode-ConsistencyState (Pixar audit, Story B).
+-- Per-job visual canon: right after the image vision-QC pass the orchestrator
+-- elects, per character, the best QC-APPROVED scene still of THIS episode
+-- (fewest characters in frame = least occlusion; hero phases preferred as
+-- tie-break) and persists it here, together with the rendered prop anchors:
+--
+--   {"characters": {"pip": "/workdir/<job>/images/scene_03.png", ...},
+--    "props":      [{"name": "...", "keyword": "...", "imagePath": "..."}]}
+--
+-- Every re-roll path (QC re-roll, Auto-Fix, manual regen, end-stills) attaches
+-- these as extra reference images, so a re-rolled scene matches how THIS
+-- episode already drew the cast — also after a JVM restart. NULL = no canon
+-- yet (legacy jobs / the first generation batch, which IS the canon source):
+-- every code path then behaves exactly as before.
+ALTER TABLE video_jobs ADD COLUMN episode_anchors jsonb;

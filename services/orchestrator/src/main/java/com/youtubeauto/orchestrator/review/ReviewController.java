@@ -9,9 +9,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Approve/reject endpoints invoked by the review mail buttons. Both GET
- * and POST are accepted so a one-click mail link works without JavaScript;
- * a friendlier preview page lives at /review/...
+ * Approve/reject endpoints for the dashboard (POST only). The old GET
+ * variants — kept for one-click mail links — were removed: mail clients and
+ * link-preview bots prefetch GET links and could approve a job unintentionally.
+ * Mail links now go through the signed-token confirm flow instead
+ * ({@link ReviewConfirmController}, GET /api/v1/review/confirm?token=...).
  */
 @RestController
 @RequestMapping("/api/v1/videos/{id}")
@@ -24,18 +26,9 @@ public class ReviewController {
     @PostMapping("/approve")
     public ResponseEntity<Map<String, String>> approvePost(@PathVariable UUID id) { return doApprove(id); }
 
-    @GetMapping("/approve")
-    public ResponseEntity<Map<String, String>> approveGet(@PathVariable UUID id)  { return doApprove(id); }
-
     @PostMapping("/reject")
     public ResponseEntity<Map<String, String>> rejectPost(@PathVariable UUID id,
                                                           @RequestParam(required = false) String reason) {
-        return doReject(id, reason);
-    }
-
-    @GetMapping("/reject")
-    public ResponseEntity<Map<String, String>> rejectGet(@PathVariable UUID id,
-                                                         @RequestParam(required = false) String reason) {
         return doReject(id, reason);
     }
 
@@ -142,8 +135,6 @@ public class ReviewController {
 
     @PostMapping("/lock-all")
     public ResponseEntity<Map<String, String>> lockAll(@PathVariable UUID id) { return doLockAll(id); }
-    @GetMapping("/lock-all")
-    public ResponseEntity<Map<String, String>> lockAllGet(@PathVariable UUID id) { return doLockAll(id); }
 
     /** Permanent delete: row + workdir on disk. Used by the dashboard. */
     @DeleteMapping

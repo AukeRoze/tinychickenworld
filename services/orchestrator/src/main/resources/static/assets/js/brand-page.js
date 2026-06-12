@@ -83,6 +83,36 @@ function wire(kind, videoId, btnId, statusId, recompositeBtnId) {
 wire("intro", "intro-video", "rebuild-intro", "intro-status", "recomposite-intro");
 wire("outro", "outro-video", "rebuild-outro", "outro-status", "recomposite-outro");
 
+// ── Bible hot-reload (stack-breed) ───────────────────────────────────────
+// POST /api/v1/brand/bible/reload → per-service resultaat. Voor handmatige
+// channel.yml-edits; Cast-edits triggeren de reload al automatisch.
+(() => {
+  const btn = document.getElementById("reload-bible");
+  const st = document.getElementById("reload-bible-status");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    if (st) st.textContent = "herladen…";
+    try {
+      const r = await api.post("/api/v1/brand/bible/reload", undefined, { key: "bible-reload" });
+      const entries = Object.entries(r || {});
+      const failed = entries.filter(([, v]) => v !== true).map(([k, v]) => `${k}: ${v}`);
+      if (failed.length === 0) {
+        if (st) st.textContent = `✓ ${entries.length} services herladen`;
+        toast("Bible herladen op alle services", "info");
+      } else {
+        if (st) st.textContent = `⚠ ${failed.join(" · ")}`;
+        toast("Bible deels herladen — zie status", "warn");
+      }
+    } catch (e) {
+      if (st) st.textContent = "mislukt";
+      /* api.js toonde de fout al */
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+
 // ── Audio previews: music library + ambient loops ───────────────────────
 // One row per track with a native <audio> player (preload=none so the page
 // stays light; the file streams on first play). Missing files are flagged so

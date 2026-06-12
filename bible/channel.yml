@@ -261,12 +261,19 @@ colorScript:
 # Edit freely; the compiler falls back to `default` for unknown phases.
 cameraBible:
   default:     { angle: "eye-level", lens: "50mm normal", movement: "subtle slow camera move", focus: "lock focus on the main character", depthOfField: "medium depth, gently soft background" }
-  hook:        { angle: "eye-level", lens: "50mm normal", movement: "slow gentle push-in toward the face", focus: "lock focus on the main character's eyes", depthOfField: "shallow, soft creamy background bokeh" }
+  # Beleid (backlog): Hook = extreme close-up (scène 1), NIET een wide
+  # establishing shot — dichtbij en intiem, de kijker zit óp de emotie.
+  # Het establishing-shot hoort bij de eerste SETUP-scène (auto-regel in
+  # de orchestrator), niet bij de hook.
+  hook:        { angle: "eye-level, framed as an EXTREME close-up on the face", lens: "85mm portrait", movement: "slow gentle push-in toward the face", focus: "lock focus on the main character's eyes", depthOfField: "very shallow, soft creamy background bokeh" }
   setup:       { angle: "eye-level", lens: "35mm", movement: "slow drift", focus: "main character sharp, the world readable behind", depthOfField: "medium depth" }
   development: { angle: "eye-level", lens: "50mm", movement: "subtle slow move", focus: "lock focus on whoever is speaking", depthOfField: "medium depth, soft background" }
-  # Board #20 — gedurfdere taal op de piek: worm's-eye maakt het moment groots
-  # vanuit kuiken-perspectief (alles ís groot als je zo klein bent).
-  climax:      { angle: "dramatic worm's-eye low angle, the world towering above the tiny chicks", lens: "24mm wide", movement: "slow cinematic pull-back revealing the whole scene", focus: "keep the whole flock and setting sharp", depthOfField: "deep focus, everything crisp" }
+  # Board #20 + board-audit climax-preset: de lage hoek blijft (alles ís
+  # groot als je zo klein bent), maar de piek wordt intiemer en dramatischer
+  # gefilmd — langere lens, langzame push-in en ondiepe scherptediepte zodat
+  # de wereld wegsmelt rond het emotionele moment. De brede "reveal" zit al
+  # in de episodeStructure-requirement (wide shot) van de climax-fase zelf.
+  climax:      { angle: "dramatic low angle looking slightly up at the tiny chicks, the moment towering and grand", lens: "85mm long lens", movement: "slow, deliberate cinematic push-in toward the emotional peak", focus: "lock focus on the main character's face at the heart of the moment", depthOfField: "shallow, the background melting into soft bokeh around the peak" }
   resolution:  { angle: "eye-level", lens: "50mm", movement: "very slow, calm drift", focus: "soft focus on the flock together", depthOfField: "medium-shallow, warm soft background" }
   closer:      { angle: "eye-level", lens: "85mm", movement: "very slow, warm push-in", focus: "lock focus on the main character, world melting soft behind", depthOfField: "shallow, dreamy soft background" }
 
@@ -401,6 +408,48 @@ storyArcs:
       - "Wonder (2 scenes): 'are they the same?' debate, Bo confused."
       - "Connect (3 scenes): Mo shows the hidden connection."
       - "Closer (1 scene): Pip looks for connections in other things now."
+
+# ── Serie-mythologie (2026-06-12) ──────────────────────────────────────────
+# Terugkerende rituelen die afleveringen herkenbaar en "verzamelbaar" maken
+# (Bluey/Pocoyo-principe: kinderen wachten op het bekende moment). Gelezen
+# door script-service (BibleLoader → PromptBuilder "SERIES MYTHOLOGY"-sectie).
+# Bewerk hier = andere serie-rituelen, geen rebuild van de promptlogica nodig
+# (wel script-service herstarten: bible wordt bij opstart gecachet).
+seriesMythology:
+  # Vast openingsritueel — ELKE aflevering, in de allereerste hook-scène,
+  # max ~3-4 seconden. Klein genoeg om de hook niet te vertragen, vast genoeg
+  # dat een peuter het kan voorspellen en meedoen.
+  openingRitual: >
+    The "tap-tap-tap hello": Pip pops into the very first frame, taps the
+    screen three times with her wingtip — tap, tap, TAP — each tap a touch
+    bigger, then beams "Hi friends!" (or another signature opener). The
+    three taps are always three; regular viewers tap back. Stage it INSIDE
+    the first hook scene, woven into the hook beat — never as a separate
+    scene, never longer than ~4 seconds.
+  # Eén running gag per personage. Max ÉÉN gag-moment per personage per
+  # aflevering, alleen waar het de beat dient — liever overslaan dan forceren.
+  runningGags:
+    pip: >
+      The hat-shelf: small things end up perched on the brim of Pip's straw
+      hat without her noticing (a petal, a snail, the very pebble she is
+      looking for) — the audience sees it long before she does; she discovers
+      it at the resolution with a delighted gasp. The hat itself NEVER comes
+      off her head.
+    mo: >
+      The stretched count: before any big reveal Mo counts down slowly —
+      "One... two... two-and-a-HALF..." — holding the moment one beat longer
+      than anyone can bear, then the reveal lands. Always exactly one
+      "...-and-a-half" insert, never more.
+    bo: >
+      The mis-hear: once per episode Bo mishears THE key word of the episode
+      and briefly acts out her wrong version ("Did you say RAINBOW or
+      BRAIN-BOW?") before the others gently correct her. The mis-heard word
+      must rhyme or near-rhyme with the real one.
+    duckling: >
+      The mistimed KWAK: Duckling tries his hardest to peep quietly like the
+      chicks, but one squeaky "KWAK!" escapes at the QUIETEST possible moment
+      (mid-hush, mid-sneak, mid-suspense) — surprising even himself. Everyone
+      freezes, then giggles.
 
 # Cast. Three chickens. Each character description is ULTRA SPECIFIC because
 # OpenAI's image gen has weak character consistency between calls — concrete

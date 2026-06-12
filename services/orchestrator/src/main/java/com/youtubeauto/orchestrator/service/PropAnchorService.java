@@ -141,6 +141,69 @@ public class PropAnchorService {
         return out;
     }
 
+    /**
+     * Episode-ConsistencyState (Story B) — pure character-anchor election.
+     *
+     * <p>Picks, per character, the best ALREADY-RENDERED scene still of THIS
+     * episode to act as that character's episode anchor: the exemplar every
+     * later re-roll must visually match (the episode becomes its own canon, on
+     * top of the bible refs). Selection criteria, in order:
+     * <ol>
+     *   <li>fewest characters in the scene — least occlusion, the character is
+     *       biggest and clearest in frame;</li>
+     *   <li>hero phase (hook/climax) preferred on a tie — those beats get the
+     *       most generation care;</li>
+     *   <li>lowest seq on a remaining tie — deterministic.</li>
+     * </ol>
+     *
+     * <p>Pure and static on purpose: no I/O of its own (file existence comes in
+     * as a predicate), so it unit-tests without Spring/Mockito and is immune to
+     * this service being mocked. Scenes without an image, or whose image file
+     * the predicate rejects (e.g. deleted from disk), never become an anchor —
+     * with nothing usable the result is empty and callers keep legacy behaviour.
+     *
+     * @param scenes      the job's assembly scenes (post vision-QC, so the
+     *                    stills are the approved ones)
+     * @param imageExists existence check for an image path (injected for
+     *                    testability; null-safe — a null predicate accepts all)
+     * @return characterId (lowercased) → scene-still path; empty when nothing qualifies
+     */
+    public static Map<String, String> selectEpisodeAnchors(
+            List<com.youtubeauto.orchestrator.domain.SceneDto> scenes,
+            java.util.function.Predicate<String> imageExists) {
+        Map<String, String> out = new java.util.TreeMap<>();
+        if (scenes == null || scenes.isEmpty()) return out;
+        record Best(int castSize, boolean hero, int seq, String path) {}
+        Map<String, Best> best = new HashMap<>();
+        for (com.youtubeauto.orchestrator.domain.SceneDto s : scenes) {
+            if (s == null || !s.hasImage()) continue;
+            String path = s.getImagePath();
+            try {
+                if (imageExists != null && !imageExists.test(path)) continue;
+            } catch (Exception e) {
+                continue; // a failing existence check just disqualifies the still
+            }
+            List<String> cast = s.charactersOrEmpty();
+            if (cast.isEmpty()) continue;
+            int castSize = cast.size();
+            String phase = s.getPhase() == null ? "" : s.getPhase().toLowerCase();
+            boolean hero = phase.equals("hook") || phase.equals("climax");
+            int seq = s.getSeq() == null ? Integer.MAX_VALUE : s.getSeq();
+            for (String c : cast) {
+                if (c == null || c.isBlank()) continue;
+                String id = c.trim().toLowerCase();
+                Best cur = best.get(id);
+                boolean better = cur == null
+                        || castSize < cur.castSize()
+                        || (castSize == cur.castSize() && hero && !cur.hero())
+                        || (castSize == cur.castSize() && hero == cur.hero() && seq < cur.seq());
+                if (better) best.put(id, new Best(castSize, hero, seq, path));
+            }
+        }
+        best.forEach((id, b) -> out.put(id, b.path()));
+        return out;
+    }
+
     /** Render one isolated prop reference image under a throwaway job id. */
     private String renderAnchor(Prop p, String imageFormat) {
         Map<String, Object> scene = new HashMap<>();

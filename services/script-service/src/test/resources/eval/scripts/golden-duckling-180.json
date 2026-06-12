@@ -1,0 +1,260 @@
+{
+  "title": "Duckling's Little Boat Trick",
+  "hook": "Splash — who's on the pond?",
+  "cta": "Shout KWAK out loud — I'm listening! And ask a grown-up to subscribe.",
+  "scenes": [
+    {
+      "seq": 1, "phase": "hook", "locationId": "barnyard", "characters": ["pip"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Oh! Oh oh oh! Splash — did you hear that?" }],
+      "visualDesc": "Extreme close-up of Pip's astonished face, beak open, huge shining eyes turned toward an off-screen sound, her straw hat tilted mid-spin of the head.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Pip hears the splash", "emotion": "surprise (5/5)", "motionSpeed": "natural",
+      "endPose": "leaning toward the sound, beak open",
+      "motionDesc": "Camera pushes in slowly; Pip's head whips toward the pond, eyes going huge; a few daisy petals drift past her face."
+    },
+    {
+      "seq": 2, "phase": "hook", "locationId": "barnyard", "characters": ["pip"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Duckling is ON the water!" }],
+      "visualDesc": "Medium shot pulling back: beyond the picket fence, a tiny lemon-yellow shape bobs on the distant pond while Pip points with her whole wing, beak agape.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Reveal what Pip reacts to", "emotion": "wonder (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 3, "phase": "setup", "locationId": "porch", "characters": ["pip"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "Chicks go plop in water. Right?" }],
+      "visualDesc": "Wide shot of Pip pacing the porch boards in puzzled circles, talking with open beak, the straw welcome mat and a tin watering can beside her.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Frame the puzzle", "emotion": "curious (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 4, "phase": "setup", "locationId": "porch", "characters": ["pip"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "I will ask Mo. Come on!" }],
+      "visualDesc": "Low angle of Pip hopping off the porch step with determined eyes, wings pumping, the seashell wind-chime swaying behind her.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Decision beat", "emotion": "determined (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 5, "phase": "setup", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 7,
+      "lines": [
+        { "speaker": "pip", "text": "Mo! Duckling sits on the pond!" },
+        { "speaker": "mo", "text": "Hmm. Show me." }
+      ],
+      "visualDesc": "Medium two-shot among the sunflowers: Pip gesturing wildly toward the pond with open beak, Mo tilting his head in calm thought, a ladybug crossing a leaf.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Mo joins", "emotion": "excited (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 6, "phase": "setup", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "He's a... a BOAT-BIRD!" }],
+      "visualDesc": "Close-up of Pip inventing the word with sparkling eyes and wings flung wide, Mo's amused calm face behind a sunflower stem.",
+      "timeOfDay": "midday", "weather": "clear",
+      "goal": "Plant the made-up name gag", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 7, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "The path goes down to the pond." }],
+      "visualDesc": "Over-the-shoulder shot past Pip: Mo walking ahead on the winding pebble path, pointing a wing toward the glinting water below, moss at the path edges.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Travel beat", "emotion": "calm (2/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 8, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Hurry hurry! Tiny webby steps!" }],
+      "visualDesc": "Close-up of small wet webbed footprints pressed between the pebbles, Pip's gasping face leaning in above them, Mo's legs at the frame edge.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Webbed footprint clue", "emotion": "gasping (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 9, "phase": "development", "locationId": "pond", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "There! He floats like a leaf!" }],
+      "visualDesc": "Wide shot of the pond: Duckling bobbing serenely between two lily pads in the distance, Pip frozen mid-point on the shore, Mo beside her on the footbridge.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "See the floating up close", "emotion": "wide-eyed (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 10, "phase": "development", "locationId": "pond", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "Watch his little feet paddle." }],
+      "visualDesc": "Close-up at water level: tiny orange webbed feet paddling under the clear surface, ripples spreading, Mo's calm observing reflection above them.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "The secret is the feet", "emotion": "thoughtful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 11, "phase": "development", "locationId": "willowGrove", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "He makes the water go pitter-patter." }],
+      "visualDesc": "Medium shot under the willow curtain at the pond's edge: Pip listening with a cupped wing, dappled light dancing on the moss around her and Mo.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Sound of paddling", "emotion": "curious (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 12, "phase": "development", "locationId": "willowGrove", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "I will fetch my notebook. Wait here." }],
+      "visualDesc": "Wide shot: Mo heading off through the hanging willow branches with a little wave, Pip staying behind watching the water, a hollow log beside her.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Mo exits with a clear beat", "emotion": "content (2/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 13, "phase": "development", "locationId": "pebblePath", "characters": ["pip", "duckling"], "durationSeconds": 5,
+      "lines": [{ "speaker": "duckling", "text": "Kwak!" }],
+      "visualDesc": "Medium shot: Duckling waddle-bounces up the pebble path toward Pip, still dripping, flapping both stubby wings in delight, leaving tiny wet footprints.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Duckling joins Pip", "emotion": "tender (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 14, "phase": "development", "locationId": "garden", "characters": ["pip", "duckling"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "A kwak? A KWAK-QUACK?!" }],
+      "visualDesc": "Close-up of Pip playfully mimicking the sound with a scrunched face, Duckling blinking up at her adoringly between the daisies, a bee drifting past.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Playful echo gag", "emotion": "giggling (4/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 15, "phase": "development", "locationId": "garden", "characters": ["pip", "duckling"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Can you teach me to float?" }],
+      "visualDesc": "Medium two-shot among sunflower stems: Pip crouching to Duckling's height with a hopeful smile, Duckling tilting his whole round body sideways in thought.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Pip wants the trick", "emotion": "hopeful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 16, "phase": "development", "locationId": "bigOak", "characters": ["pip", "duckling"], "durationSeconds": 5,
+      "lines": [{ "speaker": "duckling", "text": "Pip! Pip!" }],
+      "visualDesc": "Wide shot at the Big Oak's roots: Duckling tugging Pip's wing toward a rain-barrel puddle among the acorns, the knot-face on the trunk looking on kindly.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Duckling leads the lesson", "emotion": "eager (3/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 17, "phase": "development", "locationId": "bigOak", "characters": ["pip", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Your feathers are puffy like mine." }],
+      "visualDesc": "Close-up comparison: Pip gently pressing her wingtip into Duckling's lemon-yellow down, then her own cream fluff, both heads bent together studying.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Compare feathers", "emotion": "thoughtful (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 18, "phase": "development", "locationId": "hills", "characters": ["pip", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "But your feet are little paddles." }],
+      "visualDesc": "Low angle on the grassy slope: Duckling proudly lifting one orange webbed foot, wobbling, while Pip holds up her own pointy-toed foot beside it.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Spot the difference", "emotion": "amazed (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 19, "phase": "development", "locationId": "hills", "characters": ["pip", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "duckling", "text": "Kwak?" }],
+      "visualDesc": "Medium two-shot on the hillside: Duckling tipping over mid-proud-pose into the clover, popping back up unhurt, Pip catching a laugh behind her wing.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Gentle baby comedy", "emotion": "giggling (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 20, "phase": "development", "locationId": "bigOak", "characters": ["pip", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Can YOU see his webby feet?" }],
+      "visualDesc": "Medium shot of Pip looking straight at the viewer with a warm smile, wing presenting Duckling's lifted webbed foot, waiting patiently for the answer.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Participation beat one", "emotion": "warm (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 21, "phase": "development", "locationId": "bigOak", "characters": ["pip", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Yes! Wide like two tiny boats." }],
+      "visualDesc": "Close-up of Duckling's webbed feet side by side on a flat root, framed like two little rowboats, Pip's delighted face leaning in above them.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Viewer answer confirmed", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 22, "phase": "climax", "locationId": "hills", "characters": ["pip", "mo", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "mo", "text": "One... two... two-and-a-HALF..." }],
+      "visualDesc": "Wide shot above the pond-side slope: Mo back with raised wing counting down, Pip bouncing with anticipation, Duckling poised at the water's edge like a diver.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Mo's stretched count holds the moment", "emotion": "anticipation (4/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 23, "phase": "climax", "locationId": "hills", "characters": ["pip", "mo", "duckling"], "durationSeconds": 6,
+      "lines": [],
+      "visualDesc": "Duckling pushes off and glides out onto the golden water in perfect silence; Pip's eyes go enormous and she rises slowly onto her tiptoes, breath held, both wings drifting upward, while Mo stands perfectly still and the ripples spread in shining rings behind the tiny floating duck.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Silent visual beat: the float", "emotion": "awe (5/5)", "motionSpeed": "slow",
+      "endPose": "on tiptoes, wings half-raised, eyes huge",
+      "motionDesc": "Camera glides low across the water following Duckling's serene float; Pip rises onto tiptoes in the background; golden ripples spread through the frame."
+    },
+    {
+      "seq": 24, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "duckling"], "durationSeconds": 7,
+      "lines": [{ "speaker": "pip", "text": "He IS a boat-bird! Ducks can float!" }],
+      "visualDesc": "Low angle of Pip cheering with wings flung wide on the bank below the Big Oak, Mo beaming, Duckling paddling a proud little circle in the sparkling water.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Callback payoff: boat-bird", "emotion": "joy (5/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 25, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "duckling"], "durationSeconds": 7,
+      "lines": [{ "speaker": "duckling", "text": "KWAK! Wheee!" }],
+      "visualDesc": "Medium shot of Duckling spinning a happy circle on the water, wings flapping spray into the golden light, Pip and Mo laughing on the mossy bank.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Shared celebration", "emotion": "gleeful (5/5)", "motionSpeed": "quick",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 26, "phase": "climax", "locationId": "bigOak", "characters": ["pip", "mo", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Float, little brother, float!" }],
+      "visualDesc": "Wide postcard shot: Duckling gliding proudly past the footbridge, Pip and Mo waving from the bank under the oak, the whole valley glowing golden.",
+      "timeOfDay": "goldenHour", "weather": "clear",
+      "goal": "Peak joy postcard moment", "emotion": "joy (5/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 27, "phase": "resolution", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "So duck feet push the water." }],
+      "visualDesc": "Medium shot of Pip explaining with proud little paddling gestures of her wings, Mo nodding warmly beside the sunflowers as dusk settles in.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Pip restates the lesson in kid words", "emotion": "content (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 28, "phase": "resolution", "locationId": "garden", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "mo", "text": "It's a bit like when a leaf rides the creek." }],
+      "visualDesc": "Close-up of Mo gesturing gently toward the little creek beyond the fence, a calm knowing smile, his red scarf catching the last warm light.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Mo's everyday comparison lands", "emotion": "tender (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 29, "phase": "resolution", "locationId": "porch", "characters": ["pip", "mo"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "Who is our best little floater?" }],
+      "visualDesc": "Medium shot on the porch: Pip looking right at the viewer with a warm expectant smile, Mo settled on the carved bench, the wind-chime glinting.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Participation beat two", "emotion": "warm (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 30, "phase": "resolution", "locationId": "porch", "characters": ["pip", "mo"], "durationSeconds": 5,
+      "lines": [{ "speaker": "pip", "text": "Yes! Duckling! You said it!" }],
+      "visualDesc": "Close-up of Pip clapping her wingtips at the viewer's answer, Mo giving one slow approving blink, the first fireflies blinking on behind them.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "React as if the viewer answered", "emotion": "delighted (4/5)", "motionSpeed": "natural",
+      "endPose": "", "motionDesc": ""
+    },
+    {
+      "seq": 31, "phase": "closer", "locationId": "barnyard", "characters": ["pip", "mo", "duckling"], "durationSeconds": 6,
+      "lines": [{ "speaker": "pip", "text": "What a wonderful day! See you tomorrow!" }],
+      "visualDesc": "Slow pull-back of Pip and Mo waving by the barn at dusk with sleepy Duckling tucked between them, the windmill turning gently against the first stars.",
+      "timeOfDay": "dusk", "weather": "clear",
+      "goal": "Warm signature goodbye", "emotion": "contented love (3/5)", "motionSpeed": "slow",
+      "endPose": "", "motionDesc": ""
+    }
+  ]
+}

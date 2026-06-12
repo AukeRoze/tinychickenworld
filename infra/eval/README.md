@@ -1,3 +1,73 @@
+# Offline eval-harnas (JUnit — €0, geen service nodig)
+
+De goedkoopste en snelste trap van de eval-ladder: een **deterministische
+JUnit-laag** in script-service die zonder LLM-call, zonder netwerk en zonder
+draaiende stack pint wat een prompt- of validatorwijziging nooit stuk mag
+maken. Draai dit ALTIJD eerst; de LLM-eval hieronder (`run-eval.py`) en de
+golden-test zijn de duurdere trappen erboven.
+
+```bash
+mvn -pl services/script-service test -Dtest=*EvalHarness*   # alleen het harnas
+mvn -pl services/script-service test                        # draait het ook mee
+# rapport: services/script-service/target/eval-report.md
+```
+
+## Wat het pint
+
+**`PromptEvalHarness`** bouwt voor 8 bevroren briefs
+(`src/test/resources/eval/briefs.yaml` — mystery, first_time, song-achtig,
+kort 60s, lang 240s, met/zonder Duckling) de volledige system+user-prompt via
+de **echte** `PromptBuilder` + de **echte** `bible/channel.yml`, en assert:
+
+- alle verplichte secties aanwezig (EPISODE STRUCTURE, SERIES MYTHOLOGY incl.
+  opening-ritual + running gags, STORY ARC, CAST, LOCATIONS, VARIATION
+  DIRECTIVES, STRICT RULES-kern: CTA REALITY CHECK / TIC DOSING /
+  MICRO-CONFLICT / PARENT WINK / INSERT SHOTS);
+- geen onopgeloste placeholders (`%s`, `%d`, kale `null`, lege fallbacks);
+- promptlengte onder budget (~12.000 tokens, chars/4) + sectie-groottes in
+  het rapport zodat sluipende groei zichtbaar wordt;
+- elke bible-character (id + naam) staat in de CAST-sectie, elke locatie in
+  LOCATIONS;
+- per brief: de gekozen arc == de gevraagde arc en alle arc-beats uit de
+  bible staan letterlijk in de prompt.
+
+**`ScriptEvalHarness`** haalt twee golden scripts
+(`src/test/resources/eval/scripts/*.json`, structureel geldig tegen de echte
+episodeStructure: 31 scènes, ~178s, locatie-rotatie, cast-continuïteit, één
+stille beat, comedy-contract) door de volledige offline QA-keten van de
+orchestrator — `StructureValidator` + `PacingValidator` + `ComedyValidator` —
+en eist **pass**. Acht bewust kapotte mutanten van diezelfde golden (duur
++30%, alles in één locatie, geen closer, climax weggehaald, climax vooraan,
+cast-flicker, 4.3 woorden/sec, stille beat weg) moeten **falen met de
+verwachte violation-string**. Wie een validator versoepelt, ziet hier rood; wie hem
+aanscherpt, ziet de golden falen en werkt de fixture bewust bij.
+
+Eerlijke kanttekening (gevonden bij de bouw): `StructureValidator` checkte
+fase-VOLGORDE aanvankelijk niet, behalve "laatste scène = closer".
+**GEFIXT**: er is nu een harde niet-dalende-fase-index-check
+("Phase order violated: …"), vastgepind door de "climax vooraan"-mutant.
+Nog open: de system-prompt bevat letterlijk `%%` (uit `±15%%`/`20%%` in
+niet-geformatteerde stukken van `PromptBuilder`) — het harnas pint dat
+bewust níet vast, maar het is een bestaand schoonheidsfoutje richting het
+model.
+
+## Brief of golden toevoegen
+
+- **Brief**: blokje toevoegen aan `briefs.yaml` (arc-id moet in bible
+  `storyArcs` bestaan, anders faalt het harnas bewust). Bestaande briefs niet
+  wijzigen — dat reset de diff-baarheid van het rapport.
+- **Golden script**: nieuwe json in `eval/scripts/`, laden in
+  `ScriptEvalHarness` en als GOED-case asserten. Reken de faseaantallen/-duren
+  na tegen `bible/channel.yml episodeStructure` vóór je commit.
+
+## De afspraak
+
+**Elke promptwijziging = harnas draaien + `target/eval-report.md` diffen**
+(vóór en ná). Groen + een verklaarbare diff → dan pas de duurdere trappen:
+`run-eval.py` voor kwaliteitsscores, golden-test voor de hele pipeline.
+
+---
+
 # Script eval harness (text-only)
 
 A cheap, objective safety net for changing the script prompts. Runs a **fixed**
@@ -21,8 +91,10 @@ No images, no Veo. Just Haiku script calls → pennies.
 ## Use
 
 ```bash
-# 1) script-service must be running
-docker compose up -d script-service        # or the whole stack
+# 1) script-service must be running WITH port 8081 published on the host.
+#    The base compose file keeps 8081 internal-only (port-mapping cleanup
+#    2026-06-12), so add the dev-ports override:
+docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d script-service
 
 # 2) set a baseline ONCE on the current prompts
 python infra/eval/run-eval.py --save-baseline
@@ -38,7 +110,7 @@ Useful flags:
 - `--runs 3` — average N runs per brief (script-gen is stochastic; 2–3 smooths noise; the report also prints the run-to-run stdev on the critic axis so you can see how much is real signal).
 - `--save-baseline` — promote the current run to the new baseline.
 - `--regress-eps 3` — points an axis may drop before it counts as a regression (default 3).
-- `--base-url http://host:8081` — point at a non-default host.
+- `--base-url http://host:8081` — point at a non-default host (the default `http://localhost:8081` only works when script-service runs with the `docker-compose.dev-ports.yml` override).
 - `--timeout 300` — per-script wait before giving up.
 
 ## What you get

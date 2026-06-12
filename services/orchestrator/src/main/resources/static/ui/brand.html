@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Brand — Tiny Chicken World</title>
   <link rel="stylesheet" href="/assets/css/dashboard.css">
-  <script>
-    (function () {
-      var saved = null;
-      try { saved = localStorage.getItem('theme'); } catch (e) {}
-      var sys = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.setAttribute('data-theme', saved || (sys ? 'dark' : 'light'));
-    })();
-  </script>
+  <!-- Sync (render-blocking) on purpose: theme.js sets data-theme pre-paint,
+       so dark mode doesn't flash white (replaces the old per-page inline bootstrap). -->
+  <script src="/assets/js/theme.js"></script>
 </head>
 <body class="ui-app">
   <div id="topbar"></div>
@@ -74,6 +69,19 @@
 
   <div class="brand-grid" style="margin-top:14px">
     <div class="card" style="grid-column:1 / -1">
+      <h3 class="card-title">📖 Bible</h3>
+      <p class="sub small">Channel.yml met de hand bewerkt (DNA, mythologie, camera-bible, …)?
+      Herlaad de bible-caches stack-breed — geen herstarts meer nodig.
+      Cast-edits op de Cast-pagina doen dit al automatisch.</p>
+      <div class="filter-row">
+        <button class="btn" id="reload-bible">🔄 Reload bible (alle services)</button>
+        <span id="reload-bible-status" class="small" style="color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand-grid" style="margin-top:14px">
+    <div class="card" style="grid-column:1 / -1">
       <h3 class="card-title">🎬 Scène-overgangen</h3>
       <p class="sub small">Per verhaalfase: het overgangstype (ffmpeg xfade) en de duur.
       Wijzigingen landen via hot-reload binnen ±1 minuut — geen rebuild, gewoon
@@ -82,10 +90,9 @@
     </div>
   </div>
 
-  <div id="toast-host" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:1000"></div>
+  <div id="toast-host"></div>
 
   <script src="/assets/js/nav.js"></script>
-  <script src="/assets/js/theme.js"></script>
   <script type="module" src="/assets/js/brand-page.js"></script>
 </body>
 </html>

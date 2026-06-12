@@ -1,6 +1,15 @@
 spring:
   application:
     name: video-assembly-service
+  # Virtual threads: an assemble request blocks its request thread on ffmpeg
+  # for up to perInvocationTimeoutMinutes (30) — Process.waitFor parks the
+  # virtual thread cleanly. Encode concurrency stays governed by the
+  # java.util.concurrent.Semaphore in FfmpegRunner (virtual-thread friendly),
+  # which already drains stderr on Thread.startVirtualThread. Synchronized
+  # code (MotionSelector.next, the lazy gate init) is in-memory/microseconds.
+  threads:
+    virtual:
+      enabled: true
 
 server:
   port: 8082
@@ -41,3 +50,24 @@ app:
     colorGrade: ${COLOR_GRADE:warm-pixar}   # warm-pixar | none
     titleCard:  ${TITLE_CARD:auto}          # auto | none (animated opening title)
     endCard:    ${END_CARD:subscribe}       # subscribe | none (animated end card)
+    # Deliberate music dip (dB, negative) on the held-silence beat: the
+    # scripted silent scene (no narration / no line timings), or the start of
+    # the climax phase when no silent scene exists. Applied on top of the
+    # sidechain duck, with soft 0.8s edge fades. 0 (or anything >= 0) = off.
+    # Skipped automatically when scene timing is unknown — never breaks a render.
+    climax-dip-db: ${CLIMAX_DIP_DB:-12}
+    # Beat-sheet score plan (Pixar audit E2): per-phase music level in dB
+    # relative to the music bed, "phase:dB" pairs. The plan is the BASE volume
+    # arc over the whole track — quiet under setup/development (air for the
+    # dialogue), full at the hook, lifted at the climax, settled under the
+    # resolution, soft under the closer (the final-encode fade-out takes it
+    # the rest of the way down). The climax swell and the silence dip stack
+    # ON TOP of this arc. Unknown phases / malformed pairs are ignored;
+    # EMPTY = off → flat bed + swell + dip, exactly the pre-E2 behaviour.
+    score-plan: "${SCORE_PLAN:hook:0,setup:-2,development:-1.5,climax:+1.5,resolution:-1,closer:-3}"
+    # Chunked transition-concat fallback (OOM guard): when the full xfade
+    # filtergraph fails (e.g. exit=137 over ~29 1080p clips), retry the same
+    # transitions in bounded passes of this many clips before falling back to
+    # the bare (no-overlay) concat. Memory scales with the chunk size instead
+    # of the total clip count. <= 1 disables the chunked level (straight to bare).
+    concat-chunk-size: ${CONCAT_CHUNK_SIZE:8}

@@ -92,6 +92,20 @@ public class QualityScorer {
                         && Files.exists(Paths.get(job.getVideoPath() == null ? "" : job.getVideoPath())), 10,
                 "Final MP4 on disk");
 
+        // Render-duur-gate (soft QA factor): the orchestrator compares the
+        // rendered master against the requested target (+ intro/outro bumpers)
+        // after assembly and stores the verdict in metricsJson.withinTarget.
+        // Like "Story structure validated": unknown (no metrics yet) = not ok.
+        // Purely informational — this never fails or blocks anything.
+        Boolean withinTarget = readWithinTarget(job.getMetricsJson());
+        addCheck(checks, "Master duration within 10% of target",
+                Boolean.TRUE.equals(withinTarget), 5,
+                withinTarget == null
+                        ? "No duration metrics yet"
+                        : (withinTarget
+                                ? "Rendered length matches target ±10%"
+                                : "Rendered length off target by >10% — see duration-gate insight"));
+
         // Captions present either as a soft YouTube track (preferred — clean
         // image) or burned in. Either counts.
         boolean hasCaptions = (job.getCaptionsPath() != null && !job.getCaptionsPath().isBlank())
@@ -129,5 +143,20 @@ public class QualityScorer {
 
     private void addCheck(List<Check> out, String label, boolean ok, int weight, String detail) {
         out.add(new Check(label, ok, weight, detail));
+    }
+
+    /** Reads metricsJson.withinTarget (written by the orchestrator's
+     *  render-duur-gate after assembly). Null when the metrics are absent,
+     *  unparsable, or the key was never written. Never throws. */
+    private Boolean readWithinTarget(String metricsJson) {
+        if (metricsJson == null || metricsJson.isBlank()) return null;
+        try {
+            com.fasterxml.jackson.databind.JsonNode m =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(metricsJson);
+            com.fasterxml.jackson.databind.JsonNode w = m.path("withinTarget");
+            return w.isBoolean() ? w.asBoolean() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

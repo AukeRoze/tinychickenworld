@@ -170,7 +170,9 @@ public class OutroRebuildService {
             scene.put("negativePrompt", IntroRebuildService.IDENTITY_NEG);
             scene.put("durationSeconds", 6);
             if (model != null && !model.isBlank()) scene.put("modelOverride", model.trim());
-            JsonNode clips = videoGenClient.generate(job, "landscape", List.of(scene));
+            // Async submit + poll (drop-in: same args, same result shape) — no
+            // minutes-long open HTTP connection for a proxy/idle-timeout to kill.
+            JsonNode clips = videoGenClient.generateAsync(job, "landscape", List.of(scene));
             JsonNode c0 = clips.path("clips").path(0);
             if (!"OK".equalsIgnoreCase(c0.path("status").asText()) || c0.path("clipPath").asText("").isBlank()) {
                 throw new IllegalStateException("Veo clip not OK: " + c0.path("status").asText()

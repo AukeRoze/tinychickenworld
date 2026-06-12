@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.service.BibleEditor;
+import com.youtubeauto.orchestrator.service.BibleReloadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -33,6 +34,17 @@ public class BrandController {
 
     private final OrchestratorProperties props;
     private final BibleEditor bibleEditor;
+    private final BibleReloadService bibleReloadService;
+
+    /**
+     * Hot-reload van de bible over de hele stack (orchestrator-caches +
+     * script-/voice-/image-/thumbnail-/videogen-service). Voor handmatige
+     * channel.yml-edits; Cast-edits hieronder triggeren dit al automatisch.
+     */
+    @PostMapping("/bible/reload")
+    public Map<String, Object> reloadBible() {
+        return bibleReloadService.reloadAll();
+    }
 
     private Path bibleDir() {
         Path bible = Paths.get(props.bible().path());          // .../bible/channel.yml
@@ -352,8 +364,12 @@ public class BrandController {
                                                                @RequestBody Map<String, String> fields) {
         try {
             List<String> changed = bibleEditor.updateCharacter(id, fields == null ? Map.of() : fields);
+            // Hot-reload de bible-caches stack-breed — de edit stuurt nieuwe
+            // renders direct, geen herstart meer nodig.
+            Map<String, Object> reload = bibleReloadService.reloadAll();
             return ResponseEntity.ok(Map.of("id", id, "changed", changed, "result", "UPDATED",
-                    "note", "Cast page updates now; restart orchestrator + image-service for new renders."));
+                    "bibleReload", reload,
+                    "note", "Bible hot-reloaded across services; new renders use this edit immediately."));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
@@ -383,8 +399,11 @@ public class BrandController {
                 return ResponseEntity.badRequest().body(Map.of("error", "not a valid PNG file"));
             }
             Path saved = bibleEditor.saveReference(id, bytes);
+            // Hot-reload zodat de image-service de nieuwe referentie meteen pakt.
+            Map<String, Object> reload = bibleReloadService.reloadAll();
             return ResponseEntity.ok(Map.of("id", id, "result", "UPLOADED", "path", saved.toString(),
-                    "note", "Reference updated; restart image-service for new renders to use it."));
+                    "bibleReload", reload,
+                    "note", "Reference updated and bible hot-reloaded; new renders use it immediately."));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {

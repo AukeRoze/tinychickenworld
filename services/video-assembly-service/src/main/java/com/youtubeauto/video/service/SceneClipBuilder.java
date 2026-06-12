@@ -27,20 +27,79 @@ public class SceneClipBuilder {
     private final VideoProperties props;
 
     /** Optional ambient-effects overlay (drifting fireflies / butterflies /
-     *  petals / bokeh) composited over every Ken Burns scene to add life to an
-     *  otherwise-still image. Expects a LOOPING clip with a transparent
-     *  background. Dormant unless one of these exists — the default render is
-     *  untouched. Drop a loop here to enable. (Per-location/time-of-day
-     *  selection is a backlog item; this is the single global layer.) */
-    private static final String[] AMBIENT_FX_PATHS = {
-            "/bible/fx/ambient.mov",
-            "/bible/fx/ambient.webm"
-    };
+     *  petals / rain drops / bokeh) composited over every Ken Burns scene to
+     *  add life to an otherwise-still image. Expects a LOOPING clip with a
+     *  transparent background. Dormant unless an asset exists — the default
+     *  render is untouched. See {@link #resolveAmbientFx} for the
+     *  per-scene (weather → time-of-day → location → global) selection. */
+    private static final String FX_ROOT = "/bible/fx";
+    private static final String[] FX_EXTENSIONS = {".mov", ".webm"};
     private static final double AMBIENT_FX_OPACITY = 0.8;
 
-    private String ambientFxPath() {
-        for (String p : AMBIENT_FX_PATHS) {
-            if (java.nio.file.Files.exists(java.nio.file.Paths.get(p))) return p;
+    /** Files.exists() cache for the FX lookups — without it a 30-scene render
+     *  does up to 8 stat calls per scene. Refreshed every TTL so a freshly
+     *  dropped asset is picked up by the next render without a restart
+     *  (the whole feature is "drop a file and it lives" — no rebuild). */
+    private static final long FX_CACHE_TTL_MS = 60_000;
+    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> fxExistsCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile long fxCacheStampMs = 0;
+
+    private boolean fxExists(String path) {
+        long now = System.currentTimeMillis();
+        if (now - fxCacheStampMs > FX_CACHE_TTL_MS) {
+            fxExistsCache.clear();          // benign race: worst case one extra stat
+            fxCacheStampMs = now;
+        }
+        return fxExistsCache.computeIfAbsent(path,
+                p -> java.nio.file.Files.exists(java.nio.file.Paths.get(p)));
+    }
+
+    /** First existing {@code {dir}/{id}.mov|.webm}, or null. Ids originate from
+     *  the script LLM, so anything that isn't a plain token is rejected rather
+     *  than ever joining a path outside /bible/fx. */
+    private String firstExistingFx(String dir, String id) {
+        if (id == null || id.isBlank() || !id.matches("[A-Za-z0-9_-]+")) return null;
+        for (String ext : FX_EXTENSIONS) {
+            String candidate = FX_ROOT + "/" + dir + "/" + id + ext;
+            if (fxExists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /**
+     * Resolve the ambient FX overlay for ONE scene. First existing file wins
+     * (each level tries .mov then .webm):
+     * <ol>
+     *   <li>{@code /bible/fx/weather/{weather}.*}     — weather beats everything
+     *       (lightRain → drops on the lens);</li>
+     *   <li>{@code /bible/fx/time/{timeOfDay}.*}      — night → fireflies / stars;</li>
+     *   <li>{@code /bible/fx/location/{locationId}.*} — garden → butterflies;</li>
+     *   <li>{@code /bible/fx/ambient.*}               — the original single global
+     *       layer (backwards-compat).</li>
+     * </ol>
+     * Every level is dormant-until-asset: with an empty {@code bible/fx/} the
+     * render is identical to before.
+     *
+     * <p><b>Effect ↔ sound coupling.</b> The matching SOUND bed is mixed per
+     * scene by the voice-service's AmbientMixer from
+     * {@code bible/sfx/ambient/{locationId}.mp3} — so when a LOCATION overlay
+     * matches and that mp3 exists, picture and sound are already coupled by
+     * the shared locationId; nothing extra to do here.
+     * Weather is coupled the same way: the orchestrator passes the scene's
+     * weather in the voice payload and the voice-service AmbientMixer lets a
+     * {@code bible/sfx/ambient/{weather}.mp3} bed override the location bed —
+     * mirroring the weather-beats-everything order below. Nothing extra to do
+     * here either; see bible/sfx/README.md.
+     */
+    private String resolveAmbientFx(SceneInput scene) {
+        String p;
+        if ((p = firstExistingFx("weather", scene.weather())) != null) return p;
+        if ((p = firstExistingFx("time", scene.timeOfDay())) != null) return p;
+        if ((p = firstExistingFx("location", scene.locationId())) != null) return p;
+        for (String ext : FX_EXTENSIONS) {
+            String legacy = FX_ROOT + "/ambient" + ext;
+            if (fxExists(legacy)) return legacy;
         }
         return null;
     }
@@ -80,7 +139,12 @@ public class SceneClipBuilder {
         int frames = dur * fps;
 
         String motionChain = motion.filterChain(frames, w, h, fps);
-        String fx = ambientFxPath();
+        String fx = resolveAmbientFx(scene);
+        if (fx != null) {
+            // One line per scene, only on a match — silent when bible/fx is empty.
+            log.info("scene seq={} ambient FX overlay {} (weather={} timeOfDay={} location={})",
+                    scene.seq(), fx, scene.weather(), scene.timeOfDay(), scene.locationId());
+        }
 
         String filter;
         List<String> args = new java.util.ArrayList<>(List.of("-y",

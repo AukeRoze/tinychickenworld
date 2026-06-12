@@ -2,6 +2,17 @@
 # back after a crash or host-reboot, and `docker compose ps` shows real health.
 # The Java healthchecks use bash's /dev/tcp (present in the temurin images) so
 # no curl/wget needs to be installed.
+#
+# Port policy (backlog 2026-06-12): only the orchestrator (8080) and the
+# one-time YouTube OAuth callback (8089) are published on the host. Every
+# other service is internal-only via `expose:` — containers reach each other
+# through service names (http://image-service:8084 etc.), which needs no host
+# mapping at all. Need a service port on the host for debugging or for the
+# direct-call scripts (infra/eval/run-eval.py, infra/bridge image-whitelist,
+# tools/make-intro.sh, tools/make-outro.sh)? Start with the dev override:
+#   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+# The healthchecks below are NOT affected: they run inside the container
+# against localhost:<port> via /dev/tcp, no published port required.
 x-java-health: &java-health
   interval: 15s
   timeout: 3s
@@ -43,7 +54,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports: ["8081:8081"]
+    expose: ["8081"]   # internal-only (orchestrator -> script-service:8081); dev-ports override publishes it
 
   voice-service:
     build: ./services/voice-service
@@ -64,7 +75,7 @@ services:
     volumes:
       - ./workdir:/workdir
       - ./bible:/bible:ro
-    ports: ["8083:8083"]
+    expose: ["8083"]   # internal-only (orchestrator -> voice-service:8083)
 
   image-service:
     build: ./services/image-service
@@ -87,7 +98,7 @@ services:
     volumes:
       - ./workdir:/workdir
       - ./bible:/bible:ro
-    ports: ["8084:8084"]
+    expose: ["8084"]   # internal-only (orchestrator/thumbnail -> image-service:8084)
 
   thumbnail-service:
     build: ./services/thumbnail-service
@@ -104,7 +115,7 @@ services:
     volumes:
       - ./workdir:/workdir
       - ./bible:/bible:ro
-    ports: ["8086:8086"]
+    expose: ["8086"]   # internal-only (orchestrator -> thumbnail-service:8086)
 
   video-assembly-service:
     build: ./services/video-assembly-service
@@ -127,7 +138,7 @@ services:
     volumes:
       - ./workdir:/workdir
       - ./bible:/bible
-    ports: ["8082:8082"]
+    expose: ["8082"]   # internal-only (orchestrator -> video-assembly-service:8082)
 
   # Self-hosted Suno wrapper (github.com/Suno-API/Suno-API). Drives your own
   # Suno account via SESSION_ID + COOKIE grabbed from the browser — no per-clip
@@ -144,7 +155,7 @@ services:
       SECRET_TOKEN: ${SUNO_SECRET_TOKEN:-}
       PORT: "8000"
       ROTATE_LOGS: "false"
-    ports: ["8000:8000"]
+    expose: ["8000"]   # internal-only (assembly-service -> http://suno-api:8000)
 
   video-generation-service:
     build: ./services/video-generation-service
@@ -168,7 +179,7 @@ services:
       - ./workdir:/workdir
       - ./bible:/bible:ro
       - ./secrets:/secrets:ro
-    ports: ["8087:8087"]
+    expose: ["8087"]   # internal-only (orchestrator -> video-generation-service:8087)
 
   youtube-upload-service:
     build: ./services/youtube-upload-service
@@ -190,9 +201,13 @@ services:
     volumes:
       - ./secrets:/secrets
       - ./workdir:/workdir
+    expose:
+      - "8085"        # internal-only (orchestrator -> youtube-upload-service:8085)
     ports:
-      - "8085:8085"
-      - "8089:8089"   # one-time OAuth callback receiver during first upload
+      # One-time OAuth callback receiver during first upload. MUST stay
+      # published: the Google redirect URI is http://127.0.0.1:8089/Callback
+      # (see Bind0000Receiver), i.e. the HOST browser lands here.
+      - "8089:8089"
 
   orchestrator:
     build: ./services/orchestrator

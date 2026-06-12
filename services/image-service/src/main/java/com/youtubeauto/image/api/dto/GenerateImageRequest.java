@@ -28,17 +28,29 @@ public record GenerateImageRequest(
             String cameraFraming,
             /** Optional recurring-prop reference anchors that lock a prop's colour
              *  + design across scenes (mirrors the cast anchors). May be null. */
-            List<PropRef> propRefs
+            List<PropRef> propRefs,
+            /** Episode-ConsistencyState (Story B): QC-APPROVED stills from EARLIER
+             *  IN THIS SAME EPISODE, selected by the orchestrator per character
+             *  (least-occluded approved scene, hero phases preferred). Anchor-
+             *  capable providers attach them as extra reference images NEXT TO the
+             *  bible refs, so a re-rolled scene matches how THIS episode already
+             *  drew the cast — not just the bible's version of the character.
+             *  May be null (first generation batch / no canon yet). */
+            List<EpisodeAnchor> episodeAnchors
     ) {
         /** A recurring prop's reference image: a name + a readable PNG path. */
         public record PropRef(String name, String imagePath) {}
 
+        /** One character's episode-canon exemplar: the bible character id + a
+         *  readable PNG path of an approved still from this same episode. */
+        public record EpisodeAnchor(String characterId, String imagePath) {}
+
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId) {
-            this(seq, visualDesc, characters, locationId, null, null, null, null);
+            this(seq, visualDesc, characters, locationId, null, null, null, null, null);
         }
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId,
                            String timeOfDay, String weather, String cameraFraming) {
-            this(seq, visualDesc, characters, locationId, timeOfDay, weather, cameraFraming, null);
+            this(seq, visualDesc, characters, locationId, timeOfDay, weather, cameraFraming, null, null);
         }
     }
 

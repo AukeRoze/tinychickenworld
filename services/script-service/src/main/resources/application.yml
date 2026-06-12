@@ -1,6 +1,14 @@
 spring:
   application:
     name: script-service
+  # Virtual threads: script generation holds a request thread for 2-4 minutes
+  # (blocking Anthropic call, timeout-seconds: 240) — exactly the blocking-I/O
+  # profile virtual threads are for. The only synchronized code is
+  # VariationSelector (in-memory, microseconds) and the BibleReloadController
+  # admin endpoint (one quick file read) — no meaningful pinning risk.
+  threads:
+    virtual:
+      enabled: true
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/scripts}
     username: ${DB_USER:postgres}

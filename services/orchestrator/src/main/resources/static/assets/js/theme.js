@@ -1,10 +1,24 @@
 /*
- * Light/dark theme toggle for the new static UI — a fixed top-right button.
- * The pre-paint bootstrap in each page already set data-theme to avoid a flash;
- * this just adds the toggle control and persists the choice (localStorage +
- * a long-lived cookie, matching the classic dashboard's behaviour).
+ * Light/dark theme for the new static UI: pre-paint bootstrap + a fixed
+ * top-right toggle button.
+ *
+ * IMPORTANT: this file is loaded with a plain SYNCHRONOUS <script> tag in the
+ * <head> of every /ui page (no defer/async/module). That is deliberate: the
+ * bootstrap below must set data-theme BEFORE the body first paints, otherwise
+ * dark mode flashes white (FOUC). Being a static asset it is cached after the
+ * first page view, so this replaces the old per-page inline copy at no cost.
+ * The toggle itself persists the choice (localStorage + a long-lived cookie,
+ * matching the classic dashboard's behaviour).
  */
 (function () {
+  // ── Pre-paint bootstrap (was inline in each page's <head>) ──
+  try {
+    var saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) {}
+    var sys = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", saved || (sys ? "dark" : "light"));
+  } catch (e) { /* never block rendering over a theme */ }
+
   function current() {
     return document.documentElement.getAttribute("data-theme") || "light";
   }

@@ -1,6 +1,14 @@
 spring:
   application:
     name: youtube-upload-service
+  # Virtual threads DELIBERATELY OFF (spring.threads.virtual.enabled).
+  # YouTubeClientFactory.get() is synchronized and on first use blocks INSIDE
+  # the monitor for the entire OAuth consent flow (Bind0000Receiver waits for
+  # the browser callback — minutes to forever). On Java 21 a virtual thread
+  # blocking inside synchronized pins its carrier, and every concurrent
+  # request stuck on that monitor pins another one: a handful of requests
+  # during (re)consent could starve the whole scheduler. Revisit after
+  # converting that factory to a ReentrantLock (or on Java 24+, JEP 491).
 server:
   port: 8085
 app:

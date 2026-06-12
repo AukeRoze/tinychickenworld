@@ -23,7 +23,12 @@
         <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId></dependency>
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
-        <dependency><groupId>com.github.librepdf</groupId><artifactId>openpdf</artifactId><version>1.3.43</version></dependency>
+        <!-- OpenPDF 2.0.x: Java 17+ baseline (we run 21), keeps the com.lowagie.*
+             packages — the only consumer (ScriptPdfController: Document, PdfWriter,
+             Paragraph, Chunk, Font(int,...), PageSize, java.awt.Color) is unchanged.
+             3.x renames the base package to org.openpdf → not worth the churn for
+             one PDF endpoint. Newer 2.0.x patches are drop-in if available. -->
+        <dependency><groupId>com.github.librepdf</groupId><artifactId>openpdf</artifactId><version>2.0.3</version></dependency>
     </dependencies>
     <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
 </project>

@@ -25,9 +25,15 @@ public record SynthesizeRequest(
             String locationId,
             /** Scripted scene duration — used to size the silent track for
              *  dialogue-less beats so the edit holds the intended pause. */
-            Integer durationSeconds
+            Integer durationSeconds,
+            /** Scene weather from the script (eg "lightRain", "snow"). When a
+             *  matching {@code ambient/{weather}.mp3} bed exists it overrides
+             *  the location bed, so the rain you SEE in the visual weather
+             *  overlay also sounds like rain. Optional/additive: null or
+             *  "clear" keeps the location-bed behaviour. */
+            String weather
     ) {
-        public SceneAudio(int seq, List<Line> lines) { this(seq, lines, null, null); }
+        public SceneAudio(int seq, List<Line> lines) { this(seq, lines, null, null, null); }
     }
 
     /** speaker = character id; text = the dialogue OR emotion tag depending

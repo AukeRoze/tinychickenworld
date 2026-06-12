@@ -41,6 +41,20 @@ public record AssemblyRequest(
              *  resolution, closer). Drives the transition style into this
              *  scene. Optional — null falls back to a default crossfade. */
             String phase,
+            /** Scene location id from the script bible (e.g. "garden", "pond",
+             *  "coop"). Optional. Drives the per-location ambient FX overlay
+             *  ({@code bible/fx/location/{locationId}.mov|webm}) — the visual
+             *  twin of the per-location ambient sound bed the voice-service
+             *  already mixes from {@code bible/sfx/ambient/{locationId}.mp3}. */
+            String locationId,
+            /** Time-of-day mood id from the bible (goldenHour, midday, dusk,
+             *  night). Optional. Drives {@code bible/fx/time/{timeOfDay}}
+             *  overlays (night → fireflies / drifting stars). */
+            String timeOfDay,
+            /** Weather mood id from the bible (clear, lightRain, breezy, snow).
+             *  Optional. Drives {@code bible/fx/weather/{weather}} overlays
+             *  (lightRain → drops) — weather wins over time and location. */
+            String weather,
             /** Optional per-line voice timing (from the voice-service) — when
              *  present the SRT gets one millisecond-accurate cue per LINE
              *  instead of one whole-scene cue on whole seconds. */

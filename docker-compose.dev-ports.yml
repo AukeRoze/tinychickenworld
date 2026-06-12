@@ -1,0 +1,48 @@
+# DEV OVERRIDE — republish the internal service ports on the host.
+#
+# Since the port-mapping cleanup (backlog 2026-06-12) docker-compose.yml only
+# publishes 8080 (orchestrator) and 8089 (one-time YouTube OAuth callback).
+# All other services are internal-only: containers talk to each other via
+# service names, no host mapping needed.
+#
+# Use THIS file when you want to hit a service directly from the host, e.g.:
+#   * infra/eval/run-eval.py            -> script-service        :8081
+#   * infra/bridge/agent-bridge.ps1     -> image-service         :8084  ("image" whitelist entry)
+#   * tools/make-intro.sh / make-outro.sh -> image-service :8084 + video-generation-service :8087
+#   * ad-hoc curl/debugging against any service
+#
+# Start:
+#   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+# Back to locked-down ports:
+#   docker compose up -d --remove-orphans   (recreates without the extra mappings)
+#
+# Mappings mirror the pre-cleanup state exactly (host:container).
+services:
+  script-service:
+    ports: ["8081:8081"]
+
+  video-assembly-service:
+    ports: ["8082:8082"]
+
+  voice-service:
+    ports: ["8083:8083"]
+
+  image-service:
+    ports: ["8084:8084"]
+
+  youtube-upload-service:
+    # 8089 (OAuth callback) is already published in the base file and the two
+    # lists are merged, so only the API port is added here.
+    ports:
+      - "8085:8085"
+
+  thumbnail-service:
+    ports: ["8086:8086"]
+
+  video-generation-service:
+    ports: ["8087:8087"]
+
+  # Only starts with the suno profile, same as in the base file:
+  #   docker compose --profile suno -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+  suno-api:
+    ports: ["8000:8000"]

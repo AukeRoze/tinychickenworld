@@ -17,6 +17,15 @@
 #  - alleen paden die beginnen met /api/v1/
 #  - geen shell-commando's, geen bestandsoperaties; alleen HTTP.
 #
+# LET OP (port-mapping cleanup 2026-06-12): docker-compose.yml publiceert
+# alleen nog 8080 (orchestrator) en 8089 (OAuth-callback) op de host. De
+# "image"-whitelist-entry (8084) werkt dus ALLEEN als je de stack tijdelijk
+# start met de dev-override die de oude mappings terugzet:
+#     docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+# Zonder die override geeft een image-commando netjes status -1 met een
+# verbindingsfout in bridge/results/<id>.json; orchestrator-commando's (de
+# default) blijven gewoon werken.
+#
 # PROTOCOL:
 #   bridge/commands/<id>.json :
 #       { "method": "GET|POST|PATCH|DELETE", "path": "/api/v1/...",
@@ -40,6 +49,8 @@ foreach ($d in @($Root, $CmdDir, $ResDir, $DoneDir)) {
 
 Write-Host "agent-bridge actief - let op $CmdDir (Ctrl+C om te stoppen)"
 Write-Host "Alleen localhost (orchestrator 8080 / image 8084) + /api/v1/* wordt uitgevoerd."
+Write-Host "NB: 8084 is standaard niet meer gepubliceerd; image-commando's vereisen de"
+Write-Host "    dev-override: docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d"
 
 while ($true) {
     Get-ChildItem -Path $CmdDir -Filter "*.json" -ErrorAction SilentlyContinue |
@@ -47,6 +58,7 @@ while ($true) {
         $file = $_
         $id = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $resPath = Join-Path $ResDir ($id + ".json")
+        $svc = "orchestrator"
         try {
             $cmd = Get-Content -Raw -Path $file.FullName | ConvertFrom-Json
             $method = ("" + $cmd.method).ToUpper()
@@ -93,9 +105,16 @@ while ($true) {
             @{ status = $status; body = $parsed; executedAt = (Get-Date -Format "o") } |
                 ConvertTo-Json -Depth 20 | Set-Content -Path $resPath -Encoding UTF8
         } catch {
-            @{ status = -1; error = ("" + $_.Exception.Message); executedAt = (Get-Date -Format "o") } |
+            $err = "" + $_.Exception.Message
+            if ($svc -eq "image") {
+                # 8084 is sinds de port-mapping-cleanup niet meer gepubliceerd;
+                # zie de header: start met docker-compose.dev-ports.yml.
+                $err += " (hint: image-service:8084 is standaard niet gepubliceerd; " +
+                        "start met: docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d)"
+            }
+            @{ status = -1; error = $err; executedAt = (Get-Date -Format "o") } |
                 ConvertTo-Json -Depth 5 | Set-Content -Path $resPath -Encoding UTF8
-            Write-Host ("  FOUT: " + $_.Exception.Message) -ForegroundColor Red
+            Write-Host ("  FOUT: " + $err) -ForegroundColor Red
         } finally {
             Move-Item -Path $file.FullName -Destination (Join-Path $DoneDir $file.Name) -Force
         }

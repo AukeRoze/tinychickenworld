@@ -76,6 +76,14 @@ Wat er ontbreekt en in deze fase wordt toegevoegd: **echte beweging in scènes**
 | `thumbnail-service` | 8086 | — | OpenAI + lokale AWT | ✅ |
 | **`video-generation-service`** | **8087** | — | **Veo MCP (Google)** | 🆕 |
 
+> **Poorten (cleanup 2026-06-12):** de poorten in deze tabel zijn *interne*
+> Docker-netwerkpoorten. Op de host zijn alleen **8080** (orchestrator) en
+> **8089** (eenmalige YouTube OAuth-callback, redirect-URI
+> `http://127.0.0.1:8089/Callback`) gepubliceerd. Services bereiken elkaar via
+> servicenamen (`http://script-service:8081` enz.). Tijdelijk alles op de host
+> nodig (debugging, `infra/eval/run-eval.py`, `tools/make-intro.sh`)?
+> `docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d`
+
 `video-generation-service` is de enige nieuwe service. Zit tussen `image-service` en `video-assembly-service`. Input: lijst scènes met `startImagePath` (asset uit image-service) + duur + prompt. Output: lijst MP4 clips per scène. Skipt zichzelf als `motionMode=ken_burns` (huidige cheap path blijft default).
 
 ---

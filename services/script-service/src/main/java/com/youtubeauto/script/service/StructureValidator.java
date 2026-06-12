@@ -6,7 +6,9 @@ import com.youtubeauto.script.bible.EpisodeStructure;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -15,8 +17,9 @@ import java.util.stream.Collectors;
  * the episode structure, story arc, re-hooks and a satisfying ending — but
  * nothing enforced it (the old validate() only logged a duration warning). This
  * turns the bible's {@link EpisodeStructure} into HARD checks so a script that
- * skips the structure, jams everything in one location, or ends on the wrong
- * phase is rejected and re-prompted instead of rendered.
+ * skips the structure, plays its phases out of order, jams everything in one
+ * location, or ends on the wrong phase is rejected and re-prompted instead of
+ * rendered.
  *
  * Tolerances are deliberately lenient (the goal is to catch real failures, not
  * nitpick) so we don't burn endless re-prompts.
@@ -100,6 +103,32 @@ public class StructureValidator {
             if (lastScenePhase != null && !lastDeclared.equalsIgnoreCase(lastScenePhase.trim())) {
                 v.add(String.format("Last scene is phase '%s'; it must be the closing phase '%s'.",
                         lastScenePhase, lastDeclared));
+            }
+
+            // 4b) Phases must appear in bible order (the declaration order of
+            //     es.phases() is the canonical retention template). Each scene's
+            //     phase index must be >= the previous scene's — non-decreasing —
+            //     so a phase may not return once a later phase has started. Without
+            //     this, a script with the climax up front passed as long as the
+            //     counts/durations matched and the last scene was the closer.
+            //     Unknown/blank phases are skipped here; check 3 already flags them.
+            Map<String, Integer> order = new HashMap<>();
+            for (int i = 0; i < es.phases().size(); i++) {
+                order.put(es.phases().get(i).id().toLowerCase(), i);
+            }
+            int furthest = -1;
+            String furthestId = null;
+            for (GeneratedScript.Scene sc : scenes) {
+                String ph = sc.phase() == null ? "" : sc.phase().trim().toLowerCase();
+                Integer idx = order.get(ph);
+                if (idx == null) continue;
+                if (idx < furthest) {
+                    v.add(String.format("Phase order violated: scene %d ('%s') appears after phase '%s' started.",
+                            sc.seq(), es.phases().get(idx).id(), furthestId));
+                    break;
+                }
+                furthest = idx;
+                furthestId = es.phases().get(idx).id();
             }
         }
 

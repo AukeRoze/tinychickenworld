@@ -29,11 +29,21 @@ public class ThumbnailServiceClient {
         return generate(jobId, topic, title, hook, baseImagePaths, preferredLayout, null);
     }
 
-    /** Full form incl. an optional reviewer direction (dashboard "regenerate
-     *  with prompt", e.g. "exactly three chicks"). */
     public JsonNode generate(UUID jobId, String topic, String title, String hook,
                              List<String> baseImagePaths, String preferredLayout,
                              String customHint) {
+        return generate(jobId, topic, title, hook, baseImagePaths, preferredLayout,
+                customHint, null);
+    }
+
+    /** Full form incl. an optional reviewer direction (dashboard "regenerate
+     *  with prompt", e.g. "exactly three chicks") and the ground-truth cast
+     *  ({@code castPresent}: bible ids die echt substantieel in de scènes
+     *  zitten — ≥2 ids laat de thumbnail-service een groeps-thumbnail kiezen,
+     *  ook als titel/topic niemand bij naam noemt). */
+    public JsonNode generate(UUID jobId, String topic, String title, String hook,
+                             List<String> baseImagePaths, String preferredLayout,
+                             String customHint, List<String> castPresent) {
         Map<String, Object> body = new HashMap<>();
         body.put("jobId", jobId);
         body.put("topic", topic);
@@ -44,6 +54,8 @@ public class ThumbnailServiceClient {
             body.put("preferredLayout", preferredLayout);
         if (customHint != null && !customHint.isBlank())
             body.put("customHint", customHint.trim());
+        if (castPresent != null && !castPresent.isEmpty())
+            body.put("castPresent", castPresent);
         // 3 variants × image gen — minutes, not seconds. Paid profile.
         return Resilience.paid(
                 client.post().uri("/api/v1/thumbnails/generate")

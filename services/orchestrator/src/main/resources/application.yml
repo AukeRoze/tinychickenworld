@@ -1,6 +1,18 @@
 spring:
   application:
     name: orchestrator
+  # Virtual threads (Boot 3.3): Tomcat request handling + @Scheduled become
+  # virtual. Good fit here — dashboard endpoints block for minutes on
+  # synchronous HTTP (scene-image regen, thumbnail regen with hint, metadata
+  # regenerate) and the AnalyticsPoller blocks on the upload-service. The
+  # @Async pools are NOT affected: pipelineExecutor/veoExecutor stay the
+  # bounded ThreadPoolTaskExecutors from AsyncConfig (deliberate backpressure).
+  # Known-short synchronized sections (BibleEditor/BibleSuggestions, the
+  # per-job reroll lock in mergeSceneUpdate) are rare admin/merge paths —
+  # acceptable carrier-pinning on Java 21.
+  threads:
+    virtual:
+      enabled: true
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/orchestrator}
     username: ${DB_USER:postgres}
@@ -43,6 +55,32 @@ app:
     model: ${ANTHROPIC_MODEL:claude-haiku-4-5-20251001}
     max-tokens: 1024
     temperature: 0.7
+  seo:
+    # Free keyword source: YouTube autocomplete (KeywordSuggester). Read via
+    # @Value, NOT via OrchestratorProperties (the record binds positionally —
+    # see app.services above — and adding a field would ripple into every
+    # positional construction). Strictly best-effort: any failure or timeout
+    # yields an empty keyword list and the metadata prompt is unchanged.
+    # Set SEO_KEYWORDS_ENABLED=false to disable all suggest-endpoint calls.
+    enabled: ${SEO_KEYWORDS_ENABLED:true}
+    # The classic firefox-client variant returns clean JSON:
+    # ["query",["suggestion 1","suggestion 2",...]]
+    suggest-url: ${SEO_SUGGEST_URL:https://suggestqueries.google.com/complete/search}
+  videogen:
+    # Async clip generation (VideoGenerationServiceClient.generateAsync):
+    # submit + poll instead of a 15-min-open HTTP connection. Read via @Value
+    # (NOT via OrchestratorProperties — see app.seo above for why adding
+    # record fields ripples into every positional construction).
+    poll-interval-ms: ${VIDEOGEN_POLL_INTERVAL_MS:10000}    # ~10s between polls
+    poll-timeout-ms: ${VIDEOGEN_POLL_TIMEOUT_MS:1200000}    # 20 min total budget
+  assembly-client:
+    # Async assembly (AssemblyServiceClient.assembleAsync): submit + poll
+    # instead of one HTTP request held open for the whole ffmpeg render.
+    # Structural fix for the 2026-06-12 incident (job e2ec9448): a >20-min
+    # render tripped the shared Netty responseTimeout while ffmpeg kept going.
+    # Read via @Value (NOT via OrchestratorProperties — see app.seo above).
+    poll-interval-ms: ${ASSEMBLY_POLL_INTERVAL_MS:10000}    # ~10s between polls
+    poll-timeout-ms: ${ASSEMBLY_POLL_TIMEOUT_MS:3600000}    # 60 min total budget
   defaults:
     audience: kids_3_6
     targetSeconds: ${TARGET_SECONDS:180}   # ~3 min default (landscape). Override per job or via env.
@@ -53,6 +91,12 @@ app:
     outroPath: ${OUTRO_PATH:/bible/outro.mp4}
   bible:
     path: ${BIBLE_PATH:/bible/channel.yml}
+  review:
+    # HMAC-secret voor signed review-links (GET /api/v1/review/confirm?token=...).
+    # Leeg = random secret bij opstart: werkt, maar eerder gemailde links worden
+    # ongeldig na elke herstart. Zet REVIEW_TOKEN_SECRET voor stabiele links.
+    token-secret: ${REVIEW_TOKEN_SECRET:}
+    token-ttl-days: ${REVIEW_TOKEN_TTL_DAYS:7}
 
 # Manual review gates added to the pipeline. Both default ON (the human picks
 # the thumbnail before publish, and pushes other platforms after upload). Set

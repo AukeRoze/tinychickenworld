@@ -5,6 +5,7 @@ import com.youtubeauto.voice.api.dto.SynthesizeResponse;
 import com.youtubeauto.voice.bible.BibleLoader;
 import com.youtubeauto.voice.config.VoiceProperties;
 import com.youtubeauto.voice.elevenlabs.ElevenLabsClient;
+import com.youtubeauto.voice.elevenlabs.ProsodyContext;
 import com.youtubeauto.voice.elevenlabs.VoiceSettings;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -43,6 +46,23 @@ public class VoiceSynthesisService {
         log.info("job={} voice mode = {}", req.jobId(), mode);
 
         List<SynthesizeResponse.SceneAudio> results = new ArrayList<>();
+
+        // Episode-order flat line list + each scene's offset into it, so the
+        // prosody-context window (ProsodyContext: same speaker, same scene +
+        // adjacent scene) can look across scene boundaries. Flag off = no
+        // context fields at all → request body identical to context-less synth.
+        boolean contextEnabled = props.elevenlabs() != null
+                && Boolean.TRUE.equals(props.elevenlabs().contextEnabled());
+        List<ProsodyContext.Entry> allLines = new ArrayList<>();
+        Map<Integer, Integer> sceneOffset = new HashMap<>();
+        for (SynthesizeRequest.SceneAudio s : req.scenes()) {
+            sceneOffset.put(s.seq(), allLines.size());
+            if (s.lines() != null) {
+                for (SynthesizeRequest.Line l : s.lines()) {
+                    allLines.add(new ProsodyContext.Entry(s.seq(), l.speaker(), l.text()));
+                }
+            }
+        }
 
         for (SynthesizeRequest.SceneAudio scene : req.scenes()) {
             Path sceneFile = dir.resolve(String.format("scene_%02d.mp3", scene.seq()));
@@ -83,10 +103,16 @@ public class VoiceSynthesisService {
                             .withEmotion(line.emotion());
                     OnomatopoeiaSfx.Parsed parsed = onomatopoeia.parse(line.text());
                     // Prosody context: the nearest line of the SAME speaker before/
-                    // after this one, so intonation flows as one performance instead
-                    // of resetting per request (assembly-audit quick-win #4).
-                    String prevText = neighborText(sceneLines, li, line.speaker(), -1);
-                    String nextText = neighborText(sceneLines, li, line.speaker(), +1);
+                    // after this one (window = this scene + the adjacent scene,
+                    // capped at 300 chars/side), so intonation flows as one
+                    // performance instead of resetting per request.
+                    String prevText = null, nextText = null;
+                    if (contextEnabled) {
+                        int flatIdx = sceneOffset.get(scene.seq()) + li;
+                        ProsodyContext.Context ctx = ProsodyContext.contextFor(allLines, flatIdx);
+                        prevText = ctx.previousText();
+                        nextText = ctx.nextText();
+                    }
                     byte[] spoken = parsed.spoken().isBlank()
                             ? null : client.synthesize(parsed.spoken(), voiceId, settings,
                                                        prevText, nextText);
@@ -124,11 +150,15 @@ public class VoiceSynthesisService {
 
             // Mix ambient sound layer under the main audio. Skips silently
             // when the scene has no location or the location has no ambient
-            // file configured.
-            if (scene.locationId() != null && !scene.locationId().isBlank()) {
+            // file configured. A weather bed (ambient/{weather}.mp3) overrides
+            // the location bed so picture (fx/weather overlay) and sound match.
+            boolean hasLocation = scene.locationId() != null && !scene.locationId().isBlank();
+            boolean hasWeather = scene.weather() != null && !scene.weather().isBlank();
+            if (hasLocation || hasWeather) {
                 Path ambientOut = dir.resolve(String.format("scene_%02d_amb.mp3", scene.seq()));
                 try {
-                    Path mixed = ambientMixer.mix(sceneFile, scene.locationId(), ambientOut, dir);
+                    Path mixed = ambientMixer.mix(sceneFile, scene.locationId(), scene.weather(),
+                            ambientOut, dir);
                     if (!mixed.equals(sceneFile) && Files.exists(mixed)) {
                         Files.move(mixed, sceneFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     }
@@ -164,18 +194,4 @@ public class VoiceSynthesisService {
         }
     }
 
-    /** Nearest line text of the SAME speaker in the given direction (-1 = before,
-     *  +1 = after) within this scene, or null. Used as ElevenLabs prosody context. */
-    private static String neighborText(List<SynthesizeRequest.Line> lines, int idx,
-                                       String speaker, int dir) {
-        if (speaker == null) return null;
-        for (int i = idx + dir; i >= 0 && i < lines.size(); i += dir) {
-            SynthesizeRequest.Line l = lines.get(i);
-            if (speaker.equalsIgnoreCase(l.speaker())
-                    && l.text() != null && !l.text().isBlank()) {
-                return l.text();
-            }
-        }
-        return null;
-    }
 }

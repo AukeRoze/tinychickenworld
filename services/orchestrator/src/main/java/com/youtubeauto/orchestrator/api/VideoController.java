@@ -142,7 +142,8 @@ public class VideoController {
                         j.getPlannedPublishAt() == null ? null : j.getPlannedPublishAt().toString(),
                         j.getSeriesId(),
                         j.getEpisodeNumber(),
-                        j.getQaBoardScore()))
+                        j.getQaBoardScore(),
+                        j.getFormat()))
                 .toList();
     }
 
@@ -282,16 +283,11 @@ public class VideoController {
     /**
      * Retry a FAILED job, resuming from the stage that failed. Already-completed
      * work (script, scene images, voice, master) is reused — no re-generation.
-     * GET is supported too so a dashboard/email link is one click.
+     * POST only — the old GET variant was a link-preview hazard; one-click
+     * email links now use the signed-token flow (/api/v1/review/confirm).
      */
     @PostMapping("/{id}/retry")
     public ResponseEntity<VideoJobResponse> retry(@PathVariable UUID id) {
-        orchestrator.retry(id);
-        return ResponseEntity.ok(orchestrator.get(id));
-    }
-
-    @GetMapping("/{id}/retry")
-    public ResponseEntity<VideoJobResponse> retryGet(@PathVariable UUID id) {
         orchestrator.retry(id);
         return ResponseEntity.ok(orchestrator.get(id));
     }
@@ -307,12 +303,6 @@ public class VideoController {
         return ResponseEntity.ok(orchestrator.get(id));
     }
 
-    @GetMapping("/{id}/reassemble")
-    public ResponseEntity<VideoJobResponse> reassembleGet(@PathVariable UUID id) {
-        orchestrator.reassemble(id);
-        return ResponseEntity.ok(orchestrator.get(id));
-    }
-
     /**
      * AI-Critic Auto-Fix: iteratively re-roll the image-fixable weak scenes and
      * re-assemble until the AI-Critic score reaches {@code target} (default 90)
@@ -322,13 +312,6 @@ public class VideoController {
     public ResponseEntity<VideoJobResponse> autofix(@PathVariable UUID id,
                                                     @RequestParam(required = false) Integer target,
                                                     @RequestParam(required = false) Integer iterations) {
-        return ResponseEntity.ok(orchestrator.startAutoFix(id, target, iterations));
-    }
-
-    @GetMapping("/{id}/autofix")
-    public ResponseEntity<VideoJobResponse> autofixGet(@PathVariable UUID id,
-                                                       @RequestParam(required = false) Integer target,
-                                                       @RequestParam(required = false) Integer iterations) {
         return ResponseEntity.ok(orchestrator.startAutoFix(id, target, iterations));
     }
 }

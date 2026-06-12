@@ -32,8 +32,18 @@ public record VoiceProperties(
             boolean enabled,
             String baseUrl, String apiKey, String voiceId,
             String modelId, double stability, double similarityBoost,
-            int timeoutSeconds
-    ) {}
+            int timeoutSeconds,
+            /** Send same-speaker previous_text/next_text prosody context with
+             *  each TTS call so consecutive lines of one character flow as one
+             *  performance. Default TRUE; switch off (ELEVENLABS_CONTEXT_ENABLED
+             *  =false) if results sound off — off means the request body is
+             *  exactly the context-less body. */
+            Boolean contextEnabled
+    ) {
+        public ElevenLabs {
+            if (contextEnabled == null) contextEnabled = Boolean.TRUE;
+        }
+    }
 
     /** Sounds-mode config — see bible.voice.sfx for documentation. */
     public record Sfx(

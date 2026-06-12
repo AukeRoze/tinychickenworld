@@ -241,8 +241,18 @@ public class ThumbnailGenerator {
      * any failure so the caller falls back to OpenAI text-to-image.
      */
     private java.util.List<String> anchorBases(GenerateThumbnailRequest req, boolean castMode) {
+        // castMode rendert standaard de hele bible-cast; als de orchestrator
+        // castPresent meestuurt, renderen we alléén wie echt in de aflevering
+        // zit (gevalideerd tegen de bible-ids, bible-volgorde behouden) — zo
+        // sluipt een afwezig castlid (bv. het eendje) nooit de thumbnail in.
+        java.util.List<String> castChars = bible.getCastIds();
+        if (castMode && req.castPresent() != null && !req.castPresent().isEmpty()) {
+            java.util.List<String> present = bible.getCastIds().stream()
+                    .filter(req.castPresent()::contains).toList();
+            if (present.size() >= 2) castChars = present;
+        }
         java.util.List<String> chars = castMode
-                ? bible.getCastIds()
+                ? castChars
                 : (bible.getMainCharacterId().isBlank()
                     ? java.util.List.of()
                     : java.util.List.of(bible.getMainCharacterId()));
@@ -397,6 +407,13 @@ public class ThumbnailGenerator {
     };
 
     private boolean isCastThumbnail(GenerateThumbnailRequest req) {
+        // GROUND TRUTH first: the orchestrator tells us which characters
+        // substantially appear in the actual scenes. Two or more = ensemble
+        // episode = cast thumbnail, regardless of whether the title/topic
+        // names anyone ("The Big Puddle Mystery" stays anonymous but stars
+        // all three chicks). Text heuristics below remain the fallback for
+        // callers that don't send castPresent.
+        if (req.castPresent() != null && req.castPresent().size() >= 2) return true;
         String hay = ((req.title() == null ? "" : req.title()) + " "
                 + (req.topic() == null ? "" : req.topic())).toLowerCase();
         int hits = 0;

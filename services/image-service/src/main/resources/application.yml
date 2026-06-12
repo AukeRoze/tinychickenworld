@@ -1,6 +1,13 @@
 spring:
   application:
     name: image-service
+  # Virtual threads: scene-image generation blocks the request thread on
+  # OpenAI (120s timeout), Gemini (120s) or Replicate polling (up to 5 min)
+  # per call — pure blocking HTTP. Only synchronized code is the
+  # BibleReloadController admin endpoint (quick file reload).
+  threads:
+    virtual:
+      enabled: true
 server:
   port: 8084
 app:

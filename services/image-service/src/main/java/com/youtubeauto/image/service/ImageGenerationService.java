@@ -57,16 +57,25 @@ public class ImageGenerationService {
 
         List<GenerateImageResponse.SceneImage> out = new ArrayList<>();
         for (GenerateImageRequest.SceneVisual s : req.scenes()) {
-            List<Path> anchors = episodeAnchorsFor(s.seq(), episodeStills);
+            // Explicit per-scene anchors on the request (the orchestrator's
+            // per-character, QC-approved canon — Story B) WIN over the local
+            // disk scan: the provider reads them off the scene itself, so the
+            // generic scan list stays empty to avoid double-anchoring.
+            boolean explicitAnchors = s.episodeAnchors() != null && !s.episodeAnchors().isEmpty();
+            List<Path> anchors = explicitAnchors
+                    ? List.of()
+                    : episodeAnchorsFor(s.seq(), episodeStills);
             byte[] png = activeProvider.generatePng(s, format, sharedSeed, anchors);
             Path file = dir.resolve(String.format("scene_%02d.png", s.seq()));
             try { Files.write(file, png); }
             catch (IOException e) { throw new IllegalStateException("Failed to write " + file, e); }
             episodeStills.put(s.seq(), file);
             out.add(new GenerateImageResponse.SceneImage(s.seq(), file.toString(), png.length));
-            log.info("job={} scene={} provider={} format={} characters={} location={} epAnchors={} -> {}",
+            log.info("job={} scene={} provider={} format={} characters={} location={} epAnchors={}{} -> {}",
                     req.jobId(), s.seq(), activeProvider.name(), format,
-                    s.characters(), s.locationId(), anchors.size(), file);
+                    s.characters(), s.locationId(),
+                    explicitAnchors ? s.episodeAnchors().size() : anchors.size(),
+                    explicitAnchors ? " (request canon)" : " (disk scan)", file);
         }
         return new GenerateImageResponse(req.jobId(), out);
     }

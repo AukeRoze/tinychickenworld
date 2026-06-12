@@ -1,6 +1,13 @@
 spring:
   application:
     name: voice-service
+  # Virtual threads: per-scene ElevenLabs TTS calls (timeout 90s each) plus
+  # ffmpeg audio concat block the request thread for the whole synthesize
+  # call. Only synchronized code is the BibleReloadController admin endpoint
+  # (quick file reload) — no meaningful pinning risk.
+  threads:
+    virtual:
+      enabled: true
 server:
   port: 8083
 app:
@@ -15,6 +22,9 @@ app:
     stability: 0.5
     similarity-boost: 0.75
     timeout-seconds: 90
+    # Same-speaker prosody context (previous_text/next_text) per TTS call.
+    # Off = request body identical to the context-less behaviour.
+    context-enabled: ${ELEVENLABS_CONTEXT_ENABLED:true}
   sfx:
     root-path: /bible/sfx
     default-clip-duration: 1.5

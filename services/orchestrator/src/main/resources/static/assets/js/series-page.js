@@ -10,7 +10,9 @@ import api, { toast } from "/assets/js/api.js";
 
 const host = document.getElementById("series-host");
 
-function reload() { location.reload(); }
+/* Targeted refresh: re-fetch + re-render the list instead of location.reload(),
+   so the page doesn't flash and scroll position survives an edit. */
+function reload() { load(); }
 
 function field(label, value, area) {
   const wrap = document.createElement("label");
@@ -144,7 +146,7 @@ function seriesCard(s) {
   return card;
 }
 
-(async function () {
+async function load() {
   let series;
   try {
     series = await api.get("/api/v1/series", { key: "series" });
@@ -158,4 +160,6 @@ function seriesCard(s) {
     for (const s of series) wrap.appendChild(seriesCard(s));
   }
   host.replaceChildren(wrap);
-})();
+}
+
+load();

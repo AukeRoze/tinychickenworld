@@ -33,6 +33,22 @@ public class AssemblyService {
     private final ShortsBuilder shortsBuilder;
     private final VideoProperties props;
 
+    /**
+     * Pixar audit E2 — beat-sheet score plan: per-phase music level in dB
+     * relative to the bed, as "phase:dB" pairs, e.g.
+     * "hook:0,setup:-2,development:-1.5,climax:+1.5,resolution:-1,closer:-3".
+     * Empty/blank = feature off → exactly the current behaviour (flat bed +
+     * swell + dip). Parsed defensively: malformed pairs and unknown phases
+     * are ignored; an unparseable value just means no plan.
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.assembly.score-plan:}")
+    private String scorePlanSpec;
+
+    /** The only phases the score plan understands — anything else in the
+     *  property is silently ignored (typo-proof). */
+    private static final Set<String> SCORE_PHASES = Set.of(
+            "hook", "setup", "development", "climax", "resolution", "closer");
+
     public AssemblyResult assemble(AssemblyRequest req) {
         Workspace ws = workspaces.create(req.jobId());
         int w = req.width()  != null && req.width()  > 0 ? req.width()  : props.output().width();
@@ -62,11 +78,19 @@ public class AssemblyService {
         Path afterMusic = branded;
         if (req.backgroundMusicPath() != null && !req.backgroundMusicPath().isBlank()) {
             double[] swell = climaxSwell(req, ws);
-            // Board #18 — the SILENT visual beat earns near-silence from the
-            // score too: a held breath with full music isn't a held breath.
-            double[] dip = silentBeatWindow(req, ws);
+            // Board #18 / backlog P2 — the SILENT visual beat earns near-silence
+            // from the score too: a held breath with full music isn't a held
+            // breath. Window = the silent scene (preferred) or the climax-phase
+            // start; depth via app.assembly.climax-dip-db (0 = off). {0,0} when
+            // timing is unknown — the dip then simply doesn't happen.
+            double[] dip = musicDipWindow(req, ws);
+            // Pixar audit E2 — the score follows the WHOLE beat-sheet, not just
+            // the climax: a per-phase base arc (quiet under setup/development,
+            // lifted at the climax, settled under resolution, soft under the
+            // closer). The swell and dip stack on top of this base arc.
+            List<AudioMixer.ScoreSegment> plan = scorePlan(req, ws);
             afterMusic = mixer.mixBackgroundMusic(branded, req.backgroundMusicPath(),
-                    ws.withMusic(), ws.root(), swell[0], swell[1], dip[0], dip[1]);
+                    ws.withMusic(), ws.root(), swell[0], swell[1], dip[0], dip[1], plan);
         }
 
         // Step 4.5 — branded audio sting (channel sonic logo) at intro.
@@ -124,22 +148,110 @@ public class AssemblyService {
         );
     }
 
-    /** Centre + half-width (seconds, final-video time) of the scripted SILENT
-     *  visual beat (the scene with no dialogue lines and no narration), or
-     *  {0,0} when there is none. Same approximation rules as the climax swell. */
-    private double[] silentBeatWindow(AssemblyRequest req, Workspace ws) {
+    /** Cap for the climax-start fallback dip: dipping an entire long climax
+     *  scene would hollow out the score, so the fallback dip covers at most
+     *  this many seconds from the phase start. */
+    private static final double CLIMAX_DIP_MAX_SEC = 6.0;
+
+    /** {start, end} (seconds, final-video time) of the deliberate music dip
+     *  for the held-silence beat. Preference order:
+     *    (b) the scripted SILENT scene — no narration AND no line timings —
+     *        the whole scene is the window;
+     *    (a) else the START of the climax phase, capped at
+     *        {@link #CLIMAX_DIP_MAX_SEC}.
+     *  Returns {0,0} (→ mixer keeps a flat bed) when neither exists, when a
+     *  scene carries broken timing, or on any exception — a cosmetic dip must
+     *  never break the render. Same approximation rules as the climax swell
+     *  (scripted durations, ignores crossfade overlap + voice-stretch; the
+     *  mixer's 0.8s edge fades absorb that drift). */
+    private double[] musicDipWindow(AssemblyRequest req, Workspace ws) {
         try {
             double t = introOffsetSeconds(req, ws);
-            for (var s : req.scenes()) {
-                boolean silent = (s.narration() == null || s.narration().isBlank());
-                if (silent && (s.lineTimings() == null || s.lineTimings().isEmpty())) {
-                    return new double[]{t + s.durationSeconds() / 2.0,
-                                        Math.max(1.5, s.durationSeconds() / 2.0)};
+            double climaxStart = -1, climaxDur = 0;
+            var scenes = req.scenes().stream()
+                    .sorted(Comparator.comparingInt(SceneInput::seq)).toList();
+            for (SceneInput s : scenes) {
+                double dur = s.durationSeconds();
+                if (dur <= 0) return new double[]{0, 0};   // timing in doubt → skip
+                boolean silent = (s.narration() == null || s.narration().isBlank())
+                        && (s.lineTimings() == null || s.lineTimings().isEmpty());
+                if (silent) return new double[]{t, t + dur};
+                if (climaxStart < 0 && "climax".equalsIgnoreCase(s.phase())) {
+                    climaxStart = t;
+                    climaxDur = dur;
                 }
-                t += s.durationSeconds();
+                t += dur;
+            }
+            if (climaxStart >= 0) {
+                return new double[]{climaxStart,
+                        climaxStart + Math.min(climaxDur, CLIMAX_DIP_MAX_SEC)};
             }
         } catch (Exception ignore) { /* no dip */ }
         return new double[]{0, 0};
+    }
+
+    /** Beat-sheet score plan (Pixar audit E2): one segment per RUN of scenes
+     *  sharing the same music level — phase time-spans walked with the same
+     *  cursor as {@link #musicDipWindow} (intro offset + scripted durations,
+     *  ignoring crossfade overlap / voice-stretch; the mixer's 1.5s boundary
+     *  ramps absorb that drift). Scenes whose phase is missing or not in the
+     *  configured plan sit at 0 dB (neutral bed). Returns an empty list —
+     *  flat bed, exactly the pre-E2 behaviour — when the property is blank,
+     *  when any scene timing is in doubt, when every level is 0 dB, or on any
+     *  exception: the arc is cosmetic and must never break a render. */
+    private List<AudioMixer.ScoreSegment> scorePlan(AssemblyRequest req, Workspace ws) {
+        try {
+            Map<String, Double> levels = parseScorePlanSpec();
+            if (levels.isEmpty()) return List.of();
+            double t = introOffsetSeconds(req, ws);
+            List<AudioMixer.ScoreSegment> segments = new ArrayList<>();
+            double segStart = t, segGain = Double.NaN;
+            var scenes = req.scenes().stream()
+                    .sorted(Comparator.comparingInt(SceneInput::seq)).toList();
+            for (SceneInput s : scenes) {
+                double dur = s.durationSeconds();
+                if (dur <= 0) return List.of();   // timing in doubt → no plan
+                String phase = s.phase() == null
+                        ? "" : s.phase().trim().toLowerCase(Locale.ROOT);
+                double gain = levels.getOrDefault(phase, 0.0);
+                if (Double.isNaN(segGain)) {
+                    segGain = gain;               // first scene opens the first run
+                } else if (gain != segGain) {     // level change → close the run
+                    segments.add(new AudioMixer.ScoreSegment(segStart, t, segGain));
+                    segStart = t;
+                    segGain = gain;
+                }
+                t += dur;
+            }
+            if (!Double.isNaN(segGain)) {
+                segments.add(new AudioMixer.ScoreSegment(segStart, t, segGain));
+            }
+            boolean allFlat = segments.stream().allMatch(seg -> seg.gainDb() == 0.0);
+            return allFlat ? List.of() : segments;
+        } catch (Exception e) {
+            return List.of();   // safe: flat bed
+        }
+    }
+
+    /** Parses {@code app.assembly.score-plan} ("phase:dB,phase:dB,…") into a
+     *  phase→dB map. Defensive on purpose: blank property → empty map (feature
+     *  off); pairs that don't split into exactly two parts, phases outside
+     *  {@link #SCORE_PHASES}, and non-numeric levels are each skipped without
+     *  complaint. Levels are clamped to [-24, +6] dB. */
+    private Map<String, Double> parseScorePlanSpec() {
+        Map<String, Double> levels = new HashMap<>();
+        if (scorePlanSpec == null || scorePlanSpec.isBlank()) return levels;
+        for (String pair : scorePlanSpec.split(",")) {
+            String[] kv = pair.trim().split(":");
+            if (kv.length != 2) continue;
+            String phase = kv[0].trim().toLowerCase(Locale.ROOT);
+            if (!SCORE_PHASES.contains(phase)) continue;
+            try {
+                double db = Double.parseDouble(kv[1].trim());
+                levels.put(phase, Math.max(-24.0, Math.min(6.0, db)));
+            } catch (NumberFormatException ignore) { /* skip the bad pair */ }
+        }
+        return levels;
     }
 
     /** Intro duration (seconds) used to shift the caption timing. 0 when no

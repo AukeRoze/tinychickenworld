@@ -128,6 +128,17 @@ const PROGRESS = {
 let progressSeen = { status: null, since: Date.now() };
 let lastJob = null;
 
+// ── Paneel-state die de 5s-re-render van de review-sectie moet overleven ──
+// (loadReview herbouwt de kaarten elke poll; zonder dit verdwenen opgehaalde
+// community-posts, de expander-stand en de taalkeuze elke 5 seconden.)
+let communityPosts = null;   // laatst opgehaalde community-postideeën
+let endScreenRecipe = null;  // laatst opgehaalde end-screen-recipe
+let endScreenOpen = false;   // expander open/dicht
+let lastLangChoice = "";     // gekozen taal in het vertalingen-panel
+let costData = null;         // GET /api/v1/videos/{id}/cost (nieuw endpoint)
+let costFailed = false;      // oudere build zonder /cost → niet elke 5s opnieuw proberen
+let distRows = null;         // GET /api/v1/distribution (YouTube/Facebook-status)
+
 function progressPct(status) {
   const p = PROGRESS[status];
   if (!p) return 0;
@@ -801,17 +812,20 @@ function renderReview(ctx) {
       }
       card.appendChild(list);
     }
-    // 🤖 Auto-Fix: one round of re-rolling the weak scenes, then pause for review.
+    // 🤖 Auto-Fix: one round of weak-scene rerolls + the QA-as-hefbomen
+    // (thumbnail-regen, sound-/story-advies), then pause for review.
     const fixRow = document.createElement("div");
     fixRow.className = "scene-acts";
     fixRow.style.marginTop = "10px";
     const fixBtn = sceneBtn(
       "🤖 Auto-Fix (1 ronde)",
-      "Genereert de gemarkeerde zwakke scènes één keer opnieuw, hermonteert en auditeert opnieuw, en pauzeert dan voor je review. Kost beeldgeneratie-credits (begrensd); geen Veo, geen auto-upload.",
+      "Genereert de gemarkeerde zwakke scènes één keer opnieuw (bij een lage Characters/Animation-as ook de zwakste hero-scènes), regenereert zo nodig de thumbnail (max 1×), noteert geluids-/verhaaladvies, hermonteert en auditeert opnieuw, en pauzeert dan voor je review. Kost beeldgeneratie-credits (begrensd); geen Veo, geen auto-upload.",
       async () => {
         const ok = confirm(
           "Auto-Fix genereert de zwakke scènes ÉÉN keer opnieuw (kost beeldgeneratie-credits, " +
-          "begrensd door een cap), hermonteert en auditeert opnieuw, en pauzeert dan voor je review.\n\n" +
+          "begrensd door een cap), pakt ook zakkende QA-assen aan (thumbnail-regeneratie max 1×, " +
+          "geluids-/verhaaladvies als notitie), hermonteert en auditeert opnieuw, en pauzeert dan " +
+          "voor je review.\n\n" +
           "Geen Veo-render, geen automatische upload.\n\nDoorgaan?");
         if (!ok) return;
         try {
@@ -825,8 +839,68 @@ function renderReview(ctx) {
     wrap.appendChild(card);
   }
 
-  // ── Cost lives under the stepper now (renderCost), not as a review card ──
+  // ── Cost line under the stepper (compact) ──
   renderCost(data.cost);
+
+  // ── 💶 Kosten-paneel (backlog P2): schatting + cap + werkelijke Veo-kosten ──
+  // Bron: het nieuwe read-only /cost-endpoint (met breakdown); valt op een
+  // oudere build terug op review.cost (alleen schatting + cap). Toont NIETS
+  // dat de backend niet echt meet.
+  {
+    const c = ctx.cost || null;
+    const fb = data.cost || null;
+    if (c || fb) {
+      any = true;
+      const card = reviewCard("💶 Kosten");
+      const est = c && c.estimateEur != null ? c.estimateEur : (fb ? fb.estimateEur : null);
+      const cap = c && c.capEur != null ? c.capEur : (fb ? fb.capEur : null);
+      if (est != null && cap != null) {
+        const pct = cap ? (est / cap) * 100 : 0;
+        const kind = pct > 90 ? "danger" : pct > 70 ? "warning" : "success";
+        const line = document.createElement("div");
+        line.className = "cost-line";
+        const badge = document.createElement("span");
+        badge.className = "audit-score";
+        badge.style.background = "var(--" + kind + ")";
+        badge.textContent = "€" + Number(est).toFixed(2) + " geschat";
+        line.appendChild(badge);
+        const capEl = document.createElement("span");
+        capEl.className = "small";
+        capEl.style.color = "var(--muted)";
+        capEl.textContent = "van €" + Number(cap).toFixed(2) + " per-video cap";
+        line.appendChild(capEl);
+        line.appendChild(bar(est, cap || 1, kind));
+        card.appendChild(line);
+      }
+      if (c && Array.isArray(c.breakdown) && c.breakdown.length) {
+        const ul = document.createElement("ul");
+        ul.className = "small";
+        ul.style.cssText = "margin:4px 0 8px;padding-left:18px;color:var(--muted)";
+        for (const note of c.breakdown) {
+          const li = document.createElement("li");
+          li.textContent = note;
+          ul.appendChild(li);
+        }
+        card.appendChild(ul);
+      }
+      const act = c && c.actual;
+      if (act && act.veoCostEur != null) {
+        const p = document.createElement("p");
+        p.className = "small mono";
+        p.textContent = `Werkelijk (Veo): €${Number(act.veoCostEur).toFixed(2)}` +
+            (act.veoTotal != null ? ` · ${act.veoOk != null ? act.veoOk : "?"}/${act.veoTotal} clips gelukt` : "");
+        card.appendChild(p);
+      } else {
+        const p = document.createElement("p");
+        p.className = "sub small";
+        p.textContent = "Nog geen werkelijke kostendata — die verschijnt zodra de Veo-render " +
+            "gedraaid heeft. Voice/script-tokens worden niet per job bijgehouden; dit paneel " +
+            "toont alleen wat de backend echt meet.";
+        card.appendChild(p);
+      }
+      wrap.appendChild(card);
+    }
+  }
 
   // ── Metadata (editable) — only once it has actually been generated ──
   const meta = data.metadata;
@@ -840,6 +914,11 @@ function renderReview(ctx) {
       card.appendChild(node);
     };
 
+    // Bewerken kan alleen vóór de upload — daarna staat de metadata op YouTube
+    // en zou een lokale edit stilletjes afwijken (de backend geeft dan 409).
+    const metaFrozen = !!(lastJob && (lastJob.status === "UPLOADING" ||
+        lastJob.status === "COMPLETED" || lastJob.youtubeVideoId));
+
     const showView = () => {
       const body = document.createElement("div");
       const dl = document.createElement("dl");
@@ -848,14 +927,38 @@ function renderReview(ctx) {
       field(dl, "Description", meta.description);
       field(dl, "Tags", meta.tags);
       body.appendChild(dl);
-      body.appendChild(sceneBtn("✎ Edit", "Edit title / description / tags inline", showEdit));
+      if (metaFrozen) {
+        const note = document.createElement("p");
+        note.className = "sub small";
+        note.textContent = "🔒 Metadata staat vast — de video is (bijna) op YouTube; pas het daar aan via YouTube Studio.";
+        body.appendChild(note);
+      } else {
+        const row = document.createElement("div");
+        row.className = "filter-row";
+        row.appendChild(sceneBtn("✎ Edit", "Edit title / description / tags inline", showEdit));
+        row.appendChild(sceneBtn("🔄 Regenereer",
+          "Genereert titel/omschrijving/tags opnieuw uit het script (zelfde LLM + brand-gate als de pipeline). Overschrijft de huidige metadata.",
+          async () => {
+            if (!confirm("Metadata opnieuw genereren uit het script?\n\nDe huidige titel, omschrijving en tags worden overschreven.")) return;
+            const res = await api.post(`/api/v1/videos/${id}/metadata/regenerate`,
+                undefined, { key: "meta-regen-" + id });
+            if (res) {
+              meta.title = res.title || "";
+              meta.description = res.description || "";
+              meta.tags = res.tags || "";
+            }
+            toast("Metadata geregenereerd" + (res && res.title ? ` — “${res.title}”` : ""), "info", 6000);
+            showView();
+          }));
+        body.appendChild(row);
+      }
       replaceBody(body);
     };
 
     const showEdit = () => {
       const form = document.createElement("div");
       form.className = "meta-edit";
-      const t = labeledInput("Title", meta.title, false);
+      const t = labeledInput("Title (max 100 tekens)", meta.title, false);
       const d = labeledInput("Description", meta.description, true);
       const g = labeledInput("Tags (comma-separated)", meta.tags, false);
       form.appendChild(t.wrap);
@@ -863,12 +966,25 @@ function renderReview(ctx) {
       form.appendChild(g.wrap);
       const row = document.createElement("div");
       row.className = "filter-row";
-      const save = sceneBtn("Save", "Save metadata", async () => {
-        meta.title = t.input.value;
-        meta.description = d.input.value;
-        meta.tags = g.input.value;
-        await api.patch(`/api/v1/videos/${id}/metadata`,
-          { title: meta.title, description: meta.description, tags: meta.tags });
+      const save = sceneBtn("Save", "Save metadata (gevalideerd tegen de YouTube-limieten)", async () => {
+        if (t.input.value.trim().length > 100) {
+          toast("Titel is langer dan 100 tekens — YouTube weigert dat. Kort 'm in.", "error", 7000);
+          return;
+        }
+        // Nieuwe gevalideerde route (POST); oudere backend zonder POST → val
+        // terug op de legacy PATCH zodat opslaan blijft werken.
+        const body = { title: t.input.value, description: d.input.value, tags: g.input.value };
+        let res;
+        try {
+          res = await api.post(`/api/v1/videos/${id}/metadata`, body, { key: "meta-save-" + id });
+        } catch (e) {
+          if (e.name === "AbortError" || !/HTTP (404|405)/.test(e.message || "")) throw e;
+          res = null;
+          await api.patch(`/api/v1/videos/${id}/metadata`, body, { key: "meta-save-" + id });
+        }
+        meta.title = res && res.title != null ? res.title : body.title;
+        meta.description = res && res.description != null ? res.description : body.description;
+        meta.tags = res && res.tags != null ? res.tags : body.tags;
         toast("Metadata saved", "info");
         showView();
       });
@@ -898,21 +1014,56 @@ function renderReview(ctx) {
     wrap.appendChild(card);
   }
 
-  // ── Localization (only after upload) ──
-  if (uploaded) {
+  // Distributie-gate (taak P2): pas zichtbaar zodra de master geüpload is —
+  // status DISTRIBUTION_PENDING of COMPLETED.
+  const distReady = !!(lastJob &&
+      (lastJob.status === "DISTRIBUTION_PENDING" || lastJob.status === "COMPLETED"));
+
+  // ── 🌍 Vertalingen (backlog P2) — per taal: status + vertaal-actie ──
+  if (uploaded || distReady) {
     any = true;
-    const card = reviewCard("Localization");
+    const card = reviewCard("🌍 Vertalingen");
     const locs = Array.isArray(ctx.localizations) ? ctx.localizations : [];
     if (locs.length) {
-      const dl = document.createElement("dl");
-      dl.className = "kv";
-      for (const l of locs) field(dl, l.name || l.language, l.status);
-      card.appendChild(dl);
+      const list = document.createElement("div");
+      for (const l of locs) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;gap:8px;margin:3px 0;flex-wrap:wrap";
+        const name = document.createElement("span");
+        name.style.cssText = "min-width:120px";
+        name.textContent = l.name || l.language || "?";
+        row.appendChild(name);
+        const st = (l.status || "").toUpperCase();
+        const pill = document.createElement("span");
+        pill.className = "pill pill--" +
+            (st === "TRANSLATED" || st === "UPLOADED" ? "success"
+             : st === "FAILED" ? "danger" : "muted");
+        pill.textContent = l.status || "—";
+        row.appendChild(pill);
+        if (l.youtubeVideoId) {
+          const a = document.createElement("a");
+          a.className = "small";
+          a.href = "https://www.youtube.com/watch?v=" + encodeURIComponent(l.youtubeVideoId);
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = "YouTube ↗";
+          row.appendChild(a);
+        }
+        if (l.error) {
+          const err = document.createElement("span");
+          err.className = "small";
+          err.style.color = "var(--danger,#b91c1c)";
+          err.textContent = String(l.error).slice(0, 120);
+          err.title = l.error;
+          row.appendChild(err);
+        }
+        list.appendChild(row);
+      }
+      card.appendChild(list);
     } else {
-      const p = document.createElement("div");
-      p.className = "small";
-      p.style.color = "var(--muted)";
-      p.textContent = "no localizations yet";
+      const p = document.createElement("p");
+      p.className = "sub small";
+      p.textContent = "Nog geen vertalingen — kies hieronder een taal en klik Vertaal.";
       card.appendChild(p);
     }
     const langs = ctx.languages && ctx.languages.supported;
@@ -926,28 +1077,33 @@ function renderReview(ctx) {
         opt.textContent = (ctx.languages.names && ctx.languages.names[code]) || code;
         sel.appendChild(opt);
       }
+      if (lastLangChoice && langs.includes(lastLangChoice)) sel.value = lastLangChoice;
+      sel.addEventListener("change", () => { lastLangChoice = sel.value; });
       row.appendChild(sel);
-      row.appendChild(sceneBtn("Localize", "Generate a localized version", async () => {
-        await api.post(`/api/v1/videos/${id}/localize/${encodeURIComponent(sel.value)}`);
-        loadReview();
-      }));
+      row.appendChild(sceneBtn("🌍 Vertaal",
+        "Vertaalt het script (en de metadata, als die er al is) naar de gekozen taal en bewaart het resultaat per taal. Bestaat de vertaling al, dan wordt ze ververst.",
+        async () => {
+          const res = await api.post(
+            `/api/v1/videos/${id}/localize/${encodeURIComponent(sel.value)}`,
+            undefined, { key: "localize" });
+          toast(`Vertaling ${sel.value} klaar ✓` +
+              (res && res.title ? ` — “${res.title}”` : ""), "info", 6000);
+          loadReview();
+        }));
       card.appendChild(row);
+    } else {
+      const p = document.createElement("p");
+      p.className = "sub small";
+      p.textContent = "Talenlijst niet beschikbaar (languages-endpoint niet bereikbaar) — vertalingen blijven wel zichtbaar.";
+      card.appendChild(p);
     }
     wrap.appendChild(card);
   }
 
-  // ── Distribution (only after upload) ──
-  if (uploaded) {
+  // ── 📣 Distributie (backlog P2) — per platform: status + push-knop ──
+  if (distReady) {
     any = true;
-    const card = reviewCard("Distribution");
-    const row = document.createElement("div");
-    row.className = "filter-row";
-    for (const p of ["tiktok", "instagram", "facebook"]) {
-      row.appendChild(sceneBtn("→ " + p, "Push this video to " + p,
-        async () => { await api.post(`/api/v1/videos/${id}/distribute/${p}`); toast("Pushed to " + p, "info"); }));
-    }
-    card.appendChild(row);
-    wrap.appendChild(card);
+    wrap.appendChild(distributionCard(uploaded));
   }
 
   // When there's nothing meaningful to show yet, hide the whole Review section
@@ -964,6 +1120,239 @@ function renderReview(ctx) {
   reviewHost.replaceChildren(wrap);
 }
 
+/** Statuschip voor het distributie-panel. on=true → groen vinkje.
+ *  Optionele href (bijv. de Instagram-permalink, V25) maakt de chip een
+ *  klikbare link naar de live post. */
+function distChip(on, label, title, href) {
+  const s = document.createElement(href ? "a" : "span");
+  s.className = "pill pill--" + (on ? "success" : "muted");
+  s.textContent = label + (on ? " ✓" : " —");
+  if (title) s.title = title;
+  if (href) {
+    s.href = href;
+    s.target = "_blank";
+    s.rel = "noopener noreferrer";
+  }
+  return s;
+}
+
+/** Community-postideeën (copy-paste — de YouTube API kan ze niet plaatsen). */
+function renderCommunityPosts(host) {
+  host.replaceChildren();
+  host.className = "";
+  const data = communityPosts;
+  if (!data) return;
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  if (!posts.length) {
+    host.textContent = "Geen postideeën ontvangen (upload-service niet bereikbaar?).";
+    host.className = "sub small";
+    return;
+  }
+  for (const p of posts) {
+    const box = document.createElement("div");
+    box.style.cssText = "border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 10px;margin:6px 0";
+    const pre = document.createElement("pre");
+    pre.style.cssText = "white-space:pre-wrap;margin:0 0 6px;font:inherit";
+    pre.textContent = p.body || "";
+    box.appendChild(pre);
+    const foot = document.createElement("div");
+    foot.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+    const copy = document.createElement("button");
+    copy.className = "btn sm";
+    copy.textContent = "📋 Kopieer";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(p.body || "");
+        toast("Post gekopieerd — plak in YouTube Studio → Community → Nieuw bericht", "info");
+      } catch (e) {
+        toast("Kopiëren mislukt — selecteer de tekst handmatig", "error");
+      }
+    });
+    foot.appendChild(copy);
+    if (p.scheduleHint) {
+      const hint = document.createElement("span");
+      hint.className = "small";
+      hint.style.color = "var(--muted)";
+      hint.textContent = p.scheduleHint;
+      foot.appendChild(hint);
+    }
+    box.appendChild(foot);
+    host.appendChild(box);
+  }
+  if (data.cadenceTip) {
+    const tip = document.createElement("p");
+    tip.className = "sub small";
+    tip.textContent = "💡 " + data.cadenceTip;
+    host.appendChild(tip);
+  }
+}
+
+/** End-screen-recept: gestructureerd als de elements-lijst er is, anders JSON. */
+function renderEndScreen(host) {
+  host.replaceChildren();
+  const r = endScreenRecipe;
+  if (!r) return;
+  if (Array.isArray(r.elements) && r.elements.length) {
+    const ul = document.createElement("ul");
+    ul.className = "small";
+    ul.style.cssText = "margin:6px 0;padding-left:18px";
+    for (const el of r.elements) {
+      const li = document.createElement("li");
+      const bits = [];
+      if (el.type) bits.push(el.type);
+      if (el.position) bits.push("positie: " + el.position);
+      if (el.startSecondsBeforeEnd != null) bits.push(el.startSecondsBeforeEnd + "s voor het einde");
+      li.textContent = bits.join(" · ") || JSON.stringify(el);
+      ul.appendChild(li);
+    }
+    host.appendChild(ul);
+    for (const [k, v] of Object.entries(r)) {
+      if (k === "elements" || typeof v !== "string") continue;
+      const p = document.createElement("p");
+      p.className = "sub small";
+      p.textContent = v;
+      host.appendChild(p);
+    }
+  } else {
+    const pre = document.createElement("pre");
+    pre.className = "small mono";
+    pre.style.cssText = "white-space:pre-wrap";
+    pre.textContent = JSON.stringify(r, null, 2);
+    host.appendChild(pre);
+  }
+  const note = document.createElement("p");
+  note.className = "sub small";
+  note.textContent = "Eenmalig instellen in YouTube Studio → Editor → End screen; YouTube onthoudt het voor volgende uploads.";
+  host.appendChild(note);
+}
+
+/**
+ * 📣 Distributie-kaart: per platform een statuschip + push-knop op de
+ * bestaande MultiPlatform-endpoints (via de orchestrator-proxy
+ * POST /api/v1/videos/{id}/distribute/{platform}). Status is eerlijk én
+ * persistent: YouTube, Facebook, TikTok (publish-id) en Instagram (media-id)
+ * worden na een geslaagde push op de job bewaard (V23) en komen mee in
+ * GET /api/v1/videos/{id}; oudere backends zonder die velden vallen terug
+ * op het distributie-overzicht.
+ */
+function distributionCard(uploaded) {
+  const card = reviewCard("📣 Distributie");
+  const sub = document.createElement("p");
+  sub.className = "sub small";
+  sub.textContent = "Eén master → meerdere platformen. Een push uploadt de bestaande video — geen nieuwe render. Platforms zonder token geven '503 not configured'.";
+  card.appendChild(sub);
+
+  // Statuschips.
+  const row = Array.isArray(distRows) ? distRows.find((r) => r.id === id) : null;
+  const chips = document.createElement("div");
+  chips.className = "filter-row";
+  chips.appendChild(distChip(uploaded, "YouTube",
+      uploaded ? "Live op YouTube" : "Nog niet op YouTube"));
+  const fbOn = !!((lastJob && (lastJob.facebookVideoId || lastJob.facebookUrl)) || (row && row.facebook));
+  chips.appendChild(distChip(fbOn, "Facebook",
+      fbOn ? "Gepost op de Facebook-pagina" : "Nog niet op Facebook"));
+  // TikTok/Instagram: de push-respons (publish-id / media-id) wordt sinds V23
+  // op de job bewaard — echte status in plaats van het oude eerlijke "?".
+  // Op een oudere backend (veld ontbreekt in de job-respons én in het
+  // overzicht) blijft het chipje grijs met een eerlijke uitleg.
+  const tracked = lastJob && ("tiktokPublishId" in lastJob || "instagramMediaId" in lastJob);
+  const tkOn = !!((lastJob && lastJob.tiktokPublishId) || (row && row.tiktok));
+  const igOn = !!((lastJob && lastJob.instagramMediaId) || (row && row.instagram));
+  const UNKNOWN = "Status onbekend — deze backend bewaart de pushstatus nog niet op de job.";
+  chips.appendChild(distChip(tkOn, "TikTok",
+      tkOn ? "Gepusht naar TikTok (publish-id: " + (lastJob && lastJob.tiktokPublishId || "?") + ")"
+           : tracked ? "Nog niet naar TikTok gepusht" : UNKNOWN));
+  // Instagram-permalink (V25): als de backend 'm heeft opgeslagen wordt de
+  // chip een link naar de live Reel; zonder permalink blijft het een chip.
+  const igUrl = (lastJob && lastJob.instagramUrl) || null;
+  chips.appendChild(distChip(igOn, "Instagram",
+      igOn ? "Gepubliceerd als Instagram Reel (media-id: " + (lastJob && lastJob.instagramMediaId || "?") + ")"
+               + (igUrl ? " — klik om de Reel te openen" : "")
+           : tracked ? "Nog niet naar Instagram gepusht" : UNKNOWN,
+      igOn ? igUrl : null));
+  card.appendChild(chips);
+
+  // Push-knoppen met bevestiging + toast.
+  const acts = document.createElement("div");
+  acts.className = "filter-row";
+  const push = (platform, label, help, confirmMsg) => {
+    const b = sceneBtn(label, help, async () => {
+      if (!confirm(confirmMsg)) return;
+      const res = await api.post(`/api/v1/videos/${id}/distribute/${platform}`,
+          undefined, { key: "dist-" + platform });
+      const r = (res && res.result) || {};
+      const ok = r.success !== false;
+      toast(ok ? `Gepusht naar ${platform} ✓` + (r.url ? " · " + r.url : "")
+               : `${platform}: push niet gelukt — zie de details in de melding`,
+            ok ? "info" : "error", 8000);
+      loadReview();
+    });
+    return b;
+  };
+  acts.appendChild(push("tiktok", "→ TikTok",
+      "Upload de master als TikTok-video (vereist TIKTOK_ACCESS_TOKEN op de upload-service).",
+      "Video naar TikTok pushen?\n\nDe bestaande master wordt geüpload met de YouTube-titel als caption."));
+  const ig = push("instagram", "→ Instagram",
+      "Publiceer als Instagram Reel via de publieke YouTube-URL.",
+      "Video naar Instagram (Reels) pushen?\n\nGebruikt de publieke YouTube-URL als bron.");
+  if (!uploaded) {
+    ig.disabled = true;
+    ig.title = "Instagram heeft een publieke URL nodig — upload eerst naar YouTube.";
+  }
+  acts.appendChild(ig);
+  acts.appendChild(push("facebook", "→ Facebook",
+      "Upload de master naar de Facebook-pagina; de post-ID en URL worden op de job bewaard.",
+      "Video naar de Facebook-pagina pushen?\n\nDe bestaande master wordt geüpload met titel + beschrijving."));
+  card.appendChild(acts);
+
+  // (Facebook-URL: het overzicht zegt alleen dát hij er staat; de URL staat
+  // wel op de job maar zit niet in /review — de push-toast toont 'm direct.)
+
+  // 💬 Community-posts (copy-paste — YouTube's API is Studio-only).
+  const ideasHost = document.createElement("div");
+  const cpBtn = sceneBtn("💬 Community-postideeën",
+    "Genereert copy-paste posts voor het YouTube Community-tabblad. De API kan ze niet plaatsen (Studio-only) — kopieer en plak ze zelf.",
+    async () => {
+      communityPosts = await api.get(`/api/v1/videos/${id}/distribute/community-posts`,
+          { key: "cposts-" + id });
+      renderCommunityPosts(ideasHost);
+    });
+  const cpRow = document.createElement("div");
+  cpRow.className = "filter-row";
+  cpRow.appendChild(cpBtn);
+  card.appendChild(cpRow);
+  if (communityPosts) renderCommunityPosts(ideasHost);
+  card.appendChild(ideasHost);
+
+  // 📺 End-screen-recept (expander, lazy geladen, stand overleeft de poll).
+  const es = document.createElement("details");
+  es.open = endScreenOpen;
+  const esSum = document.createElement("summary");
+  esSum.style.cursor = "pointer";
+  esSum.className = "small";
+  esSum.textContent = "📺 End-screen-recept (eenmalig instellen in YouTube Studio)";
+  es.appendChild(esSum);
+  const esBody = document.createElement("div");
+  es.appendChild(esBody);
+  if (endScreenRecipe) renderEndScreen(esBody);
+  es.addEventListener("toggle", async () => {
+    endScreenOpen = es.open;
+    if (es.open && !endScreenRecipe) {
+      try {
+        endScreenRecipe = await api.get(
+            `/api/v1/videos/${id}/distribute/end-screen-recipe`, { key: "esr-" + id });
+        renderEndScreen(esBody);
+      } catch (e) {
+        esBody.className = "sub small";
+        esBody.textContent = "Recept laden mislukte (upload-service niet bereikbaar?).";
+      }
+    }
+  });
+  card.appendChild(es);
+
+  return card;
+}
+
 async function loadReview() {
   // Review payload is required; localizations + languages are best-effort.
   let review, localizations = [], languages = null;
@@ -976,7 +1365,22 @@ async function loadReview() {
   }
   try { localizations = await api.get(`/api/v1/videos/${id}/localizations`, { key: "locs-" + id }); } catch (e) {}
   try { languages = await api.get(`/api/v1/languages`, { key: "langs" }); } catch (e) {}
-  renderReview({ review, localizations, languages });
+  // Kosten: nieuw read-only endpoint met breakdown + werkelijke Veo-kosten.
+  // Eén mislukking (bv. oudere build zonder /cost) → niet elke 5s opnieuw
+  // proberen (en dus geen toast-spam); de UI valt terug op review.cost.
+  if (!costFailed) {
+    try {
+      costData = await api.get(`/api/v1/videos/${id}/cost`, { key: "cost-" + id });
+    } catch (e) {
+      if (e.name !== "AbortError") costFailed = true;
+    }
+  }
+  // Distributie-status (YouTube/Facebook per video) — alleen relevant zodra
+  // de master er is; best-effort.
+  if (lastJob && (lastJob.status === "DISTRIBUTION_PENDING" || lastJob.status === "COMPLETED")) {
+    try { distRows = await api.get("/api/v1/distribution", { key: "dist-rows" }); } catch (e) {}
+  }
+  renderReview({ review, localizations, languages, cost: costData });
 }
 
 /** Small async action button: disables itself while running. */

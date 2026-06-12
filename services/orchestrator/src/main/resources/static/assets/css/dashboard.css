@@ -762,3 +762,18 @@ dl.kv dd { margin: 0; word-break: break-word; }
 .scene-edit textarea { width: 100%; background: var(--input-bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit;
   font-size: 15px; line-height: 1.45; resize: vertical; }
+
+/* Toast host (api.js) — fixed bottom-right stack, shared by every /ui page
+   (was a repeated inline style attribute in each page). */
+#toast-host { position: fixed; right: 16px; bottom: 16px; display: flex;
+              flex-direction: column; gap: 8px; z-index: 1000; }
+
+/* Golden test page (/ui/golden.html) — was runtime-injected by golden-page.js. */
+.golden-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.golden-table th, .golden-table td { text-align: left; padding: 4px 10px;
+  border-bottom: 1px solid var(--border, #ddd); font-size: 13px; }
+.golden-better { color: #15803d; font-weight: 600; }
+.golden-worse  { color: #b91c1c; font-weight: 600; }
+.golden-sheets { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.golden-sheets figure { margin: 0; flex: 1 1 380px; }
+.golden-sheets img { width: 100%; border-radius: 8px; }

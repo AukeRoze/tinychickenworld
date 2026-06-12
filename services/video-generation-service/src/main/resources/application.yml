@@ -1,6 +1,16 @@
 spring:
   application:
     name: video-generation-service
+  # Virtual threads: only Tomcat request handling becomes virtual (the async
+  # submit/status endpoints are quick; the legacy synchronous generate
+  # endpoint blocks on Veo for many minutes and now no longer ties up a
+  # platform thread). The actual clip work stays where it is: the
+  # AsyncClipJobStore keeps its OWN fixed pool (2) and ClipGenerationService
+  # keeps its bounded per-run pool (veo.parallelism.max-parallel) — those
+  # bounds are deliberate Veo-quota/cost backpressure, not thread starvation.
+  threads:
+    virtual:
+      enabled: true
 
 server:
   port: 8087

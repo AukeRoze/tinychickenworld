@@ -113,11 +113,33 @@ public class MetadataGenerator {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final KeywordSuggester keywordSuggester;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record Metadata(String title, String description, List<String> tags) {}
 
+    /**
+     * Backwards-compatible entry point (the orchestrator calls this one).
+     * Fetches YouTube-autocomplete keywords for the topic itself, best-effort:
+     * {@link KeywordSuggester} never throws and returns an empty list when the
+     * feature is off or the lookup fails, so existing callers — including
+     * PipelineOrchestrator, which must not change — get the SEO boost for free
+     * with zero behavioural risk.
+     */
     public Metadata generate(String topic, String scriptTitle, String hook, boolean isShort) {
+        List<String> seoKeywords =
+                keywordSuggester == null ? List.of() : keywordSuggester.suggestFor(topic);
+        return generate(topic, scriptTitle, hook, isShort, seoKeywords);
+    }
+
+    /**
+     * Overload with explicit SEO keywords (real YouTube autocomplete phrases).
+     * Pass {@code List.of()} to skip the SEO section entirely; the
+     * emit_metadata tool schema is unchanged either way. Exists for tests and
+     * callers that want to control or pre-fetch the keyword list themselves.
+     */
+    public Metadata generate(String topic, String scriptTitle, String hook, boolean isShort,
+                             List<String> seoKeywords) {
         String system = SYSTEM_BASE + (isShort ? VERTICAL_HINT : "");
 
         ObjectNode body = mapper.createObjectNode();
@@ -134,6 +156,7 @@ public class MetadataGenerator {
                         + "\nScript title: " + scriptTitle
                         + "\nHook: " + hook
                         + (isShort ? "\nThis is a YouTube Short (vertical, <=60s)." : "")
+                        + seoSection(seoKeywords)
                         + "\nCall the emit_metadata tool.");
 
         ArrayNode tools = body.putArray("tools");
@@ -321,6 +344,23 @@ public class MetadataGenerator {
             log.warn("Chapter-title generation failed (using static labels): {}", e.getMessage());
         }
         return out;
+    }
+
+    /** Renders the SEO-keyword block appended to the user message, or "" when
+     *  there are no keywords (the prompt is then byte-for-byte what it was
+     *  before this feature — important for prompt-stability). */
+    static String seoSection(List<String> seoKeywords) {
+        if (seoKeywords == null || seoKeywords.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder(
+                "\n\nPopular YouTube search phrases for this topic (real autocomplete"
+                + " data — weave the strongest naturally into the title and include"
+                + " the best 3-5 as tags; NEVER keyword-stuff, kid-readability wins):");
+        for (String kw : seoKeywords) {
+            if (kw == null || kw.isBlank()) continue;
+            sb.append("\n- ").append(kw.trim());
+        }
+        sb.append('\n');
+        return sb.toString();
     }
 
     /** Hard mobile-safe title cap. The prompt asks for <=60 chars but the schema

@@ -10,6 +10,19 @@
  * Spring from classpath:/static/.
  */
 
+/**
+ * HTML-escape one value for interpolation into a markup string (innerHTML /
+ * template literals). Use this on EVERY dynamic value that ends up in markup —
+ * topics, titles, error texts and LLM output are attacker-controlled as far as
+ * the DOM is concerned. Prefer textContent/createElement where possible; when
+ * a template string is genuinely handier, esc() every interpolation.
+ */
+export function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 /** Fire a transient toast. Falls back to console if no #toast-host exists yet. */
 export function toast(message, kind = "info", durationMs = 4000) {
   const host = document.getElementById("toast-host");

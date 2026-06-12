@@ -100,21 +100,51 @@ public class InsightsAggregator {
     }
 
     /** The self-learning performance hint fed into every new script — the proven
-     *  patterns (top moods/lessons by view count) the writer should bias toward.
+     *  patterns (top moods/lessons by view count) the writer should bias toward,
+     *  plus — once ≥{@link PhaseRetention#MIN_VIDEOS} videos carry retention
+     *  data — which story phase loses viewers (Story I feedback loop).
      *  One source of truth, shown to the user AND sent to script-service.
      *  Returns null when there isn't enough analytics data yet. */
     public String performanceHint() {
         try {
             List<String> top = topMoods(3);
             List<String> lessons = topLessons(3);
-            if (top.isEmpty() && lessons.isEmpty()) return null;
+            String retention = retentionHintSection();
+            if (top.isEmpty() && lessons.isEmpty() && retention == null) return null;
             StringBuilder sb = new StringBuilder();
             if (!top.isEmpty())
                 sb.append("Top moods by view count: ").append(String.join("; ", top)).append(". ");
             if (!lessons.isEmpty())
                 sb.append("Top lessons by view count: ").append(String.join("; ", lessons)).append(". ");
+            if (retention != null)
+                sb.append(retention).append(' ');
             sb.append("Use these proven patterns as a base; don't copy literally.");
             return sb.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Per-story-phase retention aggregation over every job that has a
+     *  retention mapping (filled by the AnalyticsPoller). Fail-safe: any
+     *  error degrades to an empty aggregate, never an exception. */
+    public PhaseRetention.Aggregate retentionByPhase() {
+        try {
+            List<String> payloads = jobRepo.findAll().stream()
+                    .map(VideoJob::getRetentionScenesJson)
+                    .filter(j -> j != null && !j.isBlank())
+                    .toList();
+            return PhaseRetention.aggregate(payloads);
+        } catch (Exception e) {
+            return PhaseRetention.Aggregate.empty();
+        }
+    }
+
+    /** Retention sentence for the hint, or null below the data threshold —
+     *  the script writer hears nothing rather than a guess. */
+    private String retentionHintSection() {
+        try {
+            return PhaseRetention.hintSection(retentionByPhase(), PhaseRetention.MIN_VIDEOS);
         } catch (Exception e) {
             return null;
         }

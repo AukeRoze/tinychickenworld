@@ -243,7 +243,12 @@ function renderCard(c, reload) {
   return card;
 }
 
-(async function () {
+/**
+ * Re-fetch the cast and re-render the grid in place — a targeted refresh
+ * instead of location.reload(), so the page doesn't flash and scroll position
+ * survives an edit.
+ */
+async function load() {
   let cast;
   try {
     cast = await api.get("/api/v1/brand/cast", { key: "cast" });
@@ -255,9 +260,10 @@ function renderCard(c, reload) {
     host.textContent = "No characters defined in the bible (channel.yml → characters:).";
     return;
   }
-  const reload = () => location.reload();
   const grid = document.createElement("div");
   grid.className = "cast-grid";
-  for (const c of cast) grid.appendChild(renderCard(c, reload));
+  for (const c of cast) grid.appendChild(renderCard(c, load));
   host.replaceChildren(grid);
-})();
+}
+
+load();

@@ -2,6 +2,8 @@ package com.youtubeauto.orchestrator.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -41,6 +43,16 @@ public class VideoJob {
     /** Comma-separated list of scene seq numbers the reviewer has locked. */
     @Column(name = "locked_scene_seqs", columnDefinition = "text") private String lockedSceneSeqs;
 
+    /** Optimistic-locking guard (V26). Hibernate bumps this on every UPDATE
+     *  and a stale write fails with ObjectOptimisticLockingFailureException —
+     *  the async pipeline stages, dashboard controllers and the
+     *  AnalyticsPoller all write this row concurrently. Short load-mutate-save
+     *  paths retry via PipelineOrchestrator.retryOnConflict. Never set this
+     *  manually: null means "new entity" to Spring Data (persist vs merge). */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     // ---- lifecycle ----
     @Enumerated(EnumType.STRING)
     @Column(nullable = false) private JobStatus status;
@@ -72,9 +84,25 @@ public class VideoJob {
 
     /** JSON: list of {seq, durationSeconds, narration, visualDesc, imagePath, audioPath, clipPath?}.
      *  Re-loaded at each stage so a review gate can pause + resume without
-     *  re-running upstream work. */
-    @Column(name = "assembly_scenes")
+     *  re-running upstream work.
+     *  Stored as JSONB since V24; the Java type deliberately stays String
+     *  (Jackson serialises in the orchestrator) and @JdbcTypeCode(SqlTypes.JSON)
+     *  makes Hibernate 6 pass the raw JSON text through to the jsonb column —
+     *  the exact pattern script-service already uses for Script.rawJson. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "assembly_scenes", columnDefinition = "jsonb")
     private String assemblyScenesJson;
+
+    /** Episode-ConsistencyState (Story B, V27): this episode's visual canon —
+     *  JSON {@code {"characters":{id:stillPath},"props":[{name,keyword,imagePath}]}}.
+     *  Written ONCE per job, right after the image vision-QC pass (so only
+     *  QC-approved stills become canon); read by every re-roll path so a
+     *  re-generated still is conditioned on the SAME approved exemplars, even
+     *  after a JVM restart. Null = no canon yet (legacy job / first batch) →
+     *  every path behaves exactly as before. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "episode_anchors", columnDefinition = "jsonb")
+    private String episodeAnchorsJson;
 
     // ---- outputs ----
     @Column(name = "video_path") private String videoPath;
@@ -107,6 +135,17 @@ public class VideoJob {
     // ---- Cross-platform distribution IDs ----
     @Column(name = "facebook_video_id") private String facebookVideoId;
     @Column(name = "facebook_url") private String facebookUrl;
+    /** TikTok publish_id returned by the upload-service push (no public URL —
+     *  TikTok's API returns only the publish handle). Null = never pushed. */
+    @Column(name = "tiktok_publish_id") private String tiktokPublishId;
+    /** Instagram media-id returned by the Reels publish (the Graph API response
+     *  carries only the id, no permalink). Null = never pushed. */
+    @Column(name = "instagram_media_id") private String instagramMediaId;
+    /** Public Instagram permalink (https://www.instagram.com/reel/...), looked
+     *  up best-effort by the upload-service after a successful Reels publish
+     *  (V25). Null = lookup failed or never pushed — a missing URL never marks
+     *  the push as failed, the media-id above stays the source of truth. */
+    @Column(name = "instagram_url") private String instagramUrl;
 
     // ---- planning ----
     /** When this episode should go live on YouTube. If set, upload uses
