@@ -30,7 +30,8 @@ import java.util.Map;
  * and AI-generate reference CANDIDATES from the current bible DNA
  * (generate-ref / ref/approve — see the candidates section below), plus extra
  * multi-angle views conditioned on the approved primary ref
- * (generate-angle / angle/approve — see the angles section below).
+ * (generate-angle / angle/approve — see the angles section below; the special
+ * "front" angle replaces the primary ref itself, anchored on the angles).
  */
 @RestController
 @RequestMapping("/api/v1/brand")
@@ -467,22 +468,39 @@ public class BrandController {
     // ref); die hoeken zijn zelf op de primaire ref geconditioneerd, dus de
     // identiteitsketen blijft intact.
     //
-    // Hoeken-whitelist: "front" bestaat bewust niet (de primaire ref ÍS het
-    // vooraanzicht) en driekwart-VÓÓR bieden we bewust niet aan — die hoek gaf
-    // historisch wimper-drift bij Mo (de ogen kregen er lashes bij die daarna
-    // als canon doorsijpelden in episode-anchors).
+    // Hoeken-whitelist — drie generatie-routes, drie bedoelingen:
+    //   • 🎨 generate-ref    = REDESIGN: geen beeld-anchors (characters:[]),
+    //     de bible-DNA-tekst bepaalt de vorm; ref/approve reset daarna alles
+    //     wat de oude look droeg (hoeken-map + serie-anchors).
+    //   • 📐 side / back34   = HOEK TOEVOEGEN: ankert op de bestaande refs;
+    //     angle/approve schrijft ADDITIEF naar refs/{id}/{angle}.png en laat
+    //     de primaire ref met rust (cap: max 3 hoeken).
+    //   • 📐 front           = CANON VERBETEREN: zelfde geconditioneerde route,
+    //     maar de provider ankert op refs/{id}/*.png zodra die bestaan (map-
+    //     met-pngs wint van de single ref) — een nieuwe front-view die op de
+    //     goedgekeurde hoeken leunt i.p.v. de DNA-loterij van 🎨. Approve
+    //     vervangt ALLEEN de primaire ref refs/{id}.png (backup .bak); de
+    //     hoeken en serie-anchors blijven staan (zelfde design, betere front)
+    //     en de hoeken-cap is hier niet van toepassing (vervangt, voegt niet toe).
+    // Driekwart-VÓÓR bieden we bewust niet aan — die hoek gaf historisch
+    // wimper-drift bij Mo (de ogen kregen er lashes bij die daarna als canon
+    // doorsijpelden in episode-anchors).
     private static final Map<String, String> ANGLE_VIEWS = Map.of(
             "side", "side profile facing left",
-            "back34", "three-quarter view from behind");
+            "back34", "three-quarter view from behind",
+            "front", "front view facing the camera");
 
     /** Harde cap op het aantal hoek-refs in refs/{id}/ — gespiegeld aan
      *  GeminiImageProvider.MAX_ANGLES (de provider leest er toch maar 3,
      *  gesorteerd; meer toestaan zou alleen verwarren welke 3 meegaan). */
     private static final int MAX_PROVIDER_ANGLES = 3;
 
-    /** Genereert 1-4 kandidaten voor één extra hoek van een character,
-     *  geconditioneerd op de primaire ref (zie het blok-comment hierboven).
-     *  Body: {"angle": "side"|"back34", "count": 3}. Kandidaten landen als
+    /** Genereert 1-4 kandidaten voor één hoek van een character, geconditioneerd
+     *  op de bestaande refs (zie het blok-comment hierboven; bij "front" zijn
+     *  dat bij voorkeur de goedgekeurde hoeken in refs/{id}/ — de provider
+     *  prefereert die map boven de single ref, precies de bedoeling van de
+     *  canon-verbeter-route). Body: {"angle": "side"|"back34"|"front",
+     *  "count": 3}. Kandidaten landen als
      *  refs/{id}/candidates/candidate-{angle}-{i}.png — dezelfde map en
      *  "candidate"-naamconventie als generate-ref, dus het bestaande
      *  serve-/GET-/DELETE-candidates-pad lift gewoon mee. */
@@ -496,8 +514,8 @@ public class BrandController {
         String angle = String.valueOf(body == null ? "" : body.getOrDefault("angle", "")).trim();
         if (!ANGLE_VIEWS.containsKey(angle)) {
             return ResponseEntity.badRequest().body(Map.of("error",
-                    "angle moet 'side' of 'back34' zijn (front = de primaire ref zelf; "
-                            + "driekwart-vóór bieden we bewust niet aan)"));
+                    "angle moet 'side', 'back34' of 'front' zijn "
+                            + "(driekwart-vóór bieden we bewust niet aan)"));
         }
         JsonNode ch = findCharacter(id);
         if (ch == null) {
@@ -507,7 +525,11 @@ public class BrandController {
         // Zonder primaire ref is er niets om op te conditioneren — de provider
         // zou tekst-only terugvallen en dat is precies wat we hier NIET willen.
         // (.png expliciet: de single-anchor-fallback van de provider leest
-        // alleen refs/{id}.png, geen .jpg.)
+        // alleen refs/{id}.png, geen .jpg.) Voor "front" geldt dezelfde check:
+        // mét goedgekeurde hoeken ankert de provider op refs/{id}/*.png (de
+        // bedoeling van de canon-verbeter-route), zónder hoeken valt hij terug
+        // op de — mogelijk zwakke — primaire ref; de UI biedt front daarom pas
+        // aan bij ≥1 hoek, server-side blijven we permissief.
         if (!Files.isRegularFile(bibleDir().resolve("refs").resolve(id + ".png"))
                 && activeAngleFiles(id).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error",
@@ -586,12 +608,19 @@ public class BrandController {
         return ResponseEntity.ok(out);
     }
 
-    /** Promoveert één hoek-kandidaat naar refs/{id}/{angle}.png. Body:
-     *  {"file": "{id}/candidates/candidate-side-1.png", "angle": "side"}.
-     *  ADDITIEF: de primaire ref blijft staan, er wordt geen map geleegd en
-     *  geen serie-anchor weggegooid — alleen de kandidaten van deze hoek
-     *  worden opgeruimd. Cap: het resultaat mag max {@link #MAX_PROVIDER_ANGLES}
-     *  hoek-refs opleveren (de provider leest er toch maar 3). */
+    /** Promoveert één hoek-kandidaat. Body: {"file":
+     *  "{id}/candidates/candidate-side-1.png", "angle": "side"}. Twee takken:
+     *  <ul><li>side/back34 → refs/{id}/{angle}.png. ADDITIEF: de primaire ref
+     *  blijft staan, er wordt geen map geleegd en geen serie-anchor weggegooid
+     *  — alleen de kandidaten van deze hoek worden opgeruimd. Cap: het
+     *  resultaat mag max {@link #MAX_PROVIDER_ANGLES} hoek-refs opleveren (de
+     *  provider leest er toch maar 3).</li>
+     *  <li>front → de PRIMAIRE ref refs/{id}.png, via hetzelfde promotie-
+     *  mechanisme als ref/approve ({@link BibleEditor#saveReference}, oude →
+     *  .bak, daarna bible-reload) maar ZONDER de redesign-opruiming van
+     *  ref/approve: hoeken en serie-anchors blijven staan — de kandidaat is
+     *  juist op die hoeken geconditioneerd, dus het design is hetzelfde.
+     *  De hoeken-cap geldt hier niet (front vervangt, voegt niet toe).</li></ul> */
     @PostMapping(value = "/cast/{id}/angle/approve", consumes = "application/json")
     public ResponseEntity<Map<String, Object>> approveAngle(@PathVariable String id,
                                                             @RequestBody Map<String, String> body) {
@@ -601,7 +630,7 @@ public class BrandController {
         String angle = body == null ? null : body.get("angle");
         if (angle == null || !ANGLE_VIEWS.containsKey(angle)) {
             return ResponseEntity.badRequest().body(Map.of("error",
-                    "angle moet 'side' of 'back34' zijn"));
+                    "angle moet 'side', 'back34' of 'front' zijn"));
         }
         String file = body.get("file");
         Path candDir = bibleDir().resolve("refs").resolve(id).resolve("candidates").normalize();
@@ -613,6 +642,44 @@ public class BrandController {
         if (!cand.getFileName().toString().startsWith("candidate-" + angle + "-")) {
             return ResponseEntity.badRequest().body(Map.of("error",
                     "file hoort niet bij angle '" + angle + "' — verwacht candidate-" + angle + "-*.png"));
+        }
+        // FRONT-tak: nieuwe CANON, geen extra hoek. Zelfde promotie-pad als
+        // ref/approve (primaire ref + .bak-backup + stack-brede bible-reload),
+        // maar ANDERS dan ref/approve wordt hier NIETS gereset: refs/{id}/
+        // (de hoeken) en refs/series/*/{id}.png (serie-anchors) blijven staan.
+        // Bij een 🎨-redesign dragen die de OUDE look en moeten ze weg; hier
+        // is de kandidaat juist op de hoeken geconditioneerd — zelfde design,
+        // alleen een betere front. Cap-check (≤3 hoeken) is niet van
+        // toepassing: front vervangt de primaire ref, refs/{id}/ groeit niet.
+        if ("front".equals(angle)) {
+            try {
+                byte[] png = Files.readAllBytes(cand);
+                Path saved = bibleEditor.saveReference(id, png);
+                int cleaned = deleteAngleCandidates(candDir, angle);   // incl. de gekozen kandidaat
+                try { Files.deleteIfExists(candDir); } catch (Exception ignore) { /* niet leeg */ }
+                Map<String, Object> reload = bibleReloadService.reloadAll();
+                List<String> angles = activeAngleFiles(id);
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("id", id);
+                out.put("angle", angle);
+                out.put("result", "APPROVED");
+                out.put("path", saved.toString());
+                out.put("backup", saved + ".bak (vorige primaire ref — terugzetten = hernoemen)");
+                out.put("angles", angles);
+                out.put("angleCount", angles.size());
+                out.put("cleanedCandidates", cleaned);
+                out.put("bibleReload", reload);
+                out.put("note", "Nieuwe canon actief (bible hot-reloaded): refs/" + id + ".png "
+                        + "vervangen, oude versie → .bak. ANDERS dan een 🎨-redesign-approve "
+                        + "zijn de " + angles.size() + " hoek-ref(s) in refs/" + id + "/ en de "
+                        + "serie-anchors BEWAARD — de kandidaat ankert op die hoeken, dus het "
+                        + "design is hetzelfde; alleen de front-view is vervangen.");
+                return ResponseEntity.ok(out);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            } catch (Exception e) {
+                return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+            }
         }
         List<String> existing = activeAngleFiles(id);
         boolean replaces = existing.contains(angle + ".png");

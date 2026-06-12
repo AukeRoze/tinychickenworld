@@ -20,6 +20,14 @@
  * refs/{id}/{hoek}.png en laat de primaire ref met rust. Driekwart-vóór wordt
  * bewust niet aangeboden (historisch wimper-drift bij Mo).
  *
+ * Derde route in hetzelfde 📐-menu: "Front (nieuwe canon)" — alleen zichtbaar
+ * als er ≥1 goedgekeurde hoek bestaat. De generatie ankert dan op de hoek-refs
+ * (de provider prefereert refs/{id}/*.png boven refs/{id}.png) en approve
+ * vervangt ALLEEN de primaire ref refs/{id}.png (oude → .bak); hoeken en
+ * serie-anchors blijven staan. Samengevat: 🎨 = redesign (geen anchors,
+ * approve reset alles), 📐 side/back34 = hoek toevoegen (ankert, additief),
+ * 📐 front = canon verbeteren (ankert op je hoeken, vervangt alleen de front).
+ *
  * Data: GET /api/v1/brand/cast ; images: /api/v1/brand/character/{id}.png.
  */
 import api, { toast } from "/assets/js/api.js";
@@ -41,12 +49,16 @@ async function uploadImage(id, file) {
 /** Hoeveel AI-kandidaten één "🎨 Genereer"-klik aanvraagt (max 4 server-side). */
 const CANDIDATE_COUNT = 3;
 
-/** Aanbodbare extra hoeken — gespiegeld aan de server-whitelist (BrandController
- *  ANGLE_VIEWS). "front" ontbreekt bewust (de primaire ref ÍS het vooraanzicht)
- *  en driekwart-vóór ook (historisch wimper-drift bij Mo). */
+/** Aanbodbare hoeken — gespiegeld aan de server-whitelist (BrandController
+ *  ANGLE_VIEWS). Driekwart-vóór ontbreekt bewust (historisch wimper-drift bij
+ *  Mo). "front" is GEEN extra hoek maar een NIEUWE CANON (canon:true): de
+ *  generatie ankert op de bestaande hoek-refs en angle/approve vervangt alleen
+ *  de primaire ref refs/{id}.png — hoeken + serie-anchors blijven staan. De
+ *  menu-optie verschijnt pas als er ≥1 hoek bestaat (anders is 🎨 de route). */
 const ANGLES = {
   side:   { label: "Zijaanzicht" },
   back34: { label: "Driekwart-achter" },
+  front:  { label: "Front (nieuwe canon, ankert op je hoeken)", canon: true },
 };
 
 /** Hoek-id uit een kandidaat-bestandsnaam (candidate-side-1.png → "side"),
@@ -88,21 +100,39 @@ function renderGenerateRef(c, host, refreshCard) {
   const angleBtn = document.createElement("button");
   angleBtn.className = "btn sm";
   angleBtn.textContent = "📐 Extra hoek";
-  angleBtn.title = "Genereert " + CANDIDATE_COUNT + " kandidaten voor één extra hoek, " +
-      "geconditioneerd op de huidige primaire referentie (die gaat als beeld-anchor mee)";
+  angleBtn.title = "Genereert " + CANDIDATE_COUNT + " kandidaten voor één hoek, " +
+      "geconditioneerd op de bestaande referentie(s) — die gaan als beeld-anchor mee";
   row.appendChild(angleBtn);
 
   const angleMenu = document.createElement("div");
   angleMenu.style.cssText = "display:none;gap:4px";
-  for (const [angle, def] of Object.entries(ANGLES)) {
+  function addAngleOption(angle, title) {
     const opt = document.createElement("button");
     opt.className = "btn sm";
     opt.style.cssText = "font-size:11px;padding:2px 8px";
-    opt.textContent = def.label;
+    opt.textContent = ANGLES[angle].label;
+    if (title) opt.title = title;
     opt.addEventListener("click", () => { angleMenu.style.display = "none"; generateAngle(angle); });
     angleMenu.appendChild(opt);
   }
+  for (const [angle, def] of Object.entries(ANGLES)) {
+    if (def.canon) continue;   // front komt er pas bij als er ≥1 hoek bestaat (zie onder)
+    addAngleOption(angle);
+  }
   row.appendChild(angleMenu);
+  // Front-optie (nieuwe canon) alleen aanbieden als er ≥1 goedgekeurde hoek
+  // bestaat: zonder hoeken zou de generatie op de — per definitie zwakke —
+  // primaire ref ankeren en is 🎨 de juiste route. Eigen dedupe-key zodat
+  // deze fetch de refs-strip-fetch (key refs-{id}) niet afbreekt.
+  api.get(`/api/v1/brand/cast/${encodeURIComponent(c.id)}/refs`,
+      { key: `refs-anglemenu-${c.id}` })
+    .then(refs => {
+      if (!(refs || []).some(r => r.kind === "angle")) return;
+      addAngleOption("front", "Genereert front-kandidaten geconditioneerd op je bestaande " +
+          "hoek-refs; goedkeuren vervangt alleen de primaire referentie — hoeken en " +
+          "serie-anchors blijven staan");
+    })
+    .catch(() => { /* menu-optie is informatief — stil falen */ });
   angleBtn.addEventListener("click", () => {
     angleMenu.style.display = angleMenu.style.display === "none" ? "flex" : "none";
   });
@@ -129,37 +159,53 @@ function renderGenerateRef(c, host, refreshCard) {
       img.title = cand.file + " — klik voor volledig formaat";
       img.addEventListener("click", () => window.open(img.src, "_blank"));
       cell.appendChild(img);
-      // Hoek-kandidaten (candidate-{angle}-N.png) krijgen een eigen approve-
-      // route (additief, refs/{id}/{angle}.png); primaire kandidaten houden
-      // de bestaande vervang-flow (refs/{id}.png + opruimen stale refs).
+      // Hoek-kandidaten (candidate-{angle}-N.png) gaan via angle/approve;
+      // primaire 🎨-kandidaten houden de bestaande vervang-flow (ref/approve:
+      // refs/{id}.png + opruimen stale refs). Binnen de hoek-route is "front"
+      // (canon:true) bijzonder: de server vervangt dan de primaire ref maar
+      // BEWAART hoeken en serie-anchors — zelfde design, betere front.
       const angle = candidateAngle(cand.file);
+      const isCanon = !!(angle && ANGLES[angle].canon);   // front-kandidaat
       if (angle) {
         const cap = document.createElement("div");
         cap.className = "small mono";
         cap.style.cssText = "font-size:10px;color:var(--muted)";
-        cap.textContent = "hoek: " + ANGLES[angle].label.toLowerCase();
+        cap.textContent = isCanon ? "nieuwe canon (front)"
+                                  : "hoek: " + ANGLES[angle].label.toLowerCase();
         cell.appendChild(cap);
       }
       const ok = document.createElement("button");
       ok.className = "btn approve sm";
       ok.style.cssText = "font-size:10px;padding:1px 6px";
-      ok.textContent = angle ? `✓ Gebruik als ${ANGLES[angle].label.toLowerCase()}`
-                             : "✓ Gebruik als referentie";
+      ok.textContent = isCanon ? "✓ Gebruik als nieuwe canon"
+                     : angle   ? `✓ Gebruik als ${ANGLES[angle].label.toLowerCase()}`
+                               : "✓ Gebruik als referentie";
       ok.addEventListener("click", async () => {
         if (angle) {
-          if (!confirm(`Deze kandidaat goedkeuren als ${ANGLES[angle].label.toLowerCase()} van ` +
-              `${c.name}?\n\nDit schrijft refs/${c.id}/${angle}.png (additief — de primaire ` +
-              `referentie en andere hoeken blijven staan) en ruimt alleen de kandidaten van ` +
-              `deze hoek op.`)) return;
+          const msg = isCanon
+              ? `Deze kandidaat goedkeuren als NIEUWE CANON (primaire referentie) van ` +
+                `${c.name}?\n\nDit vervangt refs/${c.id}.png (oude versie → .bak). Anders ` +
+                `dan bij een 🎨-redesign blijven je hoek-refs in refs/${c.id}/ en de ` +
+                `serie-anchors gewoon staan — de kandidaat ankert op die hoeken, dus het ` +
+                `design is hetzelfde; alleen de front-view wordt vervangen. Alleen de ` +
+                `front-kandidaten worden opgeruimd.`
+              : `Deze kandidaat goedkeuren als ${ANGLES[angle].label.toLowerCase()} van ` +
+                `${c.name}?\n\nDit schrijft refs/${c.id}/${angle}.png (additief — de primaire ` +
+                `referentie en andere hoeken blijven staan) en ruimt alleen de kandidaten van ` +
+                `deze hoek op.`;
+          if (!confirm(msg)) return;
           ok.disabled = true;
           try {
             const resp = await api.post(
                 `/api/v1/brand/cast/${encodeURIComponent(c.id)}/angle/approve`,
                 { file: cand.file, angle }, { key: `approve-angle-${c.id}` });
-            toast(`Hoek '${ANGLES[angle].label}' van ${c.name} goedgekeurd — nu ` +
-                `${resp && resp.angleCount != null ? resp.angleCount : "?"} hoek-ref(s) ` +
-                `naast de primaire referentie`, "info", 8000);
-            refreshCard();   // kaart verversen: refs-strip toont de nieuwe hoek
+            toast(isCanon
+                ? `Nieuwe canon van ${c.name} actief (oude → .bak) — hoeken en ` +
+                  `serie-anchors behouden`
+                : `Hoek '${ANGLES[angle].label}' van ${c.name} goedgekeurd — nu ` +
+                  `${resp && resp.angleCount != null ? resp.angleCount : "?"} hoek-ref(s) ` +
+                  `naast de primaire referentie`, "info", 8000);
+            refreshCard();   // kaart verversen: nieuwe canon c.q. refs-strip met de nieuwe hoek
           } catch (e) {
             ok.disabled = false;   // api.post toont de serverfout (bv. cap van 3) al als toast
           }
@@ -236,10 +282,17 @@ function renderGenerateRef(c, host, refreshCard) {
    *  eventueel nog openstaande 🎨-batch naast de hoek-kandidaten blijft staan
    *  (de server ruimt alleen eerdere kandidaten van dezelfde hoek op). */
   async function generateAngle(angle) {
-    if (!confirm(`${CANDIDATE_COUNT} kandidaten genereren voor de hoek ` +
+    // Front = canon-verbeter-route: de anchors zijn dan je goedgekeurde
+    // hoek-refs (provider prefereert refs/{id}/*.png), niet de zwakke primaire.
+    const anchorLine = ANGLES[angle].canon
+        ? `Je goedgekeurde hoek-refs gaan als beeld-anchors mee (zelfde individu — dit ` +
+          `wordt een betere front-view van hetzelfde design, geen 🎨-loterij).`
+        : `De huidige primaire referentie gaat als beeld-anchor mee (zelfde individu, ` +
+          `gedraaid).`;
+    if (!confirm(`${CANDIDATE_COUNT} kandidaten genereren voor ` +
         `'${ANGLES[angle].label}' van ${c.name}?\n\n` +
-        `De huidige primaire referentie gaat als beeld-anchor mee (zelfde individu, ` +
-        `gedraaid). Kosten: ~€0,05-0,10 per kandidaat (~€0,15-0,30 totaal). Er verandert ` +
+        anchorLine +
+        ` Kosten: ~€0,05-0,10 per kandidaat (~€0,15-0,30 totaal). Er verandert ` +
         `niets tot je een kandidaat goedkeurt.`)) return;
     angleBtn.disabled = true;
     const oldText = angleBtn.textContent;
