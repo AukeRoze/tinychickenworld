@@ -16,6 +16,7 @@ Usage:
   python generate-music.py --track tiny_mystery
   python generate-music.py --mood calm
   python generate-music.py --register     # also add new tracks to channel.yml
+  python generate-music.py --outro        # ONLY the outro bed (bible/sfx/outro/calm.mp3)
 
 Cost: Eleven Music is billed per generated minute — 9 × 40s = 6 min.
 Check https://elevenlabs.io/pricing/api for your plan's music rate
@@ -95,6 +96,21 @@ TRACKS = {
 MUSIC_DIR = Path(__file__).resolve().parents[2] / "bible" / "music"
 CHANNEL_YML = Path(__file__).resolve().parents[2] / "bible" / "channel.yml"
 
+# ── Outro-bed (end-screen-outro, 2026-06-12) ─────────────────────────────
+# Apart van de musicLibrary: dit bestand wordt door OutroBuilder gelezen
+# (app.brand.outro-music, default /bible/sfx/outro/calm.mp3) en geloopt/
+# getrimd tot de outro-duur. NIET registreren in music.tracks — het is een
+# brand-asset, geen episode-track. Genereren: python generate-music.py --outro
+OUTRO_BED = Path(__file__).resolve().parents[2] / "bible" / "sfx" / "outro" / "calm.mp3"
+OUTRO_PROMPT = (
+    "The gentlest possible end-card lullaby loop: a single warm music-box "
+    "melody over the softest felt-piano chords, barely-there warm pads, "
+    "very slow, settled and final — the sound of a picture book closing "
+    "and a night-light switching on. Even quieter and simpler than a "
+    "normal lullaby; it sits UNDER a short spoken farewell and a YouTube "
+    "end screen. Starts and ends in near-silence so it loops seamlessly."
+)
+
 
 def generate_one(key: str, prompt: str, length_ms: int, out: Path,
                  retries: int = 3) -> bool:
@@ -170,6 +186,8 @@ def main() -> None:
                     help="track length in seconds (default 40, like the originals)")
     ap.add_argument("--register", action="store_true",
                     help="add generated tracks to channel.yml music.tracks")
+    ap.add_argument("--outro", action="store_true",
+                    help="generate ONLY the outro music bed (bible/sfx/outro/calm.mp3, ~20s)")
     args = ap.parse_args()
 
     key = os.environ.get("ELEVENLABS_API_KEY")
@@ -183,6 +201,17 @@ def main() -> None:
                     break
     if not key:
         sys.exit("Set ELEVENLABS_API_KEY env var (of zet hem in .env)")
+
+    if args.outro:
+        if OUTRO_BED.exists():
+            sys.exit(f"= outro bed exists, skipped: {OUTRO_BED} (verwijder 'm om opnieuw te genereren)")
+        OUTRO_BED.parent.mkdir(parents=True, exist_ok=True)
+        print(f"> outro bed [calm] -> {OUTRO_BED}")
+        if generate_one(key, PALETTE + OUTRO_PROMPT, 20_000, OUTRO_BED):
+            print("  ok — de eerstvolgende outro-(re)build mixt 'm automatisch mee (-16dB)")
+        else:
+            sys.exit("  FAILED: outro bed")
+        return
 
     names = [args.track] if args.track else [
         t for t, (mood, _) in TRACKS.items() if not args.mood or mood == args.mood]

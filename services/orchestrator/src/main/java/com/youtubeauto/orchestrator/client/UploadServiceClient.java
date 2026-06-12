@@ -76,6 +76,23 @@ public class UploadServiceClient {
         }
     }
 
+    /** Replace the channel's YouTube banner (channel art) with the image at
+     *  {@code bannerPath} — must live under the shared /workdir (the upload-
+     *  service rejects anything else). Unlike the best-effort distribute
+     *  helpers this THROWS on failure: it's an interactive Branding-studio
+     *  button and the operator needs the real reason (e.g. "banner is too
+     *  small"), not a silent null. 5 min: two API calls incl. a resumable
+     *  image upload. */
+    public JsonNode uploadChannelBanner(String bannerPath) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("bannerPath", bannerPath);
+        return client.post().uri("/api/v1/distribute/channel-banner")
+                .bodyValue(body)
+                .retrieve().bodyToMono(JsonNode.class)
+                .timeout(Duration.ofMinutes(5))
+                .block();
+    }
+
     /** Cross-post the finished master to Facebook Page. Returns null when
      *  Facebook isn't configured (503) or upload failed. */
     public JsonNode distributeFacebook(String videoPath, String title, String description,

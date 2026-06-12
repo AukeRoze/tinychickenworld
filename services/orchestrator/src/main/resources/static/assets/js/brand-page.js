@@ -173,6 +173,220 @@ async function loadAudio() {
 
 loadAudio();
 
+// ── 📺 YouTube branding (logo + banner uit de cast-refs) ─────────────────
+// Checkbox-rij van de cast (GET /api/v1/brand/cast; default: main + sidekicks
+// aan, baby uit; keuze persistent in localStorage "brandingCast.v1" — bewust
+// niet in de bible), genereren via POST /api/v1/brand/branding/generate
+// (kind: logo|banner, characters: [ids] → de provider ankert op ál hun refs),
+// kandidaten-grid met approve per kind. Na een banner-approve verschijnt
+// "⬆ Upload banner naar YouTube" (channelBanners.insert + channels.update via
+// de upload-service). Het LOGO kan niet via de API: YouTube heeft geen
+// endpoint voor de profielfoto — vandaar de ⬇ Download-link + Studio-uitleg.
+(() => {
+  const castHost = document.getElementById("branding-cast");
+  const candHost = document.getElementById("branding-candidates");
+  const approvedHost = document.getElementById("branding-approved");
+  const stEl = document.getElementById("branding-status");
+  const genLogoBtn = document.getElementById("branding-gen-logo");
+  const genBannerBtn = document.getElementById("branding-gen-banner");
+  if (!castHost || !candHost || !genLogoBtn || !genBannerBtn) return;
+
+  const LS_KEY = "brandingCast.v1";
+  const CANDIDATE_COUNT = 3;
+  const fileUrl = (name) => `/api/v1/brand/branding/file?name=${encodeURIComponent(name)}`;
+
+  function selectedIds() {
+    return [...castHost.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
+  }
+
+  function saveSelection() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(selectedIds())); } catch (e) { /* private mode */ }
+  }
+
+  function loadSelection() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  async function loadCast() {
+    try {
+      const cast = await api.get("/api/v1/brand/cast", { key: "branding-cast" });
+      const stored = loadSelection();   // null = eerste bezoek → role-default
+      castHost.replaceChildren();
+      for (const c of cast) {
+        const label = document.createElement("label");
+        label.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-right:14px;cursor:pointer";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = c.id;
+        // Default: hoofdcast aan (main + sidekicks), baby/bijrollen uit.
+        cb.checked = stored ? stored.includes(c.id)
+                            : (c.role === "main" || c.role === "sidekick");
+        cb.addEventListener("change", saveSelection);
+        label.appendChild(cb);
+        const txt = document.createElement("span");
+        txt.textContent = `${c.name || c.id} (${c.role || "?"})`;
+        label.appendChild(txt);
+        castHost.appendChild(label);
+      }
+      if (!cast.length) castHost.textContent = "Geen cast gevonden in de bible.";
+    } catch (e) { castHost.textContent = "Kon de cast niet laden."; }
+  }
+
+  function approveLabel(kind) {
+    return kind === "logo" ? "✓ Gebruik als avatar (800×800)"
+                           : "✓ Gebruik als banner (2560×1440)";
+  }
+
+  function renderCandidates(list) {
+    candHost.replaceChildren();
+    if (!list.length) return;
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:flex;flex-wrap:wrap;gap:12px";
+    for (const cand of list) {
+      const cell = document.createElement("div");
+      cell.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px";
+      const img = document.createElement("img");
+      img.src = fileUrl(cand.file);
+      img.title = cand.file + " — klik voor volledig formaat";
+      // Logo-kandidaten als cirkel tonen: zo zie je de YouTube-crop alvast.
+      img.style.cssText = cand.kind === "logo"
+        ? "width:120px;height:120px;object-fit:cover;border-radius:50%;border:1px solid var(--border,#ccc);cursor:zoom-in"
+        : "width:300px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--border,#ccc);cursor:zoom-in";
+      img.addEventListener("click", () => window.open(img.src, "_blank"));
+      cell.appendChild(img);
+      const cap = document.createElement("span");
+      cap.className = "small";
+      cap.style.color = "var(--muted)";
+      cap.textContent = cand.kind === "logo" ? "logo (cirkel-preview)" : "banner";
+      cell.appendChild(cap);
+      const ok = document.createElement("button");
+      ok.className = "btn approve sm";
+      ok.style.cssText = "font-size:10px;padding:1px 6px";
+      ok.textContent = approveLabel(cand.kind);
+      ok.addEventListener("click", async () => {
+        const msg = cand.kind === "logo"
+          ? "Deze kandidaat als kanaal-avatar opslaan (800×800, gecentreerde vierkant-crop)?\n\n" +
+            "Let op: YouTube heeft géén API voor de profielfoto — je krijgt een " +
+            "downloadlink en uploadt hem eenmalig handmatig via Studio."
+          : "Deze kandidaat als kanaal-banner opslaan (2560×1440)?\n\n" +
+            "Dit vervangt óók bible/youtube_banner.jpg — de cast-canon-referentie " +
+            "(oude versie → youtube_banner.previous.jpg). Daarna kun je hem naar " +
+            "YouTube uploaden.";
+        if (!confirm(msg)) return;
+        ok.disabled = true;
+        try {
+          const resp = await api.post("/api/v1/brand/branding/approve",
+              { file: cand.file, kind: cand.kind }, { key: "branding-approve" });
+          toast(resp && resp.note ? resp.note : `${cand.kind} goedgekeurd`, "info", 9000);
+          await refreshCandidates();
+        } catch (e) { ok.disabled = false; /* api.js toonde de fout al */ }
+      });
+      cell.appendChild(ok);
+      grid.appendChild(cell);
+    }
+    candHost.appendChild(grid);
+    const rejectAll = document.createElement("button");
+    rejectAll.className = "btn sm";
+    rejectAll.style.marginTop = "8px";
+    rejectAll.textContent = "🗑 Weiger alles";
+    rejectAll.addEventListener("click", async () => {
+      if (!confirm("Alle branding-kandidaten weigeren en verwijderen?")) return;
+      try {
+        await api.del("/api/v1/brand/branding/candidates", { key: "branding-discard" });
+        toast("Kandidaten verwijderd", "info");
+        await refreshCandidates();
+      } catch (e) { /* api.js toonde de fout al */ }
+    });
+    candHost.appendChild(rejectAll);
+  }
+
+  function renderApproved(avatarPresent, bannerPresent) {
+    approvedHost.replaceChildren();
+    if (avatarPresent) {
+      const dl = document.createElement("a");
+      dl.className = "btn sm";
+      dl.textContent = "⬇ Download avatar.png";
+      dl.href = fileUrl("avatar.png");
+      dl.download = "avatar.png";
+      approvedHost.appendChild(dl);
+      const note = document.createElement("span");
+      note.className = "small";
+      note.style.color = "var(--muted)";
+      note.textContent = "Profielfoto kan niet via de API — eenmalig handmatig: " +
+          "studio.youtube.com → Aanpassing → Branding.";
+      approvedHost.appendChild(note);
+    }
+    if (bannerPresent) {
+      const up = document.createElement("button");
+      up.className = "btn sm";
+      up.textContent = "⬆ Upload banner naar YouTube";
+      up.addEventListener("click", async () => {
+        if (!confirm("Banner naar YouTube uploaden?\n\nDit VERVANGT de live " +
+            "channel-art van het kanaal — er is geen undo (behalve opnieuw uploaden).")) return;
+        up.disabled = true;
+        up.textContent = "⏳ Uploaden…";
+        try {
+          const resp = await api.post("/api/v1/brand/branding/upload-banner",
+              undefined, { key: "branding-upload-banner" });
+          toast(resp && resp.note ? resp.note : "Banner live op YouTube ✓", "info", 9000);
+        } catch (e) { /* api.js toonde de fout al */ }
+        finally {
+          up.disabled = false;
+          up.textContent = "⬆ Upload banner naar YouTube";
+        }
+      });
+      approvedHost.appendChild(up);
+    }
+  }
+
+  async function refreshCandidates() {
+    try {
+      const data = await api.get("/api/v1/brand/branding/candidates", { key: "branding-cands" });
+      renderCandidates((data && data.candidates) || []);
+      renderApproved(!!(data && data.avatarPresent), !!(data && data.bannerPresent));
+    } catch (e) { /* informatief — stil falen */ }
+  }
+
+  function wireGenerate(btn, kind) {
+    btn.addEventListener("click", async () => {
+      const ids = selectedIds();
+      if (!ids.length) { toast("Selecteer minstens één personage", "warn"); return; }
+      const ok = confirm(
+        `${CANDIDATE_COUNT} ${kind}-kandidaten genereren met: ${ids.join(", ")}?\n\n` +
+        `Elke kandidaat is een betaalde image-call (~€0,05-0,10) en de vorige ` +
+        `${kind}-kandidaten worden vervangen. Generatie duurt ±1-2 min.`);
+      if (!ok) return;
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = "⏳ Genereren… (±1-2 min)";
+      if (stEl) stEl.textContent = `${kind} genereren…`;
+      try {
+        const resp = await api.post("/api/v1/brand/branding/generate",
+            { kind, characters: ids, count: CANDIDATE_COUNT }, { key: `branding-gen-${kind}` });
+        if (resp && Array.isArray(resp.errors) && resp.errors.length) {
+          toast(`Deels gelukt — ${resp.errors.length} kandidaat(en) mislukt`, "warn", 8000);
+        } else {
+          toast(`${kind}-kandidaten klaar`, "info");
+        }
+        await refreshCandidates();
+      } catch (e) { /* api.js toonde de fout al */ }
+      finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+        if (stEl) stEl.textContent = "";
+      }
+    });
+  }
+
+  wireGenerate(genLogoBtn, "logo");
+  wireGenerate(genBannerBtn, "banner");
+  loadCast();
+  refreshCandidates();
+})();
+
 // ── Scène-overgangen editor (bible assembly.transitions, hot-reload ≤1 min) ──
 async function loadTransitions() {
   const tHost = document.getElementById("transitions-host");

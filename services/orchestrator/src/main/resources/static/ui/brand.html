@@ -90,6 +90,26 @@
     </div>
   </div>
 
+  <div class="brand-grid" style="margin-top:14px">
+    <div class="card" style="grid-column:1 / -1">
+      <h3 class="card-title">📺 YouTube branding</h3>
+      <p class="sub small">Genereer het kanaal-logo (avatar) en de kanaal-banner uit de
+      goedgekeurde cast-referenties. Kies welke hoofdpersonages erop staan; de
+      image-service ankert op ál hun refs. De banner kan daarna rechtstreeks naar
+      YouTube; de profielfoto kent géén API — die download je en upload je eenmalig
+      via <a href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio</a>
+      → Aanpassing → Branding.</p>
+      <div id="branding-cast" class="filter-row small">loading…</div>
+      <div class="filter-row" style="margin-top:8px">
+        <button class="btn" id="branding-gen-logo">🎨 Genereer logo</button>
+        <button class="btn" id="branding-gen-banner">🎨 Genereer banner</button>
+        <span id="branding-status" class="small" style="color:var(--muted)"></span>
+      </div>
+      <div id="branding-candidates" style="margin-top:10px"></div>
+      <div class="filter-row" id="branding-approved" style="margin-top:8px"></div>
+    </div>
+  </div>
+
   <div id="toast-host"></div>
 
   <script src="/assets/js/nav.js"></script>

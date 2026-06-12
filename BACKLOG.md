@@ -52,7 +52,7 @@ Bron: `analyse/VIRAL-CONCEPT-WHOS-IN-THE-EGG-2026-06-11.md` + `analyse/CONCEPT-E
 ## 🟠 P1 — Audio- & asset-gaten (code-hooks bestaan, wachten op assets/keys)
 
 - [ ] **(user) Stemmen aan**: `VOICE_MODE=elevenlabs` + key + per-personage voice-IDs (slots klaar in bible). Grootste sprong "diavoorstelling → cartoon".
-- [ ] **(user) Muziek**: `bible/music/` uitbreiden naar ~12 tracks (nu 3 → herhaling) óf `SUNO_API_KEY` (~$0,10/track). Ontgrendelt ook: beat-synced cuts, score-volgt-beat, stingers.
+- [~] **Muziek — bleek grotendeels op orde (gecheckt 2026-06-12):** er staan al **12 tracks geregistreerd** (4 per mood; het "3 tracks"-beeld was stale). (user) Check de 🎵-kaart op de Brand-pagina op ⚠ ontbrekende bestanden; bijgenereren = `python infra/sfx-generator/generate-music.py [--register]`. **Outro-bed**: `python generate-music.py --outro` → genereert `bible/sfx/outro/calm.mp3` (~20s, ElevenLabs Music, ±€0,10) — daarna outro re-builden/re-composen. Open blijft: beat-synced cuts/stingers (latere fase).
 - [~] **(user) Foley-clips** in `bible/sfx/foley/` — de mixer is gewired; drop mp3's en hij leeft.
 - [~] **(user) Per-character signatuur-SFX** (`bible/sfx/<char>/<emotie>.mp3`).
 - [ ] **(user) Muziek-stems** (voor emotie-ducking/score-werk).
@@ -140,6 +140,11 @@ Refactor-schuld:
 - [x] Chunked-concat-ladder met proactieve OOM-guard + poort-mapping beperkt (zie P3).
 - [x] Frontend: distribution-/cost-/performance-hint-/localization-panelen (zie P2 Frontend), incl. nieuwe `CostController`.
 - [x] Auto-Fix over alle QA-assen (zie P2).
+
+**Avond-extra's (2026-06-12, op gebruikerswensen — ongecompileerd tot volgende build):**
+- [x] 📐 "Front (nieuwe canon)"-optie: nieuwe primaire ref genereren geánkerd op bestaande hoeken; vervangt alleen de canon, hoeken + serie-anchors blijven. (Drie routes: 🎨 redesign / 📐 hoek erbij / 📐 front = canon verbeteren.)
+- [x] 📺 **Branding-studio** op de Brand-pagina: hoofdpersonage-checkboxes (localStorage), logo- en banner-kandidaten gegenereerd op de cast-refs (cirkel-safe avatar 800×800; banner 2560×1440 cover-crop, safe-strip-prompt), approve → `bible/branding/` + `youtube_banner.jpg` vervangen (oude → .previous), **banner-upload naar YouTube via `channelBanners.insert` + `channels.update`** (force-ssl-scope dekt het). Avatar/profielfoto: geen API — download-knop + Studio-link. `bible/logo.png` (overlay) blijft onaangeroerd.
+- [x] `generate-music.py --outro`: genereert het outro-bed (`bible/sfx/outro/calm.mp3`).
 
 **Nachtbatch (2026-06-12, derde ronde — ook ongecompileerd tot build.bat):**
 - [x] Dashboard compleet: TikTok/IG-status persistent + metadata-edit/regenerate + zoeken/filters/bulk (zie P2 Frontend).

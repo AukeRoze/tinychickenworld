@@ -32,6 +32,7 @@ public class MultiPlatformController {
     private final CommunityPostService community;
     private final com.youtubeauto.upload.service.OAuthHealthProbe oauthProbe;
     private final com.youtubeauto.upload.service.PlaylistService playlist;
+    private final com.youtubeauto.upload.service.ChannelBannerService channelBanner;
 
     /** YouTube OAuth-token health (probed twice a day). healthy=false means the
      *  next upload WILL fail — delete StoredCredential and re-consent. */
@@ -171,6 +172,41 @@ public class MultiPlatformController {
         } catch (Exception e) {
             resp.put("success", false);
             resp.put("error", e.getMessage() == null ? "playlist add failed" : e.getMessage());
+            return ResponseEntity.status(502).body(resp);
+        }
+    }
+
+    /**
+     * Replace the channel's YouTube banner (channel art). Body:
+     * {"bannerPath": "/workdir/.../youtube_banner.jpg"} — must live under the
+     * shared workdir (same exfiltration guard as the video endpoints). Two
+     * API calls: channelBanners.insert (resumable upload → temporary url),
+     * then channels.update(brandingSettings) on the own channel to make it
+     * live. Errors come back as a JSON body with an "error" message, like the
+     * playlist endpoint (the orchestrator surfaces it in the Brand UI).
+     */
+    @PostMapping("/distribute/channel-banner")
+    public ResponseEntity<Map<String, Object>> channelBanner(@RequestBody Map<String, String> body) {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platform", "youtube-channel-banner");
+        try {
+            String bannerPath = body == null ? null : body.get("bannerPath");
+            if (bannerPath == null || bannerPath.isBlank()) {
+                throw new IllegalArgumentException("bannerPath is required");
+            }
+            com.youtubeauto.upload.service.ChannelBannerService.Result r =
+                    channelBanner.uploadBanner(safeWorkdirPath(bannerPath));
+            resp.put("bannerUrl", r.bannerUrl());
+            resp.put("channelId", r.channelId());
+            resp.put("success", true);
+            return ResponseEntity.ok(resp);
+        } catch (IllegalArgumentException e) {
+            resp.put("success", false);
+            resp.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(resp);
+        } catch (Exception e) {
+            resp.put("success", false);
+            resp.put("error", e.getMessage() == null ? "channel banner upload failed" : e.getMessage());
             return ResponseEntity.status(502).body(resp);
         }
     }
