@@ -160,7 +160,8 @@ Refactor-schuld:
 **Publicatie-verfijningen (2026-06-12, avond — op gebruikerswensen):**
 - [x] **Auto-playlist per serie**: `POST /api/v1/distribute/playlist` (lookup op titel → create public → idempotente add, max 2 pagina's dup-check) + orchestrator koppelt na elke geslaagde upload o.b.v. `seriesId` (best-effort, Shorts uitgesloten, serietitel uit bible `series[].name`). UI toont "📃 In playlist".
 - [x] **Video-taal**: `snippet.defaultLanguage` + `defaultAudioLanguage` op elke upload (`YOUTUBE_DEFAULT_LANGUAGE`, default `en`) — juiste zoekindex, auto-vertaalde metadata, caption-labels.
-- [x] **Outro-fade verlengd** op kijkersfeedback: 1.7 → 2.6s, DUR 8.5 → 9.0 (CTA-leestijd blijft ±3s). Bible `brand.intro/outro.durationSeconds` gecorrigeerd (3/3 was stale → 6/9; voedt de duur-gate-marge). **Actie: outro éénmalig ♻ Re-composite (gratis, geen Veo) na de rebuild.**
+- [x] **Outro-fade verlengd** op kijkersfeedback: 1.7 → 2.6s, DUR 8.5 → 9.0 (CTA-leestijd blijft ±3s). Bible `brand.intro/outro.durationSeconds` gecorrigeerd (3/3 was stale → 6/9; voedt de duur-gate-marge).
+- [x] **Intro-redesign** op kijkersfeedback: de letter-voor-letter "TINY CHICKEN WORLD"-tekst + het gouden ei + de letter-dings zijn eruit; in plaats daarvan vliegt het **logo** (zelfde de-haloed `bible/logo.png` als de outro) met een ease-out-swoop linksboven in beeld (240px, x=56/y=48 — spiegelt het outro-logo, branding bookend't de video) + één sparkle bij de landing. Stemmen/slots/dissolve-marge ongewijzigd. **Actie: intro én outro éénmalig ♻ Re-composite (gratis, geen Veo) na de rebuild.**
 - [ ] **(user) Kanaal telefonisch verifiëren** (youtube.com/verify als Tiny Chicken World) — vereist voor custom thumbnails; daarna thumbnail van qhw-y3paiQM handmatig zetten in Studio.
 
 > Alles van vandaag is **ongecompileerd** tot de eerstvolgende `build.bat`.

@@ -14,12 +14,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Bakes the branded intro. Takes the Veo "chickens introduce themselves" clip
- * (≈8s) and, AFTER the introductions, holds the last frame and reveals the
- * "TINY CHICKEN WORLD" title LETTER BY LETTER on a fixed wooden board in the
- * lower centre — each letter a different cheerful colour, dropping in with a
- * little bounce and a "ding". The board is drawn here at a FIXED position so it
- * never moves (decoupled from Veo's own sign), and the title comes after the
- * intros so the open feels calm, not busy.
+ * (≈8s) and flies the channel LOGO into the TOP-LEFT corner with a quick
+ * ease-out swoop + sparkle — no title text, no egg. (Kijkersfeedback
+ * 2026-06-12: de letter-voor-letter "TINY CHICKEN WORLD"-tekst + het gouden ei
+ * mochten eruit; het logo zegt hetzelfde in één beeld en houdt de open rustig.
+ * Zelfde hoekpositie als het outro-logo, dus de branding bookend't de video.)
  *
  * Everything is a single ffmpeg pass over the clip — cheap and re-runnable
  * without re-generating the (paid) Veo clip.
@@ -30,13 +29,9 @@ public class IntroBuilder {
 
     @Value("${app.brand.intro-path:/bible/intro.mp4}")
     private String introPath;
-    // Rounded "candy" font to match the logo (installed in the assembly Dockerfile
-    // via fonts-comfortaa). Falls back to DejaVu if the file isn't found.
-    @Value("${app.brand.title-font:/usr/share/fonts/truetype/comfortaa/Comfortaa-Bold.ttf}")
-    private String font;
-    private static final String FONT_FALLBACK = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
-    @Value("${app.brand.letter-ding:/bible/sfx/intro/letter_ding.mp3}")
-    private String ding;
+    /** Channel logo (transparant, de-haloed) — zelfde asset als het outro-logo. */
+    @Value("${app.brand.logo:/bible/logo.png}")
+    private String logo;
     @Value("${app.brand.title-sparkle:/bible/sfx/intro/title_sparkle.mp3}")
     private String sparkle;
     @Value("${app.ffmpeg-bin:ffmpeg}")
@@ -45,43 +40,20 @@ public class IntroBuilder {
     private String ffprobe;
 
     // SHORT INTRO (kids-YouTube retention: branding ≤5s, the hook must own
-    // the first 15s). The old 12.5s intro held a frozen last frame for ~6s —
-    // and the freeze landed on a BLINK, so all three chicks stood eyes-closed
-    // under the title. The short intro stays on LIVE video (no freeze needed:
-    // total < clip length), title up early, one greeting, done.
-    private static final double REVEAL_AT  = 1.2;   // first letter drops
-    private static final double LETTER_STEP = 0.09; // per-letter cadence
-    private static final double HOLD_AFTER = 1.4;   // beat after egg, then cut
+    // the first 15s). The clip stays LIVE under the logo (no freeze); the
+    // logo swoops in early, one greeting per chick, done.
+    private static final double LOGO_AT    = 1.0;   // logo starts its fly-in
+    private static final double FLY_DUR    = 0.7;   // swoop duration (ease-out)
+    private static final double HOLD_AFTER = 1.4;   // beat after the logo lands
 
-    /** One title letter: glyph + its fixed position, cheerful colour, reveal time.
-     *  Positions were measured once (DejaVu Bold, fontsize 76) so the fixed
-     *  "TINY CHICKEN WORLD" branding lays out with correct kerning on 3 lines. */
-    private record L(String ch, int x, int y, String color, int tMs) {}
-
-    // Brand colours from the channel avatar: TINY + CHICKEN gold-yellow, WORLD
-    // blue. (Hex approximated from the avatar; tweak YELLOW/BLUE for an exact
-    // match — it's a free re-composite, no Veo render needed.)
-    private static final String YELLOW = "0xF0B010";
-    private static final String BLUE   = "0x3E72C8";
-
-    private static final List<L> TITLE = List.of(
-            new L("T", 860, 712, YELLOW, 8200),
-            new L("I", 912, 712, YELLOW, 8360),
-            new L("N", 940, 712, YELLOW, 8520),
-            new L("Y", 1004, 712, YELLOW, 8680),
-            new L("C", 771, 806, YELLOW, 8840),
-            new L("H", 827, 806, YELLOW, 9000),
-            new L("I", 890, 806, YELLOW, 9160),
-            new L("C", 919, 806, YELLOW, 9320),
-            new L("K", 974, 806, YELLOW, 9480),
-            new L("E", 1036, 806, YELLOW, 9640),
-            new L("N", 1085, 806, YELLOW, 9800),
-            new L("W", 801, 900, BLUE, 9960),
-            new L("O", 885, 900, BLUE, 10120),
-            new L("R", 949, 900, BLUE, 10280),
-            new L("L", 1008, 900, BLUE, 10440),
-            new L("D", 1056, 900, BLUE, 10600)
-    );
+    // Logo landing position (top-left) + size — mirrors the outro logo
+    // (OutroBuilder: scale 220, x=56, y=48) so the branding bookends the video.
+    private static final int LOGO_W = 240;
+    private static final int LOGO_X = 56;
+    private static final int LOGO_Y = 48;
+    // Fly-in start: just off-screen beyond the top-left corner.
+    private static final int LOGO_FROM_X = -320;
+    private static final int LOGO_FROM_Y = -320;
 
     /** Back-compat: no spoken-voice track (keeps the Veo clip's own audio). */
     public String build(String clipPath) {
@@ -114,29 +86,24 @@ public class IntroBuilder {
         // When we have our own branded voices, DROP Veo's audio (its synthetic
         // chicken chatter is off-brand and varies run to run); otherwise keep it.
         boolean clipAudio = !haveVoices && hasAudio(clip);
-        boolean haveDing  = Files.isReadable(Paths.get(ding));
         boolean haveSpark = Files.isReadable(Paths.get(sparkle));
+        boolean haveLogo  = Files.isReadable(Paths.get(logo));
+        if (!haveLogo) log.warn("Intro logo {} not readable — building without the fly-in", logo);
 
-        // Inputs: 0 = clip, then optional ding, then optional sparkle, then voices.
+        // Inputs: 0 = clip, then optional sparkle, then optional logo, then voices.
         List<String> cmd = new ArrayList<>(List.of(
                 ffmpeg, "-y", "-loglevel", "error", "-i", clipPath));
-        int dingIdx = -1, sparkIdx = -1, idx = 1;
-        if (haveDing)  { cmd.add("-i"); cmd.add(ding);    dingIdx = idx++; }
+        int sparkIdx = -1, logoIdx = -1, idx = 1;
         if (haveSpark) { cmd.add("-i"); cmd.add(sparkle); sparkIdx = idx++; }
+        if (haveLogo)  { cmd.add("-loop"); cmd.add("1"); cmd.add("-i"); cmd.add(logo); logoIdx = idx++; }
         int[] voiceIdx = new int[voices.size()];
         for (int i = 0; i < voices.size(); i++) { cmd.add("-i"); cmd.add(voices.get(i)); voiceIdx[i] = idx++; }
 
-        String titleFont = (font != null && Files.isReadable(Paths.get(font))) ? font : FONT_FALLBACK;
-        if (!titleFont.equals(font)) log.warn("Title font {} not found — using fallback {}", font, titleFont);
-        String style = "fontfile=" + titleFont
-                + ":borderw=7:bordercolor=0xFFFFFF:shadowcolor=0x2A1B10@0.5:shadowx=4:shadowy=4";
-
-        // SHORT timeline: fixed reveal early in the clip, total ≈ 4-5s. The clip
-        // keeps PLAYING under the title (no frozen blink); tpad only kicks in
+        // SHORT timeline: the logo swoops in early, total ≈ 4-5s. The clip
+        // keeps PLAYING under the logo (no frozen blink); tpad only kicks in
         // for the rare clip shorter than the total.
         double clipDur = durationSeconds(clip);
-        double lastT = REVEAL_AT + (TITLE.size() - 1) * LETTER_STEP;
-        double eggAt = lastT + 0.15;
+        double logoLanded = LOGO_AT + FLY_DUR;
 
         // ALL three greetings on FIXED SLOTS that mirror the Veo clip's
         // scripted beak-turns (MOTION_DESC: Pip 0.5-1.6, Mo 1.7-2.8, Bo
@@ -157,45 +124,36 @@ public class IntroBuilder {
         }
         double lastVoiceEnd = prevEnd;
 
-        // Total = title timeline OR the voices, whichever needs more room.
-        // The voice tail needs 1.9s: the intro→episode concat now runs a SLOW
+        // Total = logo timeline OR the voices, whichever needs more room.
+        // The voice tail needs 1.9s: the intro→episode concat runs a SLOW
         // 1.1s DISSOLVE that overlaps (and audio-crossfades!) the intro's
         // tail — Bo's "And I'm Bo!" must end BEFORE that fade starts, plus
         // breathing room. (History: 0.6s margin ate her line entirely.)
-        double totalDur = Math.max(eggAt + HOLD_AFTER, lastVoiceEnd + 1.9);
+        double totalDur = Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 1.9);
 
         StringBuilder fc = new StringBuilder();
         fc.append("[0:v]scale=1920:1080:force_original_aspect_ratio=increase,")
           .append("crop=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration=")
           .append(fmt(Math.max(0, totalDur - clipDur))).append("[base];");
-        // Letters sit directly over the VEO clip; their white border + drop
-        // shadow keep them legible without a board.
-        String prev = "base";
-        for (int i = 0; i < TITLE.size(); i++) {
-            L l = TITLE.get(i);
-            String t = fmt(REVEAL_AT + i * LETTER_STEP);
-            fc.append("[").append(prev).append("]drawtext=").append(style)
-              .append(":fontcolor=").append(l.color())
-              .append(":text='").append(l.ch()).append("':fontsize=76")
-              .append(":x=").append(l.x())
-              .append(":y='").append(l.y()).append("-max(0,(1-(t-").append(t).append(")/0.22))*42'")
-              .append(":alpha='min(1,max(0,(t-").append(t).append(")/0.18))'")
-              .append(":enable='gte(t,").append(t).append(")'[L").append(i).append("];");
-            prev = "L" + i;
+        if (haveLogo) {
+            // Logo fly-in TOP-LEFT: swoops in diagonally from just off-screen
+            // with a quadratic ease-out (fast in, soft landing) + a quick
+            // alpha fade so the first frames never pop. Lands on the same
+            // corner as the outro logo, so the branding bookends the video.
+            String t0 = fmt(LOGO_AT), d = fmt(FLY_DUR);
+            String ease = "pow(max(0,1-(t-" + t0 + ")/" + d + "),2)";
+            fc.append("[").append(logoIdx).append(":v]scale=").append(LOGO_W).append(":-1,format=rgba,")
+              .append("fade=t=in:st=").append(t0).append(":d=0.25:alpha=1[logo];");
+            fc.append("[base][logo]overlay=")
+              .append("x='").append(LOGO_X).append("-").append(LOGO_X - LOGO_FROM_X).append("*").append(ease).append("'")
+              .append(":y='").append(LOGO_Y).append("-").append(LOGO_Y - LOGO_FROM_Y).append("*").append(ease).append("'")
+              .append(":enable='gte(t,").append(t0).append(")'[v];");
+        } else {
+            fc.append("[base]null[v];");
         }
-        // Golden egg after WORLD (matches the channel avatar) — pops in with the
-        // last letter. Drawn as two stacked ellipses (dark rim + gold body) so no
-        // external asset is needed.
-        String eggT = fmt(eggAt);
-        fc.append("color=c=0x9A6B1E:s=74x94:d=14,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':")
-          .append("a='if(lt(pow((X-37)/35,2)+pow((Y-47)/45,2),1),255,0)'[eggrim];");
-        fc.append("color=c=0xF2C84B:s=66x86:d=14,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':")
-          .append("a='if(lt(pow((X-33)/30,2)+pow((Y-43)/40,2),1),255,0)'[eggbody];");
-        fc.append("[").append(prev).append("][eggrim]overlay=x=1116:y=876:enable='gte(t,").append(eggT).append(")'[eggA];");
-        fc.append("[eggA][eggbody]overlay=x=1120:y=880:enable='gte(t,").append(eggT).append(")'[v];");
 
-        // Audio: branded chicken voices (or Veo's own track as fallback) + a ding
-        // per letter + a sparkle.
+        // Audio: branded chicken voices (or Veo's own track as fallback) + one
+        // sparkle when the logo lands.
         // All branches are resampled to a common 48 kHz so amix never fails on a
         // sample-rate mismatch (ElevenLabs MP3s and the SFX library can differ).
         List<String> amix = new ArrayList<>();
@@ -215,19 +173,10 @@ public class IntroBuilder {
                 amix.add("[vo" + i + "]");
             }
         }
-        if (haveDing) {
-            fc.append("[").append(dingIdx).append(":a]asplit=").append(TITLE.size());
-            for (int i = 0; i < TITLE.size(); i++) fc.append("[d").append(i).append("]");
-            fc.append(";");
-            for (int i = 0; i < TITLE.size(); i++) {
-                int ms = (int) Math.round((REVEAL_AT + i * LETTER_STEP) * 1000);
-                fc.append("[d").append(i).append("]adelay=").append(ms).append("|").append(ms)
-                  .append(",volume=0.6,aresample=48000[D").append(i).append("];");
-                amix.add("[D" + i + "]");
-            }
-        }
-        if (haveSpark) {
-            int ms = (int) Math.round((lastT + 0.2) * 1000);
+        if (haveSpark && haveLogo) {
+            // One sparkle exactly when the logo lands (the old per-letter dings
+            // went out with the title text).
+            int ms = (int) Math.round(logoLanded * 1000);
             fc.append("[").append(sparkIdx).append(":a]adelay=").append(ms).append("|").append(ms)
               .append(",volume=0.7,aresample=48000[sp];");
             amix.add("[sp]");
@@ -255,8 +204,8 @@ public class IntroBuilder {
         cmd.add(introPath);
 
         run(cmd);
-        log.info("Intro rebuilt -> {} (voices={}, clipAudio={}, ding={}, sparkle={})",
-                introPath, voices.size(), clipAudio, haveDing, haveSpark);
+        log.info("Intro rebuilt -> {} (voices={}, clipAudio={}, logo={}, sparkle={})",
+                introPath, voices.size(), clipAudio, haveLogo, haveSpark);
         return introPath;
     }
 
