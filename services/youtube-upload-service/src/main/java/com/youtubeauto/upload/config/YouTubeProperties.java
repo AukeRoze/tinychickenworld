@@ -19,5 +19,11 @@ public record YouTubeProperties(
          *  For clearly-animated cartoons it's not technically required,
          *  but enabling it is the safe default — over-disclosing has
          *  negligible algorithmic cost; under-disclosing risks strikes. */
-        boolean containsSyntheticMedia
+        boolean containsSyntheticMedia,
+        /** BCP-47 taalcode voor {@code snippet.defaultLanguage} (taal van
+         *  titel/omschrijving) én {@code snippet.defaultAudioLanguage}
+         *  (gesproken taal). Belangrijk voor zoekindexering, auto-vertaalde
+         *  metadata en het correct labelen van de caption-track. Blank =
+         *  niet zetten (oud gedrag). Default "en" via application.yml. */
+        String defaultLanguage
 ) {}

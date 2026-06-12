@@ -31,6 +31,7 @@ public class MultiPlatformController {
     private final EndScreenService endScreen;
     private final CommunityPostService community;
     private final com.youtubeauto.upload.service.OAuthHealthProbe oauthProbe;
+    private final com.youtubeauto.upload.service.PlaylistService playlist;
 
     /** YouTube OAuth-token health (probed twice a day). healthy=false means the
      *  next upload WILL fail — delete StoredCredential and re-consent. */
@@ -139,6 +140,39 @@ public class MultiPlatformController {
         if (!facebook.isEnabled()) return ResponseEntity.status(503).build();
         JsonNode body = facebook.getVideoInsights(videoId);
         return body == null ? ResponseEntity.status(502).build() : ResponseEntity.ok(body);
+    }
+
+    /**
+     * Add an already-uploaded YouTube video to a channel playlist by title
+     * (series feature). Body: {"videoId": "...", "playlistTitle": "...",
+     * "playlistDescription": "..."} — description only used when the playlist
+     * is created. Idempotent: a video that is already in the playlist returns
+     * added=false. Errors come back as a JSON body with an "error" message,
+     * never a bare 500 stacktrace (the orchestrator treats this best-effort).
+     */
+    @PostMapping("/distribute/playlist")
+    public ResponseEntity<Map<String, Object>> addToPlaylist(@RequestBody Map<String, String> body) {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("platform", "youtube-playlist");
+        try {
+            com.youtubeauto.upload.service.PlaylistService.Result r = playlist.addToPlaylist(
+                    body.get("videoId"),
+                    body.get("playlistTitle"),
+                    body.get("playlistDescription"));
+            resp.put("playlistId", r.playlistId());
+            resp.put("added", r.added());
+            resp.put("playlistCreated", r.playlistCreated());
+            resp.put("success", true);
+            return ResponseEntity.ok(resp);
+        } catch (IllegalArgumentException e) {
+            resp.put("success", false);
+            resp.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(resp);
+        } catch (Exception e) {
+            resp.put("success", false);
+            resp.put("error", e.getMessage() == null ? "playlist add failed" : e.getMessage());
+            return ResponseEntity.status(502).body(resp);
+        }
     }
 
     @GetMapping("/distribute/end-screen-recipe")

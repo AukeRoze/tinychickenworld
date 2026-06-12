@@ -54,6 +54,28 @@ public class UploadServiceClient {
                 .block();
     }
 
+    /** Add an uploaded YouTube video to a channel playlist by title (series
+     *  feature; the upload-service creates the playlist when missing and is
+     *  idempotent on re-runs). Returns null on any error — the caller treats
+     *  the playlist add as best-effort. */
+    public JsonNode addToPlaylist(String videoId, String playlistTitle, String description) {
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("videoId", videoId);
+            body.put("playlistTitle", playlistTitle);
+            if (description != null && !description.isBlank()) {
+                body.put("playlistDescription", description);
+            }
+            return client.post().uri("/api/v1/distribute/playlist")
+                    .bodyValue(body)
+                    .retrieve().bodyToMono(JsonNode.class)
+                    .timeout(Duration.ofMinutes(2))
+                    .block();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** Cross-post the finished master to Facebook Page. Returns null when
      *  Facebook isn't configured (503) or upload failed. */
     public JsonNode distributeFacebook(String videoPath, String title, String description,

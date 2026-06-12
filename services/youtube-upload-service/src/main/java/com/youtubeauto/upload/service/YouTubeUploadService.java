@@ -79,6 +79,14 @@ public class YouTubeUploadService {
         s.setDescription(req.description());
         s.setTags(req.tags() != null ? req.tags() : props.defaultTags());
         s.setCategoryId(req.categoryId() != null ? req.categoryId() : props.defaultCategoryId());
+        // Video-taal: defaultLanguage = taal van de metadata (titel/omschrijving),
+        // defaultAudioLanguage = gesproken taal. Zet beide expliciet zodat
+        // YouTube de juiste zoekindex, auto-vertalingen en caption-labels
+        // gebruikt (localisaties uploaden hun eigen vertaalde metadata ernaast).
+        if (props.defaultLanguage() != null && !props.defaultLanguage().isBlank()) {
+            s.setDefaultLanguage(props.defaultLanguage());
+            s.setDefaultAudioLanguage(props.defaultLanguage());
+        }
 
         VideoStatus st = new VideoStatus();
         // Scheduled publish: if publishAt is in the future, force privacy to

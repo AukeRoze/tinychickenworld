@@ -21,6 +21,10 @@ app:
     default-tags: ["kids","education","learning"]
     made-for-kids: ${MADE_FOR_KIDS:true}
     contains-synthetic-media: ${CONTAINS_SYNTHETIC_MEDIA:true}
+    # snippet.defaultLanguage + defaultAudioLanguage op elke upload (BCP-47):
+    # juiste zoekindex, auto-vertaalde metadata en caption-labels. Leeg = niet
+    # zetten (oud gedrag). Localisaties uploaden hun eigen vertaalde metadata.
+    default-language: ${YOUTUBE_DEFAULT_LANGUAGE:en}
   tiktok:
     access-token: ${TIKTOK_ACCESS_TOKEN:}
   instagram:

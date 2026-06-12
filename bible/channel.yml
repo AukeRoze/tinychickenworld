@@ -1113,10 +1113,14 @@ landmarks:
 brand:
   intro:
     path: "/bible/intro.mp4"
-    durationSeconds: 3
+    # Werkelijke duur van de gebouwde bumper (IntroBuilder is voice-gedreven,
+    # ~6-7s). Deze waarde voedt o.a. de render-duur-gate-marge — houd 'm
+    # in sync met de echte clip na een intro-rebuild.
+    durationSeconds: 6
   outro:
     path: "/bible/outro.mp4"
-    durationSeconds: 3
+    # OutroBuilder DUR = 9.0s (fade verlengd naar 2.6s, 2026-06-12).
+    durationSeconds: 9
   # Branded audio sting played UNDER the opening title card (first ~1.5s).
   # A short signature chime/jingle that becomes the channel's sonic logo.
   # File should be a soft cheerful sound (chime, sparkle, glockenspiel hit)

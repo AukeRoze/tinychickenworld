@@ -138,6 +138,7 @@ let lastLangChoice = "";     // gekozen taal in het vertalingen-panel
 let costData = null;         // GET /api/v1/videos/{id}/cost (nieuw endpoint)
 let costFailed = false;      // oudere build zonder /cost → niet elke 5s opnieuw proberen
 let distRows = null;         // GET /api/v1/distribution (YouTube/Facebook-status)
+let seriesNames = null;      // id → naam uit GET /api/v1/series (lazy, eenmalig)
 
 function progressPct(status) {
   const p = PROGRESS[status];
@@ -1103,7 +1104,7 @@ function renderReview(ctx) {
   // ── 📣 Distributie (backlog P2) — per platform: status + push-knop ──
   if (distReady) {
     any = true;
-    wrap.appendChild(distributionCard(uploaded));
+    wrap.appendChild(distributionCard(uploaded, pl && pl.seriesId ? pl.seriesId : null));
   }
 
   // When there's nothing meaningful to show yet, hide the whole Review section
@@ -1235,12 +1236,33 @@ function renderEndScreen(host) {
  * GET /api/v1/videos/{id}; oudere backends zonder die velden vallen terug
  * op het distributie-overzicht.
  */
-function distributionCard(uploaded) {
+function distributionCard(uploaded, seriesId) {
   const card = reviewCard("📣 Distributie");
   const sub = document.createElement("p");
   sub.className = "sub small";
   sub.textContent = "Eén master → meerdere platformen. Een push uploadt de bestaande video — geen nieuwe render. Platforms zonder token geven '503 not configured'.";
   card.appendChild(sub);
+
+  // Serie-playlist: na de upload voegt de pipeline de video automatisch toe
+  // aan de playlist van de serie (Shorts niet). Naam lazy via /api/v1/series;
+  // tot die er is (of bij een fout) tonen we gewoon de seriesId.
+  if (seriesId) {
+    const plLine = document.createElement("p");
+    plLine.className = "sub small";
+    plLine.title = "Automatisch toegevoegd na de YouTube-upload (verticale Shorts niet).";
+    const setText = () => {
+      plLine.textContent = "📃 In playlist: " + ((seriesNames && seriesNames[seriesId]) || seriesId);
+    };
+    setText();
+    if (!seriesNames) {
+      api.get("/api/v1/series", { key: "series-names" }).then((arr) => {
+        seriesNames = {};
+        for (const s of (Array.isArray(arr) ? arr : [])) seriesNames[s.id] = s.name || s.id;
+        setText();
+      }).catch(() => {});
+    }
+    card.appendChild(plLine);
+  }
 
   // Statuschips.
   const row = Array.isArray(distRows) ? distRows.find((r) => r.id === id) : null;

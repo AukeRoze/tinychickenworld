@@ -2243,6 +2243,9 @@ public class PipelineOrchestrator {
             // with the legacy auto Facebook cross-post below).
             if (distributionGateEnabled) {
                 enterDistribution(jobId, ytId, ytUrl);
+                // Series playlist: after the YouTube id is persisted, so a crash
+                // here never loses the upload result. Best-effort, never blocks.
+                addToSeriesPlaylist(jobId, job, ytId);
                 pauseForReview(jobId, JobStatus.DISTRIBUTION_PENDING,
                         "on YouTube — push other platforms, then finish");
                 log.info("Job {} uploaded -> {} ; awaiting distribution", jobId, ytUrl);
@@ -2251,6 +2254,9 @@ public class PipelineOrchestrator {
 
             complete(jobId, ytId, ytUrl);
             log.info("Job {} COMPLETED -> {}", jobId, ytUrl);
+
+            // Series playlist (best-effort, after persist — see helper).
+            addToSeriesPlaylist(jobId, job, ytId);
 
             // Best-effort cross-post to Facebook Page. Never blocks completion;
             // the user can re-trigger from the dashboard if it fails or is
@@ -2283,6 +2289,72 @@ public class PipelineOrchestrator {
             log.error("Job {} upload stage FAILED", jobId, e);
             fail(jobId, e.getMessage());
         }
+    }
+
+    /**
+     * Best-effort: add the freshly uploaded episode to its series playlist
+     * (named after the bible series; the upload-service creates the playlist
+     * on first use and is idempotent on re-runs, so nothing is persisted on
+     * the job — a retry simply resolves the same playlist again).
+     *
+     * Skipped on purpose for vertical (Shorts) jobs: vertical videos pollute
+     * the landscape series playlist. Note the pipeline itself never uploads
+     * the derived Short (job.shortPath) to YouTube — it only feeds the manual
+     * TikTok/Reels pushes — so only the master needs this guard.
+     *
+     * Null response (upload-service down, or a mocked client in tests) is a
+     * silent ok: never fail or block the upload flow over a playlist.
+     */
+    private void addToSeriesPlaylist(UUID jobId, VideoJob job, String ytId) {
+        try {
+            if (job.getSeriesId() == null || job.getSeriesId().isBlank()) return;
+            if (ytId == null || ytId.isBlank()) return;
+            try {
+                if (VideoFormat.parse(job.getFormat()).isVertical()) {
+                    log.info("Job {} is vertical/Short — not adding to the series playlist", jobId);
+                    return;
+                }
+            } catch (IllegalArgumentException ignore) { /* unknown format → treat as landscape */ }
+
+            String title = resolveSeriesTitle(job.getSeriesId());
+            JsonNode res = uploadClient.addToPlaylist(ytId, title,
+                    "Alle afleveringen van " + title + " — Tiny Chicken World.");
+            if (res == null) {
+                // Best-effort by design (and the state-machine test's mock
+                // returns null here) — log and move on.
+                log.warn("Job {} series-playlist add gave no response (non-fatal)", jobId);
+                return;
+            }
+            if (res.path("success").asBoolean(false)) {
+                log.info("Job {} {} series playlist '{}' ({}{})", jobId,
+                        res.path("added").asBoolean(false) ? "added to" : "already in",
+                        title, res.path("playlistId").asText(""),
+                        res.path("playlistCreated").asBoolean(false) ? ", playlist created" : "");
+            } else {
+                String err = res.path("error").asText("unknown error");
+                log.warn("Job {} series-playlist add failed (non-fatal): {}", jobId, err);
+                try {
+                    qcInsights.record(jobId, null,
+                            List.of("Series playlist add failed: " + err), "distribution");
+                } catch (Exception ignore) { /* insights are optional */ }
+            }
+        } catch (Exception e) {
+            log.warn("Job {} series-playlist add failed (non-fatal): {}", jobId, e.getMessage());
+        }
+    }
+
+    /** Display title of a bible series (bible.series[].name) — falls back to
+     *  the raw seriesId when the bible is missing or the id is unknown. */
+    private String resolveSeriesTitle(String seriesId) {
+        try {
+            for (JsonNode s : readBible().path("series")) {
+                if (seriesId.equals(s.path("id").asText(null))) {
+                    String name = s.path("name").asText("");
+                    if (!name.isBlank()) return name;
+                }
+            }
+        } catch (Exception ignore) { /* no bible in tests / misconfig → fallback */ }
+        return seriesId;
     }
 
     /**

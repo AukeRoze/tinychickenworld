@@ -24,7 +24,8 @@ Alles hieronder is de drempel naar "de machine draait en leert".
 - [ ] **(user) PUBLICEREN.** Elke databehoefte (retention-priors, CTR-kalibratie, squint-validatie, arc-weging) start pas met kijkers.
 - [ ] **(user) API-keys roteren** (.env bevat live keys, ~1 uur). Zet meteen `REVIEW_TOKEN_SECRET` (nieuw, voor review-confirm-links).
 - [ ] **(user) WSL-geheugen bevestigen**: `.wslconfig` met `memory=12-16GB` gezet + `wsl --shutdown`? (De exit-137/OOM bij de transitie-concat kwam hierdoor; code-fallback = chunked concat, zie P3.)
-- [ ] **(user) GCS-bucket gereed** voor VEO (eenmalig; zie `analyse/TOMORROW-VEO-RUN.md` fase C½) + 1-clip smoke test (`analyse/VEO-SMOKE-TEST.md`).
+- [x] ~~GCS-bucket + VEO-smoke-test~~ — **was al lang gebeurd** (EP2/EP3 zijn Veo-renders); stale item uit de gearchiveerde draaiboeken, geschrapt 2026-06-12.
+- [ ] **(user) `VOICE_MODE=elevenlabs` expliciet in `.env` zetten** — staat nu leeg (werkt vermoedelijk via een host-env-var, maar een verse shell rendert dan stilletjes stemloos; compose-default = silent).
 
 **Verificatielijst eerste run** (code is klaar; de run bewijst het):
 - [ ] ⚠ `lastFrame(...)`-SDK-regel in `VertexVeoClient` (methodenaam kan per google-genai-versie verschillen).
@@ -153,5 +154,11 @@ Refactor-schuld:
 - [x] **ffmpeg-integratietests** (assembly, `@EnabledIf` ffmpeg+ffprobe op PATH, fixtures via lavfi): concat-duur/streams, chunked==monolithisch (±0.5s, incl. proactieve-guard-bewijs via passdir), eerlijk kapotte-input-gedrag (ffprobe faalt luid — ladder redt graphs, geen inputs), scorePlan+dip-mix + flat-retry, SceneClipBuilder duur-stretch/cap. Vereist libx264.
 - [x] **Pixar Story B** (zie hierboven).
 - [x] Episode-anchors-bevinding: image-service had al een QC-blinde disk-scan-ConsistencyState; request-canon wint nu, disk-scan blijft voor de eerste batch.
+
+**Publicatie-verfijningen (2026-06-12, avond — op gebruikerswensen):**
+- [x] **Auto-playlist per serie**: `POST /api/v1/distribute/playlist` (lookup op titel → create public → idempotente add, max 2 pagina's dup-check) + orchestrator koppelt na elke geslaagde upload o.b.v. `seriesId` (best-effort, Shorts uitgesloten, serietitel uit bible `series[].name`). UI toont "📃 In playlist".
+- [x] **Video-taal**: `snippet.defaultLanguage` + `defaultAudioLanguage` op elke upload (`YOUTUBE_DEFAULT_LANGUAGE`, default `en`) — juiste zoekindex, auto-vertaalde metadata, caption-labels.
+- [x] **Outro-fade verlengd** op kijkersfeedback: 1.7 → 2.6s, DUR 8.5 → 9.0 (CTA-leestijd blijft ±3s). Bible `brand.intro/outro.durationSeconds` gecorrigeerd (3/3 was stale → 6/9; voedt de duur-gate-marge). **Actie: outro éénmalig ♻ Re-composite (gratis, geen Veo) na de rebuild.**
+- [ ] **(user) Kanaal telefonisch verifiëren** (youtube.com/verify als Tiny Chicken World) — vereist voor custom thumbnails; daarna thumbnail van qhw-y3paiQM handmatig zetten in Studio.
 
 > Alles van vandaag is **ongecompileerd** tot de eerstvolgende `build.bat`.

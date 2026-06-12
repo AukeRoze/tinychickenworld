@@ -38,12 +38,16 @@ public class OutroBuilder {
     @Value("${app.ffprobe-bin:ffprobe}")
     private String ffprobe;
 
-    // 8.5s with a calm arc instead of 6s wall-to-wall: ~3s of just waving and
+    // 9.0s with a calm arc instead of 6s wall-to-wall: ~3s of just waving and
     // goodbyes (the wind-down the episode needs), CTA at 3.4s, then a long
-    // 1.7s fade of BOTH picture and sound — no more "boem, einde video".
-    private static final double DUR = 8.5;     // outro length (s)
+    // fade of BOTH picture and sound — no more "boem, einde video".
+    // Fade 1.7 → 2.6 op kijkersfeedback (2026-06-12): het uitfaden beviel
+    // maar mocht trager — een langzame uitgeleide past het bedtime-ritme.
+    // DUR +0.5 zodat de langere fade de CTA-leestijd niet opeet: de CTA
+    // staat nog steeds ±3s vol in beeld (3.4 → 6.4) vóór de fade inzet.
+    private static final double DUR = 9.0;     // outro length (s)
     private static final double CTA_AT = 3.4;  // when the CTA bounces in (s)
-    private static final double FADE = 1.7;    // tail fade (video + audio)
+    private static final double FADE = 2.6;    // tail fade (video + audio)
 
     /** Back-compat: no spoken-voice track. */
     public String build(String clipPath) {
