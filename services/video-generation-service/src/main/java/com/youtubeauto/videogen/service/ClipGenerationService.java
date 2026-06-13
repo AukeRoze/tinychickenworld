@@ -258,7 +258,7 @@ public class ClipGenerationService {
         } catch (VeoException ve) {
             log.warn("Scene {} Veo error ({}): {}", s.seq(), ve.kind(), ve.getMessage());
             if (ve.kind() == VeoException.Kind.QUOTA) {
-                return retryOnFallback(jobId, aspect, s, budget, ve, start);
+                return retryQuotaWithBackoff(jobId, aspect, s, route, budget, ve, start);
             }
             return ClipResult.fallback(s.seq(), route.modelId(), ve.kind().name());
         } catch (IOException io) {
@@ -275,6 +275,93 @@ public class ClipGenerationService {
             return ClipResult.fallback(s.seq(), route.modelId(),
                     "RUNTIME:" + e.getClass().getSimpleName() + ":" + e.getMessage());
         }
+    }
+
+    /**
+     * Quota (RESOURCE_EXHAUSTED) backoff. A Vertex quota / rate-limit hit is
+     * transient: instead of dumping the scene straight to Ken Burns (€0, frozen
+     * frame) we retry the SAME model with bounded exponential backoff + jitter
+     * (5s, 15s, 45s by default). The call runs on a pool thread holding its
+     * parallelism semaphore slot, so sleeping here also throttles overall
+     * throughput while Vertex is under quota pressure — exactly the backpressure
+     * we want. Only after the retries are exhausted (or another, non-quota error
+     * surfaces) do we degrade to the existing fallback/Ken-Burns path.
+     */
+    private ClipResult retryQuotaWithBackoff(UUID jobId, String aspect, SceneRequest s,
+                                             ModelRoute route, CostBudget budget,
+                                             VeoException original, long started) {
+        int maxRetries = veoProps.quota().maxRetries();
+        long baseMs = veoProps.quota().baseBackoffMs();
+        VeoException last = original;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            // Exponential backoff: base * 3^(attempt-1) → 5s, 15s, 45s for base=5000.
+            long backoff = (long) (baseMs * Math.pow(3, attempt - 1));
+            long jitter = java.util.concurrent.ThreadLocalRandom.current()
+                    .nextLong(0, Math.max(1, backoff / 4));   // up to +25% jitter
+            long sleepMs = backoff + jitter;
+            log.warn("Scene {} QUOTA — backing off {}s (attempt {}/{}) on model {}",
+                    s.seq(), Math.round(sleepMs / 1000.0), attempt, maxRetries, route.modelId());
+            try {
+                Thread.sleep(sleepMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("Scene {} QUOTA backoff interrupted", s.seq());
+                return ClipResult.failed(s.seq(), route.modelId(), "INTERRUPTED");
+            }
+
+            double estimate = costCalc.estimate(route);
+            if (budget.spent() + estimate > budget.cap()) {
+                log.warn("Scene {} QUOTA — budget no longer fits same-model retry, "
+                        + "falling back", s.seq());
+                break;
+            }
+            Path workScene = workdirScene(jobId, s.seq());
+            Path clipOut = workScene.resolve("clip.mp4");
+            try {
+                Files.createDirectories(workScene);
+                String startGcs = gcs.uploadImage(jobId, s.seq(),
+                        Paths.get(s.startImagePath()), "image/png");
+                String endGcs   = uploadEndIfPresent(jobId, s);
+                String outGcs   = gcs.outputPrefixUri(jobId, s.seq());
+                String resultUri = veo.generateAndAwait(
+                        route, s.visualDesc(), startGcs, endGcs, s.negativePrompt(), aspect,
+                        outGcs, characterRefs.resolve(s.characters()));
+                gcs.download(resultUri, clipOut);
+                if (!isValidMp4(clipOut)) {
+                    gcs.deleteQuietly(resultUri);
+                    log.warn("Scene {} CORRUPT_OUTPUT after QUOTA retry", s.seq());
+                    return ClipResult.fallback(s.seq(), route.modelId(), "CORRUPT_OUTPUT");
+                }
+                frames.extractQcFrames(clipOut, workScene);
+                budget.add(estimate);
+                long wall = System.currentTimeMillis() - started;
+                log.info("Scene {} OK after QUOTA retry {}/{}: model={} dur={}s wall={}ms cost≈€{}",
+                        s.seq(), attempt, maxRetries, route.modelId(), route.durationSec(),
+                        wall, estimate);
+                return ClipResult.ok(s.seq(), clipOut.toString(), route.modelId(),
+                        route.resolution(), route.durationSec(), wall, round2(estimate));
+            } catch (VeoException ve) {
+                if (ve.kind() == VeoException.Kind.QUOTA) {
+                    last = ve;   // still quota — keep backing off
+                    continue;
+                }
+                log.warn("Scene {} QUOTA retry hit non-quota error ({}): {} — falling back",
+                        s.seq(), ve.kind(), ve.getMessage());
+                break;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return ClipResult.failed(s.seq(), route.modelId(), "INTERRUPTED");
+            } catch (Exception ex) {
+                log.warn("Scene {} QUOTA retry error ({}): {} — falling back",
+                        s.seq(), ex.getClass().getSimpleName(), ex.getMessage());
+                break;
+            }
+        }
+        // Retries exhausted (or budget/other error): degrade to the existing
+        // downshift + Ken-Burns fallback path.
+        log.warn("Scene {} QUOTA retries exhausted ({} attempts) — degrading to fallback",
+                s.seq(), maxRetries);
+        return retryOnFallback(jobId, aspect, s, budget, last, started);
     }
 
     private ClipResult retryOnFallback(UUID jobId, String aspect, SceneRequest s,

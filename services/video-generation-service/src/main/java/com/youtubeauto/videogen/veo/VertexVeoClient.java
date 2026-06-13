@@ -124,8 +124,23 @@ public class VertexVeoClient {
         if (negativePrompt != null && !negativePrompt.isBlank()) {
             cfgBuilder.negativePrompt(negativePrompt);
         }
+        boolean hasStartFrame = startImageGcsUri != null && !startImageGcsUri.isBlank();
+        // Veo 3.1 mutual-exclusion rule: a request may carry EITHER an image-to-video
+        // frame (start/last frame) OR reference images, never both — Vertex rejects the
+        // combination with code=3 "Image and reference images cannot be both set."
+        // Our start frame is the scene still from the Gemini pipeline, already
+        // reference-conditioned on the cast, so it is the PRIMARY identity source and
+        // wins. When a start frame is present we deterministically drop the refs here,
+        // BEFORE the call — no conflict, no exception-fallback round-trip. (The
+        // exception fallback in generateAndAwait stays as a safety net.)
+        if (hasStartFrame && referenceImages != null && !referenceImages.isEmpty()) {
+            log.debug("Veo: start-frame present → skipping {} reference image(s) "
+                    + "(mutually exclusive)", referenceImages.size());
+            referenceImages = java.util.List.of();
+        }
         // Character reference stills (Veo 3.1 "asset" references) — identity
         // anchored in pixels. Sent inline (bytes) so no extra GCS round-trip.
+        // Only reached in the (rare) reference-to-video path with no start frame.
         // If the SDK/model rejects them, generateAndAwait retries without refs.
         if (referenceImages != null && !referenceImages.isEmpty()) {
             java.util.List<com.google.genai.types.VideoGenerationReferenceImage> refs =
@@ -207,7 +222,20 @@ public class VertexVeoClient {
 
     private VeoException classify(Exception e) {
         String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-        if (msg.contains("429") || msg.contains("quota") || msg.contains("rate limit")) {
+        // Quota / rate-limit detection. `msg` is already lowercased so all
+        // needles are lowercase. Beyond the original "429"/"quota"/"rate limit",
+        // catch Vertex's gRPC RESOURCE_EXHAUSTED (code 8) shapes — previously
+        // these fell through to OTHER and skipped the backoff path, dumping the
+        // scene straight to Ken Burns even though it was a transient quota hit.
+        if (msg.contains("429")
+                || msg.contains("quota")
+                || msg.contains("rate limit")
+                || msg.contains("resource_exhausted")
+                || msg.contains("resourceexhausted")
+                || msg.contains("code: 8")
+                || msg.contains("code=8")
+                || msg.contains("quota exceeded")
+                || msg.contains("exhausted")) {
             return new VeoException(VeoException.Kind.QUOTA, e.getMessage(), e);
         }
         if (msg.contains("timeout") || msg.contains("deadline")) {

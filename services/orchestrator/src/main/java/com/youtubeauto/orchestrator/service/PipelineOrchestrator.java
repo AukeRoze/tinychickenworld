@@ -352,6 +352,66 @@ public class PipelineOrchestrator {
         self.runAssetsStage(jobId);
     }
 
+    /**
+     * 🎬 Generate a Veo clip for EVERY scene that doesn't have one yet ("alles
+     * bewegend"). Flips the job to {@code motionMode=veo} so {@link #runVeoStage}
+     * takes ALL scenes as candidates (not just the hook/climax hero beats that
+     * {@code hybrid} routes), then restarts the Veo stage exactly like
+     * {@link #retry}/{@link #resumeAfterRestart}/{@link #rerenderVisuals} do —
+     * via {@code mark(...) + self.runVeoStage(jobId)}. The stage ends in assembly
+     * on its own (no dedicated post-Veo gate).
+     *
+     * <p>COST-CRITICAL — does NOT regenerate clips you already have. The scene
+     * images and voices are reused untouched, and {@code clipPath}s are
+     * deliberately KEPT: {@link #runVeoStage} now skips every scene whose clip
+     * file still exists on disk (see the skip block there), so this only pays for
+     * the MISSING clips. A hybrid episode that already has its hook+climax clips
+     * therefore only fills in the remaining setup/development/resolution scenes;
+     * a ken_burns episode generates one clip per scene.
+     *
+     * <p>NB — {@code runVeoStage}/{@code buildVeoScenes} do NOT inherently skip
+     * existing clips: {@code buildVeoScenes} builds a request for every candidate.
+     * The skip is enforced by the explicit on-disk-clip filter added to
+     * {@code runVeoStage}; without it this method would re-pay for clips that are
+     * already fine. The skip is a no-op for a normal first Veo run (no clips yet)
+     * and for re-render (clips cleared first), so existing behaviour is unchanged.
+     *
+     * <p>Guard: same safe-status set as {@link #rerenderVisuals}/{@code approve} —
+     * any review-pending status, COMPLETED or FAILED. A mid-stage job throws
+     * IllegalStateException.
+     */
+    public void generateAllClips(UUID jobId) {
+        VideoJob job = load(jobId);
+        JobStatus st = job.getStatus();
+        if (!st.isAwaitingReview() && !st.isTerminal()) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " is mid-stage (status=" + st + "); generate-all-clips "
+                    + "needs a paused (review-pending), COMPLETED or FAILED job.");
+        }
+        List<SceneDto> scenes = loadAssemblyScenes(job);
+        if (scenes.isEmpty()) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " has no scenes yet — nothing to animate.");
+        }
+        if (!assetsComplete(scenes)) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " has incomplete scene assets (image + voice) — "
+                    + "generate the storyboard + voices before animating every scene.");
+        }
+        long already = scenes.stream().filter(SceneDto::hasClip).count();
+        // Flip to full-Veo so buildVeoScenes takes ALL scenes as candidates.
+        // clipPaths are KEPT — runVeoStage skips scenes whose clip exists on disk.
+        retryOnConflict(jobId, j -> {
+            j.setMotionMode("veo");
+            j.setError(null);
+        });
+        log.info("Job {} generate-all-clips: motionMode→veo, {} of {} scenes already have a clip "
+                + "(kept); restarting Veo stage to fill the remaining {} scene(s)",
+                jobId, already, scenes.size(), scenes.size() - already);
+        mark(jobId, JobStatus.VEO_GENERATING, "alle scènes → Veo");
+        self.runVeoStage(jobId);
+    }
+
     /** Determines the earliest stage that still has work left, based on which
      *  artifacts already exist. Used by {@link #retry}. */
     private JobStatus resumePoint(VideoJob job) {
@@ -1297,6 +1357,21 @@ public class PipelineOrchestrator {
             if (hybrid) {
                 log.info("Job {} hybrid Veo routing: {} of {} scenes get Veo (hook+climax only)",
                         jobId, veoCandidates.size(), assemblyScenes.size());
+            }
+            // SKIP-ON-EXISTING-CLIP: never re-pay for a clip that's already on
+            // disk. A scene that still has its clip.mp4 keeps it (its clipPath is
+            // untouched in assemblyScenes); only the scenes WITHOUT a usable clip
+            // are sent to Veo. No-op for a normal first run (no clips yet) and for
+            // re-render (clipPaths cleared upstream); load-bearing for
+            // generateAllClips, which keeps the good clips and fills the gaps.
+            int beforeSkip = veoCandidates.size();
+            veoCandidates = veoCandidates.stream()
+                    .filter(s -> !fileExists(s.getClipPath()))
+                    .toList();
+            if (veoCandidates.size() < beforeSkip) {
+                log.info("Job {} Veo skip-on-existing-clip: {} of {} candidate scenes already "
+                        + "have a clip on disk (kept) — generating the remaining {}",
+                        jobId, beforeSkip - veoCandidates.size(), beforeSkip, veoCandidates.size());
             }
             if (veoCandidates.isEmpty()) {
                 log.info("Job {} no scenes to Veo-ify, skipping to assembly", jobId);

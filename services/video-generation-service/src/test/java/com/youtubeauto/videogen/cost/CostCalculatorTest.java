@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class CostCalculatorTest {
 
     private CostCalculator calcWithRates(Map<String, VeoProperties.Rate> rates) {
-        // Only rates() is used by estimate(); polling/parallelism are irrelevant here.
-        return new CostCalculator(new VeoProperties(null, null, rates));
+        // Only rates() is used by estimate(); polling/parallelism/quota are irrelevant here.
+        return new CostCalculator(new VeoProperties(null, null, rates, null));
     }
 
     @Test

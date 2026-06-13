@@ -572,6 +572,24 @@ function renderActions(job) {
         return api.post(`/api/v1/videos/${id}/rerender-visuals`);
       }));
   }
+  // 🎬 Alle scènes → Veo: genereer een echte Veo-clip voor ELKE scène die er nog
+  // geen heeft (motionMode wordt veo). Bestaande clips blijven behouden; alleen
+  // de ontbrekende worden gemaakt. Zelfde veilige statussen als re-render.
+  if (RERENDER_SAFE.has(s)) {
+    items.push(actionItem("🎬 Alle scènes → Veo (alles bewegend)", "",
+      "Genereert een echte Veo-clip voor ELKE scène die er nog geen heeft, zodat de hele " +
+      "aflevering beweegt (motionMode wordt 'veo'). Bestaande clips blijven behouden — alleen " +
+      "de ontbrekende scènes worden gegenereerd. Daarna hermonteert de video automatisch. " +
+      "Let op: dit kost echt Veo-geld per scène.",
+      () => {
+        const ok = confirm(
+          "Genereert een echte Veo-clip voor ELKE scène die er nog geen heeft " +
+          "(~€2-4 per scène; een aflevering van ~25 scènes kan €50-90 kosten). " +
+          "Bestaande clips blijven behouden. Daarna hermonteert de video automatisch.\n\nDoorgaan?");
+        if (!ok) throw new Error("cancelled");
+        return api.post(`/api/v1/videos/${id}/all-clips`);
+      }));
+  }
   items.push(actionItem("Clone", "",
     "Create a NEW job that copies this one's brief and settings — a fresh run from scratch. The original is left untouched.",
     () => api.post(`/api/v1/videos/${id}/clone`)));

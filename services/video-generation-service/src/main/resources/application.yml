@@ -28,7 +28,17 @@ veo:
     max-delay-ms: 15000
     max-wait-seconds: ${VEO_MAX_WAIT_SEC:600}
   parallelism:
-    max-parallel: ${VEO_MAX_PARALLEL:3}
+    # Default lowered 3 → 2: Vertex Veo has an RPM/concurrency quota and a burst
+    # of parallel submits trips RESOURCE_EXHAUSTED (gRPC code 8), which used to
+    # dump scenes straight to Ken-Burns fallback. 2 keeps throughput while
+    # staying under the burst threshold. Override with VEO_MAX_PARALLEL.
+    max-parallel: ${VEO_MAX_PARALLEL:2}
+  # Quota / rate-limit (RESOURCE_EXHAUSTED) backoff. On a quota error the scene
+  # retries on the SAME model with exponential backoff + jitter before falling
+  # back to Ken Burns: 5s, 15s, 45s (base * 3^attempt) for max-retries attempts.
+  quota:
+    max-retries: ${VEO_QUOTA_MAX_RETRIES:3}
+    base-backoff-ms: ${VEO_QUOTA_BASE_BACKOFF_MS:5000}
   rates:
     veo-3.1-lite-generate-preview: { eur-per-second: 0.05 }
     veo-3.1-fast-generate-preview: { eur-per-second: 0.10 }
@@ -36,9 +46,15 @@ veo:
     # GA endpoints — what ModelRouter actually emits since Veo 3.1 went GA.
     # Without these the CostCalculator fell back to a conservative €0.5/s,
     # making the cap think a €1.20 hybrid run cost €6 and downshift too early.
-    veo-3.1-fast-generate-001:     { eur-per-second: 0.10 }
-    veo-3.1-generate-001:          { eur-per-second: 0.40 }
+    veo-3.1-fast-generate-001:     { eur-per-second: 0.10 }   # GA Fast (UI "~€0,10/s Fast")
+    veo-3.1-generate-001:          { eur-per-second: 0.40 }   # GA Premium (UI "~€0,40/s Premium")
     veo-3.0-fast-generate-001:     { eur-per-second: 0.20 }   # observed real cost (€1.20 / 6s)
+    # GA Lite — defensive. Lite is the only tier still on a "-preview" id today
+    # (ModelRouter maps veo3_1_lite → veo-3.1-lite-generate-preview), but when it
+    # graduates to "-001" the CostCalculator would otherwise fall back to the
+    # conservative €0.5/s. Priced at the UI "~€0,05/s Lite" label, same as the
+    # preview entry above. (Added so no router-emittable Veo id is unpriced.)
+    veo-3.1-lite-generate-001:     { eur-per-second: 0.05 }   # GA Lite (UI "~€0,05/s Lite")
     # Seedance 2.0 via fal.ai — ESTIMATES, verify against your fal dashboard
     # after the first runs and correct here (the cost cap uses these). Bracket
     # syntax keeps the slashes literal in Spring's relaxed map binding.

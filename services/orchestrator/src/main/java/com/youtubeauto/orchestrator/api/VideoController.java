@@ -319,6 +319,20 @@ public class VideoController {
     }
 
     /**
+     * 🎬 Generate a Veo clip for EVERY scene that doesn't have one yet ("alles
+     * bewegend"). Flips the job to motionMode=veo and restarts the Veo stage;
+     * existing clips are kept (the stage skips scenes whose clip is already on
+     * disk), so only the missing clips are paid for. Real Veo cost per generated
+     * scene. Only allowed when the job is paused (review-pending), COMPLETED or
+     * FAILED; the video re-assembles automatically afterwards.
+     */
+    @PostMapping("/{id}/all-clips")
+    public ResponseEntity<VideoJobResponse> generateAllClips(@PathVariable UUID id) {
+        orchestrator.generateAllClips(id);
+        return ResponseEntity.ok(orchestrator.get(id));
+    }
+
+    /**
      * AI-Critic Auto-Fix: iteratively re-roll the image-fixable weak scenes and
      * re-assemble until the AI-Critic score reaches {@code target} (default 90)
      * or the hard caps run out, then pause for review. Never auto-uploads.
