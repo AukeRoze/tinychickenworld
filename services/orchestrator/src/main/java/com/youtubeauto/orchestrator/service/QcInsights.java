@@ -79,6 +79,31 @@ public class QcInsights {
         return false;
     }
 
+    /**
+     * The most recent persisted QC issue text for one job+scene (newest-first),
+     * or {@code null} when none recorded. Used to pre-fill the per-scene "Regen"
+     * prompt with the most specific feedback we have. Best-effort: never throws.
+     */
+    @Transactional(readOnly = true)
+    public String latestIssueFor(UUID jobId, int seq) {
+        try {
+            QcFinding best = null;
+            for (QcFinding f : repo.findByVideoJobId(jobId)) {
+                if (f.getSeq() == null || f.getSeq() != seq) continue;
+                if (f.getIssue() == null || f.getIssue().isBlank()) continue;
+                if (best == null
+                        || (f.getCreatedAt() != null && best.getCreatedAt() != null
+                            && f.getCreatedAt().isAfter(best.getCreatedAt()))) {
+                    best = f;
+                }
+            }
+            return best == null ? null : best.getIssue();
+        } catch (Exception e) {
+            log.warn("QC latestIssueFor failed (non-fatal): {}", e.getMessage());
+            return null;
+        }
+    }
+
     public record Pattern(String category, String character, long count, String lastExample) {}
 
     /**

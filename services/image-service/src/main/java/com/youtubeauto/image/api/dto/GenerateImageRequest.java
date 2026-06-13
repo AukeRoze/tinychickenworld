@@ -46,7 +46,16 @@ public record GenerateImageRequest(
              *  reference next to the character anchors. Anchor-capable providers
              *  attach them as the FINAL reference images (max 2, counted in the
              *  total-ref budget). May be null. */
-            List<String> styleAnchors
+            List<String> styleAnchors,
+            /** CORRECTION hint (additive, optional — same Jackson additivity as
+             *  {@code styleAnchors}: absent in the JSON → null → exactly the
+             *  current behaviour). A free-form instruction describing what was
+             *  WRONG with the previous render of this scene ("no second chicken",
+             *  "hat slightly smaller", "move the character left"). When present,
+             *  anchor-capable providers append a short, high-priority correction
+             *  clause to the END of the scene prompt so the re-roll is targeted
+             *  instead of a blind re-roll. May be null/blank. */
+            String correctionHint
     ) {
         /** A recurring prop's reference image: a name + a readable PNG path. */
         public record PropRef(String name, String imagePath) {}
@@ -68,12 +77,12 @@ public record GenerateImageRequest(
         }
 
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId) {
-            this(seq, visualDesc, characters, locationId, null, null, null, null, null, null);
+            this(seq, visualDesc, characters, locationId, null, null, null, null, null, null, null);
         }
         public SceneVisual(int seq, String visualDesc, List<String> characters, String locationId,
                            String timeOfDay, String weather, String cameraFraming) {
             this(seq, visualDesc, characters, locationId, timeOfDay, weather, cameraFraming,
-                    null, null, null);
+                    null, null, null, null);
         }
     }
 

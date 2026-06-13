@@ -642,6 +642,25 @@ dl.kv dd { margin: 0; word-break: break-word; }
                    justify-content: center; }
 .scene-img-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .scene-img-ph { color: var(--muted); font-size: 12px; align-items: center; justify-content: center; }
+/* Busy-overlay tijdens een regen: dimt het oude beeld + spinner, zodat
+   duidelijk is dat er iets gebeurt (Gemini kan 10-30s duren). */
+.scene-img-frame img.dimmed { filter: brightness(.45) saturate(.6); }
+.scene-img-busy { position: absolute; inset: 0; display: flex; flex-direction: column;
+                  align-items: center; justify-content: center; gap: 10px; z-index: 3;
+                  color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .02em;
+                  text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
+.scene-img-busy .spin { width: 30px; height: 30px; border-radius: 50%;
+                  border: 3px solid rgba(255,255,255,.35); border-top-color: #fff;
+                  animation: scene-spin .8s linear infinite; }
+@keyframes scene-spin { to { transform: rotate(360deg); } }
+/* Eénmalige uitleg-box boven de scènelijst (wat doen de knoppen / Lock). */
+.scene-help { border: 1px solid var(--border); border-radius: 10px; background: var(--hover);
+              padding: 8px 12px; margin: 0 0 12px; }
+.scene-help > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--fg);
+                        list-style: none; user-select: none; }
+.scene-help > summary::-webkit-details-marker { display: none; }
+.scene-help[open] > summary { margin-bottom: 6px; }
+.scene-help-body p { line-height: 1.45; }
 /* Start → Eind caption badge on a hero scene's stills. */
 .scene-img-cap { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 999px;
                  font-size: 11px; font-weight: 600; letter-spacing: .02em; color: #fff;

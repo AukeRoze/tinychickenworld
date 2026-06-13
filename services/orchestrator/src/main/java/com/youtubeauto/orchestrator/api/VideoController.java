@@ -304,6 +304,21 @@ public class VideoController {
     }
 
     /**
+     * 🔁 Re-render visuals (new cast): regenerate EVERY scene image — and any
+     * Veo clips / end-stills — with the CURRENT character refs, after a cast
+     * redesign. Script and voices are reused; the old episode-anchor canon,
+     * thumbnail and reviewer locks are cleared so the fresh images anchor on
+     * the new cast. Costs real generation money (per scene image; Veo clips
+     * separately). Only allowed when the job is paused (review-pending),
+     * COMPLETED or FAILED.
+     */
+    @PostMapping("/{id}/rerender-visuals")
+    public ResponseEntity<VideoJobResponse> rerenderVisuals(@PathVariable UUID id) {
+        orchestrator.rerenderVisuals(id);
+        return ResponseEntity.ok(orchestrator.get(id));
+    }
+
+    /**
      * AI-Critic Auto-Fix: iteratively re-roll the image-fixable weak scenes and
      * re-assemble until the AI-Critic score reaches {@code target} (default 90)
      * or the hard caps run out, then pause for review. Never auto-uploads.

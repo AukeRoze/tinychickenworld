@@ -35,7 +35,7 @@ public class OpenAiImageProvider implements ImageProvider {
     public byte[] generatePng(SceneVisual scene, String format, long seed) {
         // OpenAI gpt-image-1 doesn't accept a seed param — ignored here.
         // Style consistency relies entirely on the visualStyle description.
-        String prompt = prompts.composeDescribe(scene);
+        String prompt = PromptComposer.withCorrection(prompts.composeDescribe(scene), scene);
         String size = "vertical".equalsIgnoreCase(format) ? VERTICAL_SIZE : LANDSCAPE_SIZE;
         log.debug("openai scene {} format={} prompt: {}", scene.seq(), format, prompt);
         return client.generatePng(prompt, size);

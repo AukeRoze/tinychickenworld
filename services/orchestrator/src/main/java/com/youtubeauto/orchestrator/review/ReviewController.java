@@ -46,15 +46,34 @@ public class ReviewController {
 
     // -------- per-scene image review (Feature A) --------
 
+    /** Regenerate a scene's still. Optional body {"correctionHint": "..."} (also
+     *  accepts the shorthand key "hint") steers the re-roll toward fixing a
+     *  specific problem; absent/blank → the legacy blind re-roll. */
     @PostMapping("/scenes/{seq}/regenerate")
-    public ResponseEntity<Map<String, Object>> regenerateScene(@PathVariable UUID id, @PathVariable int seq) {
-        String newPath = orchestrator.regenerateSceneImage(id, seq);
+    public ResponseEntity<Map<String, Object>> regenerateScene(@PathVariable UUID id, @PathVariable int seq,
+                                                              @RequestBody(required = false) Map<String, String> body) {
+        String hint = body == null ? null
+                : (body.get("correctionHint") != null ? body.get("correctionHint") : body.get("hint"));
+        String newPath = orchestrator.regenerateSceneImage(id, seq, hint);
         return ResponseEntity.ok(Map.of(
                 "id", id.toString(),
                 "seq", seq,
                 "imagePath", newPath,
                 "result", "REGENERATED"
         ));
+    }
+
+    /** Read-only: a suggested correction hint to PRE-FILL the per-scene Regen
+     *  prompt, assembled from the best feedback the system already has for this
+     *  scene (persisted QC issue > AI-Critic finding naming a character in the
+     *  scene > QA-Board axis nudge). Best-effort — no feedback → {"hint": ""}.
+     *  Never 500s on a missing audit/board. */
+    @GetMapping("/scenes/{seq}/regen-hint")
+    public ResponseEntity<Map<String, Object>> regenHint(@PathVariable UUID id, @PathVariable int seq) {
+        String hint;
+        try { hint = orchestrator.regenHint(id, seq); }
+        catch (Exception e) { hint = ""; }
+        return ResponseEntity.ok(Map.of("hint", hint == null ? "" : hint));
     }
 
     /** Edit a scene's visual description and regenerate its image from the new

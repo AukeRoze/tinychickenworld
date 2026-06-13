@@ -39,21 +39,25 @@ public class IntroBuilder {
     @Value("${app.ffprobe-bin:ffprobe}")
     private String ffprobe;
 
-    // SHORT INTRO (kids-YouTube retention: branding ≤5s, the hook must own
-    // the first 15s). The clip stays LIVE under the logo (no freeze); the
-    // logo swoops in early, one greeting per chick, done.
+    // The clip stays LIVE under the logo (no freeze); the logo swoops in early,
+    // one greeting per chick. Vaste minimumduur 12s (gebruikerswens 2026-06-12,
+    // matcht de outro): de Veo-clip is ~8s, dus het slotframe wordt met tpad
+    // vastgehouden tot 12s — zelfde hold-onder-de-staart als de outro.
+    private static final double MIN_DUR    = 12.0;  // vaste minimum-introlengte (s)
     private static final double LOGO_AT    = 1.0;   // logo starts its fly-in
     private static final double FLY_DUR    = 0.7;   // swoop duration (ease-out)
     private static final double HOLD_AFTER = 1.4;   // beat after the logo lands
 
-    // Logo landing position (top-left) + size — mirrors the outro logo
-    // (OutroBuilder: scale 220, x=56, y=48) so the branding bookends the video.
-    private static final int LOGO_W = 240;
-    private static final int LOGO_X = 56;
-    private static final int LOGO_Y = 48;
+    // Logo landing position (top-left) + size. Vergroot 240 → 340 op
+    // gebruikerswens (2026-06-12); x/y iets ruimer zodat het grotere logo niet
+    // tegen de rand plakt. (Outro-logo blijft 220 — bewust kleiner, want daar
+    // botst het anders met de end-screen-elementen.)
+    private static final int LOGO_W = 340;
+    private static final int LOGO_X = 64;
+    private static final int LOGO_Y = 56;
     // Fly-in start: just off-screen beyond the top-left corner.
-    private static final int LOGO_FROM_X = -320;
-    private static final int LOGO_FROM_Y = -320;
+    private static final int LOGO_FROM_X = -440;
+    private static final int LOGO_FROM_Y = -440;
 
     /** Back-compat: no spoken-voice track (keeps the Veo clip's own audio). */
     public String build(String clipPath) {
@@ -129,7 +133,9 @@ public class IntroBuilder {
         // 1.1s DISSOLVE that overlaps (and audio-crossfades!) the intro's
         // tail — Bo's "And I'm Bo!" must end BEFORE that fade starts, plus
         // breathing room. (History: 0.6s margin ate her line entirely.)
-        double totalDur = Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 1.9);
+        // Vaste minimumduur 12s, maar nooit korter dan wat de stemmen nodig
+        // hebben (de voice-staart van 1.9s blijft leidend als die langer is).
+        double totalDur = Math.max(MIN_DUR, Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 1.9));
 
         StringBuilder fc = new StringBuilder();
         fc.append("[0:v]scale=1920:1080:force_original_aspect_ratio=increase,")

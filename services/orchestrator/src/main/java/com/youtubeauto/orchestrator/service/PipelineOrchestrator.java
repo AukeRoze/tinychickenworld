@@ -278,6 +278,80 @@ public class PipelineOrchestrator {
         self.runAssemblyStage(jobId);
     }
 
+    /**
+     * 🔁 Re-render visuals (new cast) — rebuild the SAME video after a
+     * character redesign: identical script and voices, every visual fresh so
+     * the new images anchor on the redesigned character refs.
+     *
+     * <p>Per scene we clear {@code imagePath}, {@code clipPath} and
+     * {@code endImagePath} (SceneDto is NON_NULL, so a null setter removes the
+     * key — the runAssetsStage reuse block then sees "no image" and
+     * regenerates). {@code audioPath} is deliberately KEPT: the voices don't
+     * change on a cast redesign, and the same reuse block skips re-voicing a
+     * scene whose audio file still exists.
+     *
+     * <p>LOCKED scenes are re-rendered too — deliberately. A reviewer lock
+     * means "this still is approved", but a cast redesign makes every old
+     * still stale by definition: keeping a locked still would mix the old and
+     * the new cast in one video. The locked set is therefore cleared so the
+     * reviewer re-approves the fresh stills at the image gate.
+     *
+     * <p>Job-level stale state cleared in the same write:
+     * {@code episodeAnchorsJson} (the per-episode canon — it points at
+     * OLD-cast stills and would otherwise seed the new batch with the old
+     * look) and {@code thumbnailPath} (composed from old stills; the assembly
+     * stage regenerates it). After that the pipeline restarts at the assets
+     * stage via the {@code self.}-dispatch (same async pattern as
+     * {@link #retry}/{@link #resumeAfterRestart}); QC + review gates run as
+     * normal, {@code collectEpisodeAnchors} elects a NEW post-QC canon from
+     * the fresh stills, and for series jobs the promoted series anchors of the
+     * new cast (if present) seed the first batch.
+     *
+     * <p>Guard: only allowed while the job is NOT mid-stage — any review-pending
+     * status, COMPLETED or FAILED is fine; an active generate/assemble/upload
+     * status throws (same style as the approve/retry guards).
+     */
+    public void rerenderVisuals(UUID jobId) {
+        VideoJob job = load(jobId);
+        JobStatus st = job.getStatus();
+        if (!st.isAwaitingReview() && !st.isTerminal()) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " is mid-stage (status=" + st + "); re-render visuals "
+                    + "needs a paused (review-pending), COMPLETED or FAILED job.");
+        }
+        if (job.getScriptJobId() == null) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " has no script yet — nothing to re-render.");
+        }
+        List<SceneDto> scenes = loadAssemblyScenes(job);
+        if (scenes.isEmpty()) {
+            throw new IllegalStateException(
+                    "Job " + jobId + " has no scenes yet — nothing to re-render.");
+        }
+        for (SceneDto s : scenes) {
+            s.setImagePath(null);     // fresh still per scene (key disappears)
+            s.setClipPath(null);      // old-cast Veo clip is stale
+            s.setEndImagePath(null);  // old-cast directed end-still is stale
+        }
+        final String scenesJson = serialise(scenes);
+        retryOnConflict(jobId, j -> {
+            j.setAssemblyScenesJson(scenesJson);
+            j.setError(null);
+            j.setEpisodeAnchorsJson(null);   // old-cast canon must not seed the new batch
+            j.setThumbnailPath(null);        // composed from old stills; assembly regenerates
+            j.setLockedSceneSeqs(null);      // every still changes → reviewer re-approves
+            // Feature-B copy path would re-copy the OLD-cast images from the
+            // source job's workdir instead of generating fresh ones — exactly
+            // what a re-render must not do. One-shot clear, this job only.
+            j.setReuseImagesFromJob(null);
+        });
+        log.info("Job {} re-render visuals (new cast): cleared {} scene image/clip/end-still "
+                + "paths + episode anchors + thumbnail (voices kept) — restarting assets stage",
+                jobId, scenes.size());
+        mark(jobId, JobStatus.ASSETS_GENERATING, "re-render visuals (new cast) queued");
+        self.runAssetsStage(jobId);
+    }
+
     /** Determines the earliest stage that still has work left, based on which
      *  artifacts already exist. Used by {@link #retry}. */
     private JobStatus resumePoint(VideoJob job) {
@@ -342,6 +416,18 @@ public class PipelineOrchestrator {
      *  job. The scene is removed from the locked set. Returns the new
      *  image path. */
     public String regenerateSceneImage(UUID jobId, int seq) {
+        return regenerateSceneImage(jobId, seq, null);
+    }
+
+    /**
+     * Regenerate one scene's image with an optional free-form CORRECTION hint
+     * ("no second chicken", "hat a bit smaller", "move the character left").
+     * The hint (null/blank = exactly the legacy blind re-roll) rides along as
+     * {@code correctionHint} on the scene payload, where the image-service
+     * appends it as a high-priority correction clause to the prompt — so a
+     * manual re-roll is steered instead of a blind one.
+     */
+    public String regenerateSceneImage(UUID jobId, int seq, String correctionHint) {
         VideoJob job = load(jobId);
         // Allowed during the image-review step AND on a finished job (so a single
         // weak still can be re-rolled after completion; the video itself only
@@ -369,6 +455,9 @@ public class PipelineOrchestrator {
                 m.put("visualDesc", s.path("visualDesc").asText());
                 m.put("characters", chars);
                 m.put("locationId", s.path("locationId").asText(""));
+                if (correctionHint != null && !correctionHint.isBlank()) {
+                    m.put("correctionHint", correctionHint.trim());
+                }
                 imgScene = m;
                 break;
             }
@@ -390,7 +479,10 @@ public class PipelineOrchestrator {
         saveAssemblyScenes(jobId, assembly);
         // Removing seq from locked set so the reviewer must re-approve.
         unlockScene(jobId, seq);
-        log.info("Job {} scene {} image regenerated -> {}", jobId, seq, newPath);
+        log.info("Job {} scene {} image regenerated{} -> {}", jobId, seq,
+                (correctionHint != null && !correctionHint.isBlank())
+                        ? " (hint: " + correctionHint.trim() + ")" : "",
+                newPath);
         return newPath;
     }
 
@@ -2030,7 +2122,11 @@ public class PipelineOrchestrator {
                         : "QA Board Characters/Animation axis low — weakest hero beat";
                 log.info("Job {} Auto-Fix rerolling scene {} ({})", jobId, seq, why);
                 if (qcWeak) qcInsights.record(jobId, seq, r.issues(), "auto-fix");
-                String newPath = regenScene(jobId, a, format.imageFormat);
+                // Feed the reason into the re-roll. For a QC-weak scene the
+                // concrete issue list is the sharpest hint; the Critic/axis cases
+                // pass their (shorter, directional) reason. Null-safe throughout.
+                String autofixHint = qcWeak ? qcIssuesHint(r.issues()) : why;
+                String newPath = regenScene(jobId, a, format.imageFormat, autofixHint);
                 if (newPath != null && !newPath.isBlank()) { a.setImagePath(newPath); rerolled++; }
             }
 
@@ -2101,6 +2197,93 @@ public class PipelineOrchestrator {
             log.warn("Job {} criticTargetedSeqs failed: {}", jobId, e.getMessage());
         }
         return out;
+    }
+
+    /**
+     * Best-effort correction hint to PRE-FILL the per-scene "Regen" prompt with
+     * the most useful feedback the system already holds for scene {@code seq},
+     * in descending specificity:
+     *   a. the latest persisted per-scene QC issue (most specific);
+     *   b. an AI-Critic critical/major finding that names a character present in
+     *      this scene — reusing the SAME character→scene mapping as
+     *      {@link #criticTargetedSeqs} (here scene {@code seq} is in its set);
+     *   c. a generic QA-Board nudge when the Characters/Animation axis is below
+     *      the Auto-Fix axis threshold (more general).
+     * Combined into one compact sentence (~200 char cap, de-duplicated). No
+     * feedback available → empty string. Never throws on a missing audit/board.
+     */
+    @Transactional(readOnly = true)
+    public String regenHint(UUID jobId, int seq) {
+        List<String> parts = new ArrayList<>();
+        try {
+            VideoJob job = load(jobId);
+
+            // (a) Most specific: latest persisted per-scene QC issue.
+            try {
+                String qc = qcInsights.latestIssueFor(jobId, seq);
+                if (qc != null && !qc.isBlank()) parts.add(qc.trim());
+            } catch (Exception ignore) { /* best-effort */ }
+
+            List<SceneDto> assembly;
+            try { assembly = loadAssemblyScenes(job); }
+            catch (Exception e) { assembly = new ArrayList<>(); }
+
+            // (b) AI-Critic critical/major finding naming a character in THIS
+            //     scene. Reuse the finding→scene mapping; only add the finding's
+            //     message text when seq is among the Critic's targeted scenes.
+            try {
+                if (criticTargetedSeqs(jobId, assembly).contains(seq)) {
+                    var audit = auditRepo.findTopByVideoJobIdOrderByCreatedAtDesc(jobId).orElse(null);
+                    if (audit != null && audit.getFindings() != null && !audit.getFindings().isBlank()) {
+                        Set<String> here = new HashSet<>();
+                        for (SceneDto a : assembly) {
+                            if (a.effectiveSeq() == seq) {
+                                for (String c : a.charactersOrEmpty())
+                                    if (c != null) here.add(c.toLowerCase());
+                            }
+                        }
+                        for (JsonNode f : mapper.readTree(audit.getFindings())) {
+                            String sev = f.path("severity").asText("minor");
+                            if (!sev.equals("critical") && !sev.equals("major")) continue;
+                            String message = f.path("message").asText("");
+                            if (message.isBlank()) continue;
+                            String hay = (f.path("area").asText("") + " " + message).toLowerCase();
+                            boolean mentionsHere =
+                                    (here.contains("pip") && hay.matches("(?s).*\\bpip\\b.*"))
+                                 || (here.contains("mo")  && hay.matches("(?s).*\\bmo\\b.*"))
+                                 || (here.contains("bo")  && hay.matches("(?s).*\\bbo\\b.*"));
+                            if (mentionsHere) { parts.add(message.trim()); break; }
+                        }
+                    }
+                }
+            } catch (Exception ignore) { /* best-effort */ }
+
+            // (c) General: QA-Board Characters/Animation axis below threshold.
+            try {
+                Map<String, Integer> axes = qaAxes(job);
+                int thr = autofixAxisThreshold > 0 ? autofixAxisThreshold : 70;
+                if (axes.getOrDefault("Characters", 100) < thr)
+                    parts.add("character-consistentie verbeteren (juiste kleuren/accessoires per personage)");
+                if (axes.getOrDefault("Animation", 100) < thr)
+                    parts.add("dynamischer beeld met duidelijke houding/beweging");
+            } catch (Exception ignore) { /* best-effort */ }
+        } catch (Exception e) {
+            log.warn("Job {} regenHint failed (non-fatal): {}", jobId, e.getMessage());
+            return "";
+        }
+
+        // De-duplicate (case-insensitive) and join into one compact sentence.
+        List<String> uniq = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String p : parts) {
+            if (p == null) continue;
+            String t = p.trim();
+            if (t.isEmpty()) continue;
+            if (seen.add(t.toLowerCase())) uniq.add(t);
+        }
+        String hint = String.join("; ", uniq).trim();
+        if (hint.length() > 200) hint = hint.substring(0, 197).trim() + "...";
+        return hint;
     }
 
     /** Per-axis QA Board scores on the /100 scale (axis is /10 in the JSON,
@@ -2456,7 +2639,11 @@ public class PipelineOrchestrator {
                     log.warn("Job {} scene {} still weak — keeping it (human gate is the backstop)", jobId, seq);
                     break;
                 }
-                String newPath = regenScene(jobId, a, imageFormat);
+                // The QC knows WHAT it disliked — feed that into the re-roll as a
+                // correction hint so it's targeted, not blind. Null-safe: an empty
+                // issues list yields a blank hint = legacy blind re-roll.
+                String qcHint = qcIssuesHint(r.issues());
+                String newPath = regenScene(jobId, a, imageFormat, qcHint);
                 if (newPath == null || newPath.isBlank()) break;
                 a.setImagePath(newPath);
                 totalRerolls++;
@@ -2783,6 +2970,18 @@ public class PipelineOrchestrator {
 
     /** Re-generate a single scene's still from its current assembly fields. */
     private String regenScene(UUID jobId, SceneDto a, String imageFormat) {
+        return regenScene(jobId, a, imageFormat, null);
+    }
+
+    /**
+     * Re-roll one scene's still. The optional {@code correctionHint} (null/blank
+     * = exactly the legacy blind re-roll) is passed through to the image-service
+     * as {@code correctionHint} on the scene payload, where anchor-capable
+     * providers append it as a high-priority correction clause — so a QC fail
+     * reason, a Critic finding or the user's own "what's wrong" note steers the
+     * re-roll instead of a blind re-generation.
+     */
+    private String regenScene(UUID jobId, SceneDto a, String imageFormat, String correctionHint) {
         try {
             int seq = a.effectiveSeq();
             Map<String, Object> m = new HashMap<>();
@@ -2792,6 +2991,9 @@ public class PipelineOrchestrator {
             m.put("locationId", nz(a.getLocationId()));
             m.put("timeOfDay", nz(a.getTimeOfDay()));
             m.put("weather", nz(a.getWeather()));
+            if (correctionHint != null && !correctionHint.isBlank()) {
+                m.put("correctionHint", correctionHint.trim());
+            }
             // Episode-ConsistencyState: a QC/Auto-Fix re-roll must match the
             // episode's canon. During the first batch (autoQcImages before the
             // canon is collected) there are no episode anchors yet — a series
@@ -2805,6 +3007,21 @@ public class PipelineOrchestrator {
             log.warn("Job {} QC reroll image-gen failed: {}", jobId, e.getMessage());
         }
         return null;
+    }
+
+    /** Compress a QC/Critic issue list into a short, prompt-friendly correction
+     *  hint. Null/empty → null (= legacy blind re-roll). Capped so a verbose QC
+     *  report can't bloat the image prompt's terminal tokens. */
+    private static String qcIssuesHint(List<String> issues) {
+        if (issues == null || issues.isEmpty()) return null;
+        String joined = issues.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining("; "));
+        if (joined.isBlank()) return null;
+        final int CAP = 400;
+        if (joined.length() > CAP) joined = joined.substring(0, CAP - 1) + "…";
+        return joined;
     }
 
     /** script-service caps brief at @Size(max=4000). The creative brief always

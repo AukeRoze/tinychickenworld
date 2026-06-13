@@ -340,6 +340,13 @@ public class GeminiImageProvider implements ImageProvider {
                     + "they are different angles/expressions of that one character — treat them "
                     + "as one identity and keep colours, accessories and proportions identical. ";
         }
+        // CORRECTION hint (additive — scene.correctionHint): when a manual/QC/
+        // Auto-Fix re-roll knows WHAT was wrong with the previous render, append
+        // a short, high-priority correction clause at the very END of the prompt
+        // (Gemini weighs terminal tokens heavily, so this lands AFTER all the
+        // anchor/style clauses above). Null/blank = no-op = exactly the current
+        // blind-re-roll behaviour.
+        prompt = PromptComposer.withCorrection(prompt, scene);
         log.debug("gemini scene {} format={} refs={} prompt: {}",
                 scene.seq(), format, orderedIds, prompt);
 

@@ -1125,10 +1125,9 @@ landmarks:
 brand:
   intro:
     path: "/bible/intro.mp4"
-    # Werkelijke duur van de gebouwde bumper (IntroBuilder is voice-gedreven,
-    # ~6-7s). Deze waarde voedt o.a. de render-duur-gate-marge — houd 'm
-    # in sync met de echte clip na een intro-rebuild.
-    durationSeconds: 6
+    # Vaste minimumduur van de gebouwde bumper (IntroBuilder MIN_DUR = 12.0,
+    # tenzij de stemmen langer zijn). Voedt o.a. de render-duur-gate-marge.
+    durationSeconds: 12
   outro:
     path: "/bible/outro.mp4"
     # OutroBuilder DUR = 9.0s (fade verlengd naar 2.6s, 2026-06-12).

@@ -548,6 +548,30 @@ function renderActions(job) {
       "Rebuild the final video from the EXISTING assets (script, scene images, voice) — nothing is regenerated. Use to apply assembly / outro / thumbnail changes at no extra generation cost.",
       () => api.post(`/api/v1/videos/${id}/reassemble`)));
   }
+  // 🔁 Re-render beelden (nieuwe cast): na een character-redesign alle visuals
+  // vers genereren op de huidige refs — script en stemmen blijven staan.
+  // Alleen zichtbaar in de statussen waar de backend-guard het toestaat
+  // (gepauzeerd op een review-gate, of klaar/mislukt — nooit mid-stage).
+  const RERENDER_SAFE = new Set([
+    "IMAGES_REVIEW_PENDING", "ASSETS_REVIEW_PENDING", "VEO_REVIEW_PENDING",
+    "THUMBNAIL_REVIEW_PENDING", "UPLOAD_REVIEW_PENDING", "DISTRIBUTION_PENDING",
+    "COMPLETED", "FAILED",
+  ]);
+  if (RERENDER_SAFE.has(s)) {
+    items.push(actionItem("🔁 Re-render beelden (nieuwe cast)", "",
+      "Genereert ALLE scène-beelden opnieuw met de huidige character-refs (na een redesign). " +
+      "Stemmen en script blijven; de oude episode-canon, thumbnail en scène-locks worden " +
+      "gewist zodat de nieuwe beelden op de nieuwe cast ankeren.",
+      () => {
+        const ok = confirm(
+          "Genereert ALLE scène-beelden opnieuw met de huidige character-refs (na een redesign). " +
+          "Script en stemmen blijven; beelden + eventuele Veo-clips worden opnieuw gemaakt — " +
+          "dat kost echt geld (±€0,02-0,05 per scène-beeld, Veo-clips apart). " +
+          "Gelockte scènes gaan óók mee.\n\nDoorgaan?");
+        if (!ok) throw new Error("cancelled");
+        return api.post(`/api/v1/videos/${id}/rerender-visuals`);
+      }));
+  }
   items.push(actionItem("Clone", "",
     "Create a NEW job that copies this one's brief and settings — a fresh run from scratch. The original is left untouched.",
     () => api.post(`/api/v1/videos/${id}/clone`)));
@@ -1444,6 +1468,32 @@ function bust(img) {
   img.src = img.src.split("?")[0] + "?t=" + Date.now();
 }
 
+/** Toon/verberg een laad-overlay (spinner + tekst) op een scène-beeldframe
+ *  tijdens een regen, zodat het niet lijkt of er niks gebeurt. `frame` is het
+ *  .scene-img-frame element; `label` de tekst onder de spinner. */
+function setSceneBusy(frame, on, label) {
+  if (!frame) return;
+  const img = frame.querySelector("img");
+  let ov = frame.querySelector(".scene-img-busy");
+  if (on) {
+    if (img) img.classList.add("dimmed");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.className = "scene-img-busy";
+      const sp = document.createElement("div");
+      sp.className = "spin";
+      const tx = document.createElement("div");
+      tx.textContent = label || "Genereren…";
+      ov.appendChild(sp);
+      ov.appendChild(tx);
+      frame.appendChild(ov);
+    }
+  } else {
+    if (img) img.classList.remove("dimmed");
+    if (ov) ov.remove();
+  }
+}
+
 /** A single labelled still (start or end) with a graceful "no image yet" box.
  *  `version` (the still's mtime) is appended as ?v= so a regenerated image
  *  refreshes — and only when it actually changed (poll re-renders stay cached). */
@@ -1498,6 +1548,45 @@ function sceneImage(s) {
   return { frame: wrap, img: start.img };
 }
 
+/** Eénmalige uitleg-box bovenaan de scènelijst: wat doen de per-scène-knoppen,
+ *  en met name wat betekent 🔒 Lock. Uitklapbaar (<details>) en de open/dicht-
+ *  stand overleeft de poll via localStorage, zodat hij niet steeds terugklapt. */
+function sceneActionsHelp() {
+  const d = document.createElement("details");
+  d.className = "scene-help";
+  let open = false;
+  try { open = localStorage.getItem("sceneHelpOpen") === "1"; } catch (e) {}
+  d.open = open;
+  d.addEventListener("toggle", () => {
+    try { localStorage.setItem("sceneHelpOpen", d.open ? "1" : "0"); } catch (e) {}
+  });
+  const sum = document.createElement("summary");
+  sum.textContent = "ⓘ Wat doen de knoppen per scène? (en wat is 🔒 Lock?)";
+  d.appendChild(sum);
+
+  const body = document.createElement("div");
+  body.className = "scene-help-body sub small";
+  const rows = [
+    ["↻ Regen", "Maakt het startbeeld opnieuw uit de scripttekst. Je kunt een correctie meegeven (bv. “geen tweede kip”). Alleen een beeld — goedkoop."],
+    ["✎ Edit", "Pas de scène-omschrijving aan en genereer het beeld daaruit opnieuw."],
+    ["↻/＋ Eindbeeld", "Maakt een eindbeeld zodat Veo van start → eind beweegt (geregisseerde beweging). Geen Veo-kosten."],
+    ["🔊 Re-voice", "Pas de dialoog aan en laat alleen deze scène opnieuw inspreken. Beeld blijft."],
+    ["🎬 Maak/Reroll clip", "Maakt de Veo-clip van deze scène (kost ±1 clip) en hermonteert. Kies links het model."],
+    ["🔒 Lock / 🔓 Unlock", "DIT is de belangrijke: een Lock beschermt een scène tegen de AUTOMATISCHE systemen — de vision-QC en de Auto-Fix-lus laten een gelockte scène met rust en vervangen het beeld niet meer. Handig zodra een scène er precies goed uitziet. Jij kunt 'm met de knoppen hierboven nog wél handmatig aanpassen; de lock is een hek tegen de robot, niet tegen jou. Unlock geeft 'm weer vrij voor de automatische passes."],
+  ];
+  for (const [k, v] of rows) {
+    const p = document.createElement("p");
+    p.style.margin = "4px 0";
+    const b = document.createElement("b");
+    b.textContent = k + " — ";
+    p.appendChild(b);
+    p.appendChild(document.createTextNode(v));
+    body.appendChild(p);
+  }
+  d.appendChild(body);
+  return d;
+}
+
 // One row per scene: script (dialogue + visual description) on the LEFT,
 // the scene image (or placeholder) + per-scene actions on the RIGHT.
 function renderScenes(scenes) {
@@ -1507,6 +1596,7 @@ function renderScenes(scenes) {
   }
   const list = document.createElement("div");
   list.className = "scene-rows";
+  list.appendChild(sceneActionsHelp());
   for (const s of scenes) {
     const seq = s.seq;
     const row = document.createElement("div");
@@ -1580,6 +1670,10 @@ function renderScenes(scenes) {
     right.className = "scene-media";
     const { frame, img } = sceneImage(s);
     right.appendChild(frame);
+    // Het START-beeldframe (eerste .scene-img-frame) krijgt de busy-overlay
+    // tijdens een regen/edit/eindbeeld — zo zie je dat er iets gebeurt.
+    const startFrame = frame.classList && frame.classList.contains("scene-img-frame")
+        ? frame : frame.querySelector(".scene-img-frame");
 
     // Inline Veo-clip player (raw clip, no voice/music — those join at
     // assembly). Toggle so the page stays light with 25+ scenes.
@@ -1620,8 +1714,35 @@ function renderScenes(scenes) {
       api.post(`/api/v1/videos/${id}/scenes/${seq}/${path}`, body, { key: `${path}-${seq}` });
 
     acts.appendChild(sceneItem("↻ Regen",
-      "Genereert het STARTBEELD van deze scène opnieuw uit de oorspronkelijke scripttekst. Goedkoop (alleen een beeld). De video zelf verandert pas na een re-roll/hermontage.",
-      async () => { await P("regenerate"); loadScenes(); }));
+      "Genereert het STARTBEELD van deze scène opnieuw uit de oorspronkelijke scripttekst. " +
+      "Je kunt optioneel een correctie-aanwijzing meegeven (bv. \"geen tweede kip\", \"hoed iets kleiner\", " +
+      "\"meer naar links\") — die stuurt de nieuwe prompt. Leeg laten = gewone re-roll. " +
+      "Goedkoop (alleen een beeld). De video zelf verandert pas na een re-roll/hermontage.",
+      async () => {
+        // Pre-fill the prompt with the best feedback we already have for this
+        // scene (QA/Critic/QC). Short, best-effort GET; failure → empty prompt
+        // (the legacy blind re-roll). The user can overwrite, extend or clear it.
+        let suggested = "";
+        try {
+          const r = await api.get(
+            `/api/v1/videos/${id}/scenes/${seq}/regen-hint`,
+            { key: `regen-hint-${seq}` });
+          suggested = (r && r.hint) ? String(r.hint) : "";
+        } catch (e) { /* leave empty — plain prompt, current behaviour */ }
+        // Optionele correctie-hint: leeg/cancel = gewone blinde re-roll.
+        const hint = (window.prompt(
+          "Wat moet er anders aan dit beeld? (voorstel uit de kwaliteitsanalyse — pas aan of wis)\n\n" +
+          "Bijv. \"geen tweede kip\", \"hoed iets kleiner\", \"meer naar links\".\n" +
+          "Leeg laten voor een gewone regeneratie.",
+          suggested) || "").trim();
+        setSceneBusy(startFrame, true, "Nieuw beeld genereren…");
+        try {
+          await P("regenerate", hint ? { correctionHint: hint } : undefined);
+        } finally {
+          setSceneBusy(startFrame, false);
+        }
+        loadScenes();
+      }));
     acts.appendChild(sceneItem("✎ Edit",
       "Pas de omschrijving van deze scène aan en genereer het startbeeld daaruit opnieuw. Alleen het beeld — de video verandert pas na een re-roll/hermontage.",
       () => {
@@ -1638,7 +1759,9 @@ function renderScenes(scenes) {
           async () => {
             const vd = ta.value.trim();
             if (!vd) return;
-            await P("edit", { visualDesc: vd });
+            setSceneBusy(startFrame, true, "Nieuw beeld genereren…");
+            try { await P("edit", { visualDesc: vd }); }
+            finally { setSceneBusy(startFrame, false); }
             loadScenes();
           });
         save.classList.add("approve");
@@ -1653,7 +1776,12 @@ function renderScenes(scenes) {
       s.hasEndStill
         ? "Maakt het eindbeeld (Start → Eind) van deze hero-scène opnieuw aan. Alleen een beeld, geen Veo-kosten."
         : "Genereert een EINDBEELD zodat Veo van start → eind beweegt (geregisseerde beweging). Alleen een extra beeld, geen Veo-kosten.",
-      async () => { await P("end-still"); loadScenes(); }));
+      async () => {
+        setSceneBusy(startFrame, true, "Eindbeeld genereren…");
+        try { await P("end-still"); }
+        finally { setSceneBusy(startFrame, false); }
+        loadScenes();
+      }));
     acts.appendChild(sceneItem("🔊 Re-voice",
       "Pas de dialoog aan en laat ALLEEN deze scène opnieuw inspreken (ElevenLabs). Beeld blijft ongewijzigd.",
       async () => {
@@ -1774,9 +1902,32 @@ function applyStepFocus(status) {
   }
 }
 
+// Staat de gebruiker NU in een invoerveld? De 5s-poll herbouwt scène- en
+// review-kaarten compleet (replaceChildren) en zou een open editor + getypte
+// tekst wegblazen. Zolang een tekstveld/textarea/select/contenteditable focus
+// heeft, slaan we de verversing van die kaarten over (de status-tijd updaten
+// blijft prima). Zodra je het veld verlaat of submit, hervat de poll vanzelf.
+function isUserEditing() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    const t = (el.type || "text").toLowerCase();
+    // checkboxes/radio/buttons mogen de poll niet blokkeren — alleen tekstinvoer.
+    return !["checkbox", "radio", "button", "submit", "range", "file"].includes(t);
+  }
+  return el.isContentEditable === true;
+}
+
 async function load() {
   if (!id) {
     statusLine.textContent = "no job id in URL";
+    return;
+  }
+  // Bevries de verversing tijdens het typen — anders verdwijnt je tekst.
+  if (isUserEditing()) {
+    statusLine.textContent = "bezig met bewerken — verversen gepauzeerd";
     return;
   }
   try {

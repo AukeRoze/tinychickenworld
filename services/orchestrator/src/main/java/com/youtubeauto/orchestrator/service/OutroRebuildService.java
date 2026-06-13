@@ -39,21 +39,26 @@ public class OutroRebuildService {
      *  start here, not in the motion prompt. */
     private static final String STILL_DESC =
             "The SAME " + IntroRebuildService.BANNER_WORLD + ", but the warm sun now sits a "
-            + "little LOWER and gently DIMMED for a soft, cosy end-of-day golden glow. The "
-            + "three little chickens sit CLOSE TOGETHER, LOW in the frame — all three fully "
-            + "inside the BOTTOM THIRD of the picture — smiling and giggling warmly at each "
-            + "other. The UPPER TWO THIRDS of the frame are deliberately CALM and EMPTY: only "
-            + "soft warm evening sky and gently blurred farm bokeh, nothing else there (that "
-            + "space is reserved for on-screen elements added later). No signboard, no sign, "
-            + "no banner and NO text anywhere. Wholesome, cosy composition.";
+            + "little LOWER and gently DIMMED for a soft, cosy end-of-day golden glow. "
+            + "EXACTLY THREE chickens in the whole picture — Pip, Mo and Bo, each appearing "
+            + "ONCE, no duplicates and no extra chickens anywhere. They sit CLOSE TOGETHER, "
+            + "LOW in the frame — all three fully inside the BOTTOM THIRD of the picture — "
+            + "smiling and giggling warmly at each other. The UPPER TWO THIRDS of the frame "
+            + "are deliberately CALM and EMPTY: only soft warm evening sky and gently blurred "
+            + "farm bokeh, NOTHING and NOBODY else there (that space is reserved for on-screen "
+            + "elements added later — absolutely no extra chickens in that empty space). No "
+            + "signboard, no sign, no banner and NO text anywhere. Wholesome, cosy composition.";
 
     /** End-screen motion prompt. The single dubbed farewell line is embedded
      *  VERBATIM (the "voice lines match MOTION_DESC word for word" contract),
      *  and the line is configurable — so this is a method, not a constant. */
     private String motionDesc() {
         return "STATIC, calm camera — locked off, or at most a very slow, minimal push-in. "
-            + "The three little cartoon chickens sit CLOSE TOGETHER, LOW in the frame — all "
-            + "three fully inside the BOTTOM THIRD of the picture — in warm golden-hour light. "
+            + "EXACTLY THREE cartoon chickens in the whole clip — Pip, Mo and Bo, each "
+            + "appearing ONCE; never duplicate a chick and never add extra chickens (not in "
+            + "the background, the bokeh or the empty sky). The three little chickens sit "
+            + "CLOSE TOGETHER, LOW in the frame — all three fully inside the BOTTOM THIRD of "
+            + "the picture — in warm golden-hour light. "
             + "They giggle and laugh warmly WITH EACH OTHER first, leaning into each other "
             + "happily, then all three turn and beam warmly at the camera. While looking at "
             + "the camera, Pip says cheerfully: '" + outroLine + "'. "

@@ -23,6 +23,20 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PromptComposer {
 
+    /** Append a short, high-priority CORRECTION clause to a finished prompt when
+     *  the scene carries a non-blank {@code correctionHint} (additive — null/blank
+     *  → returns the prompt unchanged = current blind-re-roll behaviour). Kept at
+     *  the END so terminal-token-weighting providers prioritise it. */
+    public static String withCorrection(String prompt, SceneVisual scene) {
+        if (scene == null || scene.correctionHint() == null
+                || scene.correctionHint().isBlank()) {
+            return prompt;
+        }
+        return prompt + " IMPORTANT CORRECTION — the previous render of this scene was "
+                + "wrong; fix specifically: " + scene.correctionHint().trim()
+                + ". Keep everything else as described.";
+    }
+
     private static final String TAIL =
             " Soft 3D Pixar / Illumination cartoon look — NOT photo-real, no realistic "
             + "fur texture, no depth-of-field blur, no cat-ear tufts. Keep both eyes and "

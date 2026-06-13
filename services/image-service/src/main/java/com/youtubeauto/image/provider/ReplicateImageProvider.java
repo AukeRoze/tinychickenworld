@@ -64,7 +64,7 @@ public class ReplicateImageProvider implements ImageProvider {
     @Retry(name = "replicate")
     public byte[] generatePng(SceneVisual scene, String format, long seed) {
         ImageGenConfig.Replicate cfg = bibleLoader.getBible().imageGen().replicate();
-        String prompt = prompts.composeTrigger(scene);
+        String prompt = PromptComposer.withCorrection(prompts.composeTrigger(scene), scene);
         log.debug("replicate scene {} format={} prompt: {}", scene.seq(), format, prompt);
 
         String version = extractVersion(cfg.model());

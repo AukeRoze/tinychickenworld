@@ -33,27 +33,40 @@ public class IntroRebuildService {
     /** Per-character identity lock — appended to intro/outro Veo prompts because
      *  these clips bypass the normal compileVeoPrompt DNA injection, so without
      *  this Veo swaps the chicks' colours + accessories (hat/glasses/scarf). */
+    // Body-vormen bijgewerkt 2026-06-12 (silhouet-redesign): Pip petite/rond/
+    // kleinste, Mo breed/zwaar-onder/grootste, Bo slank/verticaal — de oude
+    // "PLUMP, never slim down"-regel vocht met de nieuwe Bo en petite Pip.
+    // Plus HEADCOUNT-slot: duplicaat-kippen waren het grootste Veo-defect in
+    // de outro (kijkersmelding 2026-06-12).
     static final String IDENTITY_LOCK =
-            "IDENTITY LOCK — keep each chicken EXACTLY as described and NEVER swap their "
-            + "accessories: Pip is a CREAM-WHITE chick wearing a STRAW HAT and a RED neck "
-            + "bandana (no glasses). Mo is a BLUE-GREY chick wearing a RED knitted neck scarf "
-            + "(no hat, no glasses). Bo is a TAN/sandy chick wearing ROUND thin-framed GLASSES "
-            + "and a GREEN neck scarf (no hat). Keep their body colours and accessories stable "
-            + "the whole clip; do not move the hat, glasses or scarves between them, and add no "
-            + "extra accessories. Keep each chick's PLUMP, ROUNDED baby-chick body and size "
-            + "CONSTANT the entire clip — never thin out, slim down, stretch, elongate or change "
-            + "a chicken's body volume or size at any moment.";
+            "EXACTLY THREE chickens in the entire frame — Pip, Mo and Bo, each appearing "
+            + "exactly ONCE. NEVER duplicate a chicken, never add extra chickens anywhere "
+            + "(not in the background, not in the bokeh, not at the edges). "
+            + "IDENTITY LOCK — keep each chicken EXACTLY as described and NEVER swap their "
+            + "accessories: Pip is the SMALLEST — a tiny, petite, perfectly ROUND CREAM-WHITE "
+            + "chick wearing a STRAW HAT and a RED neck bandana (no glasses). Mo is the "
+            + "LARGEST — a BLUE-GREY chick with a broad, bottom-heavy sturdy body, wearing a "
+            + "RED knitted neck scarf (no hat, no glasses). Bo is the THINNEST — a slim, "
+            + "upright TAN/sandy chick wearing ROUND thin-framed GLASSES and a GREEN neck "
+            + "scarf (no hat). Keep their body colours, accessories AND these distinct body "
+            + "shapes stable the whole clip; do not move the hat, glasses or scarves between "
+            + "them, add no extra accessories, and never change a chicken's body shape, "
+            + "volume or size at any moment.";
 
+    // De vorm-negatives (thin/slim/elongated) zijn verwijderd: die golden voor
+    // de oude "alle kippen mollig"-look en vechten nu met de slanke Bo en petite
+    // Pip. Duplicaat-negatives juist VERSTERKT (grootste outro-defect).
     static final String IDENTITY_NEG =
-            "swapped accessories, glasses on the wrong chicken, hat on the wrong chicken, "
-            + "wrong colours, extra hats, extra glasses, duplicate chicken, morphing, "
+            "duplicate chicken, duplicated character, cloned chicken, two of the same chicken, "
+            + "extra chicken, extra chickens, four chickens, five chickens, more than three "
+            + "chickens, repeated character, background chickens, "
+            + "swapped accessories, glasses on the wrong chicken, hat on the wrong chicken, "
+            + "wrong colours, extra hats, extra glasses, morphing, "
             + "identity drift, hat flying off, hat falling off, hat lifting off the head, "
             + "characters swapping places, characters changing position, characters crossing "
             + "over each other, lip-sync, lip syncing, mouthing words, talking mouth, "
             + "wide open beak, gaping beak, exaggerated mouth movement, flapping beak, "
-            + "thin chicken, skinny chicken, slim chicken, elongated body, stretched body, "
-            + "lanky chicken, slimmed-down chicken, deformed proportions, body morphing, "
-            + "changing body size, "
+            + "deformed proportions, body morphing, changing body size, "
             + "text, watermark";
 
     /** Shared channel-banner world so intro + outro match the brand banner. */
