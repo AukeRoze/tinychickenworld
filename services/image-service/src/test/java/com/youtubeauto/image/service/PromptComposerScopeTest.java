@@ -160,6 +160,26 @@ class PromptComposerScopeTest {
         assertTrue(out.contains("thin and upright"), "legacy build still used: " + out);
     }
 
+    @Test
+    void guardsAreNoOpOnMigratedCastNeutralText() {
+        // Contract (proza→velden migratie, stap 4): a migrated silhouetteShape/
+        // bodyBuild is cast-neutral, so the scrub guard must leave it BYTE-FOR-BYTE
+        // unchanged even with the whole cast passed as "absent". If this ever
+        // fails, someone put another character's name or a flock count
+        // ("trio"/"three"/"four") back into a structured field.
+        String[] migrated = {
+            "an ANVIL-shaped chick, broad and bottom-heavy, with an oversized head",
+            "a petite, dainty little circle of a body, never chubby, all soft curves",
+            "a slim, VERTICAL, springy little body stretched upward, a tall thin small chick",
+            "a round lemon-yellow puffball with a FLAT WIDE BILL and one upright head-tuft"
+        };
+        java.util.List<String> wholeCast = List.of("Pip", "Mo", "Bo", "Duckling");
+        for (String field : migrated) {
+            assertEquals(field, PromptComposer.scopeDnaText(field, wholeCast),
+                    "scrub must be a no-op on cast-neutral text: " + field);
+        }
+    }
+
     private PromptComposer composerWith(Character character) {
         ChannelBible bible = new ChannelBible("storybook style", List.of(character), List.of(), null);
         BibleLoader loader = mock(BibleLoader.class);

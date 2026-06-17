@@ -273,7 +273,7 @@ colorScript:
 # de wijziging pakt pas bij de eerstvolgende bible-reload).
 veoLeanPrompts: true
 # Eén korte relatieve-grootteregel voor de hele flock (lean-modus).
-veoScaleRule: "Pip is the smallest, Mo is slightly larger, Bo is slightly taller and slimmer. Their proportions never change between or within shots."
+# veoScaleRule: verwijderd — relatieve grootte komt uit dna.veoSizeRank (proza→velden, stap 5)
 
 # Flow / Veo 3.1 NATIVE audio. True = de Veo-prompt regisseert het geluid ZELF:
 #   • wordeloze kuikengeluiden per personage (dna.signatureSound + emotie),
@@ -576,7 +576,7 @@ characters:
       # Verfijning 2026-06-12 (gebruikerswens): Pip duidelijk KLEINER, fijner
       # en schattiger dan Mo — petite i.p.v. mollig. Nieuwe grootte-orde:
       # Mo = grootste/breedste, Bo = dunste (middelhoog), Pip = kleinste.
-      silhouette: "a TINY, petite, perfectly ROUND ball-of-fluff chick — the smallest of the trio, a dainty little circle body under an extra-large round head, every line a soft curve — topped by the tall pointed straw hat: a small circle-plus-triangle shape you read instantly as a black silhouette"
+      # silhouette: gemigreerd → silhouetteShape (proza→velden, stap 5)
       accessory: "straw farmer hat and a red neck bandana"
       # Korte zelfstandig-naamwoordvorm van het EIGEN signatuur-accessoire. Single
       # source of truth voor de accessory-guard: als een actie Pip per ongeluk een
@@ -591,7 +591,7 @@ characters:
       # Extended cross-shot identity fields — keep the look stable across
       # different stills/shots WITHOUT needing an identical reference frame.
       feathers: "dense ultra-soft PURE-WHITE down (clean white, NO yellow or cream-yellow tint), fluffy and a little wispy at the cheeks"
-      build: "the SMALLEST and roundest of the trio — a petite, dainty little circle of a body, noticeably smaller and finer than Mo (never chubby: small and delicate, not plump), with an extra-oversized round head and HUGE sparkling eyes — baby proportions that read as instantly adorable (where Mo is base and weight, and Bo is a vertical line)"
+      # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "light and bouncy, as if a gentle breeze could lift her"
       eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
       # Scale lock — the three chicks have DISTINCT but FIXED proportions so each
@@ -662,14 +662,14 @@ characters:
       silhouetteShape: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, a wide planted stance, the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette"
       bodyBuild: "a bottom-heavy, solid little body with a broad base and squared, settled posture — weight and foundation rather than curves, with an oversized head; a sturdy small chick"
       # Vorm-taal: Mo = AAMBEELD — breed en zwaar van onderen, recht van schouders.
-      silhouette: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, planted wide stance, with the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette, unmistakably different from Pip's circle"
+      # silhouette: gemigreerd → silhouetteShape (proza→velden, stap 5)
       accessory: "a red knitted neck scarf"
       # Single source voor de accessory-guard (zie Pip). Mo's eigen accessoire.
       signatureAccessoryShort: "thick red knitted scarf"
       tic: "gives his red knitted scarf a quick tug with one wingtip to snug it up at the neck (the scarf always stays on — never removed)"
       signatureSound: "a soft low thoughtful hum"
       feathers: "smooth even blue-grey down with a soft dusty sheen, neat and tidy, no stray tufts"
-      build: "very slightly the largest of the three — a bottom-heavy, solid little body with a broad base and squared, settled posture (NOT round: where Pip is all curves, Mo is weight and foundation), only a TOUCH taller and sturdier than the others, oversized head; still clearly the same kind of small chick"
+      # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "solid and settled — plants both feet when he stops to think"
       eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
       scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); the largest of the trio — a touch taller and clearly broader-based than the others, with Pip the smallest and Bo thin in between. Keep the gaps modest (never one much bigger than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
@@ -725,14 +725,14 @@ characters:
       silhouetteShape: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette"
       bodyBuild: "a slim, VERTICAL, springy little body stretched upward — a line rather than a ball — light and twitchy, with an oversized head; a tall, thin small chick"
       # Vorm-taal: Bo = VERTICALE STREEP — smal, gestrekt, tuft als spits.
-      silhouette: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up as the dot's echo, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette, the opposite of Pip's circle and Mo's anvil"
+      # silhouette: gemigreerd → silhouetteShape (proza→velden, stap 5)
       accessory: "round thin-framed eyeglasses and a green neck scarf"
       # Single source voor de accessory-guard (zie Pip). Bo's eigen accessoire.
       signatureAccessoryShort: "round thin-framed eyeglasses"
       tic: "pushes her glasses up the beak with a wingtip before a joke"
       signatureSound: "a goofy hiccup-giggle"
       feathers: "warm tan and sandy-brown down, slightly ruffled, with a comic cowlick tuft sticking up on top"
-      build: "the THINNEST of the three, middle in height — a slim, VERTICAL, springy little body stretched upward (NOT round: where Pip is a tiny ball and Mo is a broad base, Bo is a line), lighter than Mo, slightly taller than petite Pip, with an oversized head; still clearly the same kind of small chick"
+      # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "light and twitchy, looks caught half-way through a hop"
       eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
       scaleAnchor: "a small chick against the world; the THINNEST of the trio, middle in height — slimmer than both, slightly taller than petite Pip, clearly lighter than Mo. Keep the gaps modest (never one much smaller than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
@@ -783,12 +783,12 @@ characters:
     triggerWord: "duckling_duck"
     dna:
       coreColor: "bright lemon-yellow"
-      silhouette: "the tiniest of the four — a round yellow puffball with a FLAT WIDE BILL and one upright head-tuft; reads as 'baby duck' at a glance"
+      # silhouette: gemigreerd → silhouetteShape (proza→velden, stap 5)
       accessory: "none — the only cast member without an accessory (being the baby IS the identity)"
       tic: "waddle-bounces twice on the spot and flaps both stubby wings when happy"
       signatureSound: "a tiny squeaky 'kwak!' that surprises even himself"
       feathers: "ultra-soft lemon-yellow down, slightly damp spiky tuft on top in his first scenes, fluffy in later episodes"
-      build: "clearly the smallest of the group — about two-thirds of Bo's height, round baby proportions, oversized head, tiny webbed feet"
+      # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "feather-light and wobbly — tips over when he flaps too enthusiastically"
       eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
       scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
@@ -1355,61 +1355,4 @@ voice:
     # When a scene's character + emotion has no matching file, fall back
     # to this generic per-character "talking" sound. Last-resort safety net.
     fallbackEmotion: "content"
-  # ──────────────────────────────────────────────────────────────────
-  # Narrator (optional 2-3 spoken lines per video)
-  # ──────────────────────────────────────────────────────────────────
-  narrator:
-    enabled: ${NARRATOR_ENABLED:false}   # OFF by default — robotic espeak narration clashes with the chicken-sounds (Pingu-style) aesthetic. Flip to true if you want spoken hook/closer lines.
-    # Free local TTS via Java's built-in voice synth (espeak-ng inside the
-    # voice-service container — no external API cost, no language lock-in).
-    # Switch to "elevenlabs" if you want a polished narrator voice (€0.05
-    # per video, single line ≈ 100 chars).
-    tts: ${NARRATOR_TTS:espeak}   # espeak | elevenlabs
-    # When narrator runs, these scene phases get narrator lines automatically
-    # mixed in over the sounds (low volume, warm).
-    phases:
-      - hook        # opening branding: "Welcome to Tiny Chicken World"
-      - closer      # closing CTA + lesson recap
-    # Templates — use {topic}, {lesson}, {channel} placeholders.
-    phrases:
-      hook: "Welcome to Tiny Chicken World — today, {topic}."
-      closer: "Today's lesson: {lesson}. See you next time, friends!"
-    voiceGainDb: -1.0
-    musicDuck: -6.0               # background music dips this many dB during narrator
-
-# ──────────────────────────────────────────────────────────────────────
-# Scene-transition styling (video-assembly-service, hot-reloaded ≤1 min —
-# edit, save, re-assemble; geen rebuild nodig).
-#
-# Per episode-fase: het ffmpeg xfade-type van de overgang NAAR scènes in
-# die fase + de duur in seconden (0.05–1.5; korter = energieker).
-# Ongeldige types worden geweigerd (luide log) en vallen terug op de
-# ingebouwde defaults — een typefout kan een render nooit breken.
-#
-# Beschikbare types (stock ffmpeg xfade):
-#   fades:    fade fadeblack fadewhite fadegrays dissolve distance
-#   wipes:    wipeleft wiperight wipeup wipedown wipetl wipetr wipebl wipebr
-#             radial circleopen circleclose circlecrop rectcrop
-#             horzopen horzclose vertopen vertclose
-#             diagtl diagtr diagbl diagbr hlslice hrslice vuslice vdslice
-#   slides:   slideleft slideright slideup slidedown
-#             smoothleft smoothright smoothup smoothdown
-#             coverleft coverright coverup coverdown
-#             revealleft revealright revealup revealdown
-#   stylized: pixelize hblur zoomin squeezev squeezeh
-# ──────────────────────────────────────────────────────────────────────
-assembly:
-  transitions:
-    # Feedback 2026-06-14 ("langere, langzamere overgangen — het zijn baby-video's,
-    # geen snelle scènes; voelt nu soms te snel en chaotisch"): alle overgangen
-    # fors verzacht en verlengd naar een rustig, dromerig babytempo. Bijna alles
-    # op een zachte dissolve i.p.v. een (harde) fade; cap blijft = halve kortste
-    # clip, dus deze waarden zijn veilig op normale scènelengtes.
-    hook:        { type: dissolve,    seconds: 0.45 }  # was fade/0.20 — zacht binnenkomen, geen snap
-    setup:       { type: dissolve,    seconds: 0.55 }  # was fade/0.25
-    development: { type: dissolve,    seconds: 0.55 }  # was 0.28 — rustige, vloeiende cuts
-    climax:      { type: fadewhite,   seconds: 0.55 }  # was 0.40 — witflits, maar trager en zachter
-    # Einde ruim en kalm — het rustige slot verdraagt de langste overgangen.
-    resolution:  { type: dissolve,    seconds: 0.80 }  # was 0.65 — zacht landen
-    closer:      { type: circleclose, seconds: 0.90 }  # iris-uit — klassiek, traag kindertv-einde
-    default:     { type: dissolve,    seconds: 0.55 }  # was fade/0.28 — alles standaard zacht
+  # ─────
