@@ -1,0 +1,11 @@
+﻿{
+    "status":  400,
+    "body":  {
+                 "type":  "about:blank",
+                 "title":  "Bad Request",
+                 "status":  400,
+                 "detail":  "Unknown job 85a4a36c-5b20-4177-a74c-250c7753a2bc",
+                 "instance":  "/api/v1/videos/85a4a36c-5b20-4177-a74c-250c7753a2bc"
+             },
+    "executedAt":  "2026-06-16T18:08:11.6898765+02:00"
+}

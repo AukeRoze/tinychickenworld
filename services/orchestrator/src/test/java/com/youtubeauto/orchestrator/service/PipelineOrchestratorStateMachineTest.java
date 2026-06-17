@@ -10,7 +10,6 @@ import com.youtubeauto.orchestrator.client.ScriptServiceClient;
 import com.youtubeauto.orchestrator.client.ThumbnailServiceClient;
 import com.youtubeauto.orchestrator.client.UploadServiceClient;
 import com.youtubeauto.orchestrator.client.VideoGenerationServiceClient;
-import com.youtubeauto.orchestrator.client.VoiceServiceClient;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.domain.JobStatus;
 import com.youtubeauto.orchestrator.domain.VideoJob;
@@ -92,7 +91,6 @@ class PipelineOrchestratorStateMachineTest {
     // ── mocked collaborators (constructor order of PipelineOrchestrator) ──
     private VideoJobRepository repo;
     private ScriptServiceClient scriptClient;
-    private VoiceServiceClient voiceClient;
     private ImageServiceClient imageClient;
     private VideoGenerationServiceClient videoGenClient;
     private AssemblyServiceClient assemblyClient;
@@ -130,7 +128,6 @@ class PipelineOrchestratorStateMachineTest {
 
         repo = mock(VideoJobRepository.class);
         scriptClient = mock(ScriptServiceClient.class);
-        voiceClient = mock(VoiceServiceClient.class);
         imageClient = mock(ImageServiceClient.class);
         videoGenClient = mock(VideoGenerationServiceClient.class);
         assemblyClient = mock(AssemblyServiceClient.class);
@@ -187,11 +184,6 @@ class PipelineOrchestratorStateMachineTest {
                 any(), any(), any(), any())).thenReturn(scriptJobId);
         when(scriptClient.get(any(UUID.class))).thenReturn(json(scriptResponse()));
 
-        when(voiceClient.synthesize(any(), anyList())).thenReturn(json("""
-                {"scenes":[
-                  {"seq":1,"audioPath":"/workdir/test/audio/scene_01.mp3"},
-                  {"seq":2,"audioPath":"/workdir/test/audio/scene_02.mp3"}]}
-                """));
         when(imageClient.generate(any(), anyList(), any())).thenReturn(json("""
                 {"scenes":[
                   {"seq":1,"imagePath":"/workdir/test/images/scene_01.png"},
@@ -276,7 +268,7 @@ class PipelineOrchestratorStateMachineTest {
                                                  boolean distributionGate) {
         when(reviewConfig.getReview()).thenReturn(gates);
         PipelineOrchestrator orch = new PipelineOrchestrator(
-                repo, scriptClient, voiceClient, imageClient, videoGenClient,
+                repo, scriptClient, imageClient, videoGenClient,
                 assemblyClient, uploadClient, thumbnailClient, propAnchorService,
                 metadataGenerator, new MetadataPolicy(), lyricsGenerator,
                 qualityReviewer, qaBoard, sceneImageQc, clipQc, thumbnailQc,
@@ -427,11 +419,10 @@ class PipelineOrchestratorStateMachineTest {
         assertEquals("discovery", job.getStoryArc());
         assertEquals(92, job.getQaBoardScore());
 
-        // Stage order, voice branch: script → voice → assembly → upload.
-        InOrder voiceOrder = inOrder(scriptClient, voiceClient, assemblyClient, uploadClient);
+        // Stage order: script → assembly → upload (voice removed — Omni clip audio).
+        InOrder voiceOrder = inOrder(scriptClient, assemblyClient, uploadClient);
         voiceOrder.verify(scriptClient).submit(any(), any(), anyInt(), any(), any(),
                 any(), any(), any(), any(), any());
-        voiceOrder.verify(voiceClient).synthesize(any(), anyList());
         voiceOrder.verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
                 any(), anyInt(), anyInt(), anyBoolean(), any());
         voiceOrder.verify(uploadClient).upload(any(), any(), any(), any(), any(),
@@ -466,13 +457,11 @@ class PipelineOrchestratorStateMachineTest {
         // submit → runScriptStage pauses at the afterScript gate.
         UUID jobId = orch.submit(request()).id();
         assertEquals(JobStatus.SCRIPT_REVIEW_PENDING, store.get(jobId).getStatus());
-        verify(voiceClient, never()).synthesize(any(), anyList());
         verify(imageClient, never()).generate(any(), anyList(), any());
 
         // approve #1 → runAssetsStage pauses at the per-scene image gate.
         orch.approve(jobId);
         assertEquals(JobStatus.IMAGES_REVIEW_PENDING, store.get(jobId).getStatus());
-        verify(voiceClient).synthesize(any(), anyList());
         verify(imageClient).generate(any(), anyList(), any());
         verifyNeverAssembled();
 
@@ -550,7 +539,7 @@ class PipelineOrchestratorStateMachineTest {
         VideoJob job = store.get(jobId);
         assertEquals(JobStatus.FAILED, job.getStatus());
         assertEquals("script-service down", job.getError());
-        verifyNoInteractions(voiceClient, imageClient, videoGenClient,
+        verifyNoInteractions(imageClient, videoGenClient,
                 assemblyClient, thumbnailClient, uploadClient);
     }
 
@@ -579,7 +568,7 @@ class PipelineOrchestratorStateMachineTest {
 
         verify(scriptClient, never()).submit(any(), any(), anyInt(), any(), any(),
                 any(), any(), any(), any(), any());
-        verifyNoInteractions(voiceClient, imageClient, videoGenClient);
+        verifyNoInteractions(imageClient, videoGenClient);
         verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
                 any(), anyInt(), anyInt(), anyBoolean(), any());
         verify(uploadClient).upload(any(), any(), any(), any(), any(),
@@ -603,7 +592,6 @@ class PipelineOrchestratorStateMachineTest {
 
         assertEquals(JobStatus.COMPLETED, store.get(job.getId()).getStatus());
         // All assets existed → the (paid) generation clients are never hit.
-        verify(voiceClient, never()).synthesize(any(), anyList());
         verify(imageClient, never()).generate(any(), anyList(), any());
         verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
                 any(), anyInt(), anyInt(), anyBoolean(), any());

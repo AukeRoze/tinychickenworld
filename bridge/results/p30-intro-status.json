@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "hasClip":  true,
+                 "running":  false,
+                 "status":  "done â intro.mp4 re-composited at 10:13:02"
+             },
+    "executedAt":  "2026-06-14T12:38:56.9546049+02:00"
+}

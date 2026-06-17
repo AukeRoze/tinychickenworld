@@ -253,6 +253,18 @@ public class PromptBuilder {
               always "a small GREEN metal watering can", never just "a watering
               can" and never a different colour). A recurring object may NEVER
               change colour, material or design between scenes.
+            - SINGLE REVEAL (no double payoff): the big reveal / payoff of the
+              episode — the egg actually OPENING, the hidden character appearing,
+              the "birth"/hatch moment — happens in EXACTLY ONE scene: the climax /
+              key moment. Build-up scenes BEFORE it may show the egg cracking,
+              wobbling, rocking or spilling light, but the shell must NOT fall fully
+              open and whatever/whoever is inside must NOT be visible yet — describe
+              only cracks and glow, never the contents. The shell "falls away" /
+              "opens" in ONE scene only. AFTER the reveal the character stays
+              revealed and the shell stays open — never re-hide it or re-open it in
+              a later scene (that is a hard continuity break in the edit). So never
+              write "the egg opens" or "the shell falls away" in two different
+              scenes.
             - PACING FOR THE EDIT: let key beats BREATHE. End important scenes
               (hook, climax, closer) on a CLEAR, settled expression or pose — a
               held look, a soft smile, a beat of stillness — that the editor can
@@ -376,6 +388,11 @@ public class PromptBuilder {
               expense — the child must still enjoy the line at face value.
               Parents decide what gets rewatched; give them one reason per
               episode.
+            - LANGUAGE (HARD RULE): ALL dialogue lines and narration MUST be written
+              in clear, natural ENGLISH — never Dutch or any other language, and
+              never a mix. Even if the topic, brief or any input is in another
+              language, the spoken lines are always English. This is read aloud
+              and lip-synced downstream, so any non-English word breaks the voice.
             - Every spoken line must have a speaker that is one of the cast ids below.
             - Every scene's characters list must include only ids from the cast.
             - **The main character MUST appear in every scene's characters list.**
@@ -388,9 +405,21 @@ public class PromptBuilder {
               the coop"). NEVER make a character vanish for a single scene and
               then reappear (no flicker). Aim for a smooth build: start small
               (often the main character solo or with one sidekick), bring the
-              others in DELIBERATELY, and once the trio is together for the
-              climax, keep all three together through the resolution and closer.
-              Do NOT bounce between 1, 3 and 1 characters from scene to scene.
+              others in DELIBERATELY for the climax "postcard" beat; afterwards
+              it is fine to settle the resolution/closer on one or two chicks in
+              focus. Do NOT bounce between 1, 3 and 1 characters from scene to
+              scene — change the cast count only with a clear entrance/exit beat.
+            - CONSISTENCY BUDGET (image-gen reality — IMPORTANT): three chicks
+              sharply in ONE frame is the HARDEST shot for the image generator and
+              the #1 source of character drift and swapped accessories. Keep MOST
+              scenes to the main character + AT MOST ONE sidekick (so the scene's
+              characters list usually holds 1-2 ids, not 3). Aim for at most about
+              ONE IN THREE scenes to list all three chicks, and concentrate those
+              on the climax "postcard" beat. Build the story so the cast is
+              genuinely 1-2 for much of it (one chick off fetching something,
+              another arriving a beat later) instead of the whole trio glued
+              together every scene. Fewer three-chick shots = markedly more
+              consistent characters.
             - Each scene's visualDesc must explicitly mention what the on-screen
               chickens are doing physically (open beak talking, walking, pointing
               wing, examining object, looking up, etc.) — never just "Pip stands".
@@ -403,12 +432,14 @@ public class PromptBuilder {
               shot, wide establishing shot, low angle, over-the-shoulder.
               Rotate so consecutive scenes use different framings.
             - Every scene's locationId must be one of the locations below.
-            - LOCATION VARIETY (HARD RULE — the validator WILL reject + re-prompt
-              otherwise): use AT LEAST 3 DIFFERENT locationIds across the video,
-              and NEVER more than 2 consecutive scenes in the same location. Move
-              the cast through the world (coop → porch → pebblePath → garden →
-              pond → bigOak …) as the story progresses — a different setting is
-              one of the cheapest re-hooks. Do NOT set every scene in the barnyard.
+            - SINGLE LOCATION (HARD RULE — the validator WILL reject + re-prompt
+              otherwise): the ENTIRE episode plays in ONE location. Choose the
+              single best-fitting location for THIS topic and set that SAME
+              locationId on EVERY scene — no exceptions. Do NOT move the cast
+              between settings (no coop → garden → pond hopping); switching places
+              mid-episode confuses young viewers. Keep visual interest by varying
+              the FRAMING (close-up, wide, low angle, over-the-shoulder) and the
+              time-of-day within that one place — never by changing the place.
             - Set each scene's timeOfDay (one of: goldenHour, midday, dusk, night).
               ROTATE it across the video for visual variety (e.g. a morning setup
               drifting toward a golden-hour climax), but keep it consistent within
@@ -579,7 +610,7 @@ public class PromptBuilder {
                 .append("Your last script was rejected by the structure validator. Regenerate "
                         + "the WHOLE script and fix every issue below. Pay attention to phase "
                         + "scene-counts, phase durations, the closing phase being last, and "
-                        + "using multiple locations:\n")
+                        + "keeping the WHOLE episode in ONE single location:\n")
                 .append(structureFeedback).append('\n');
         }
         if (criticFeedback != null && !criticFeedback.isBlank()) {

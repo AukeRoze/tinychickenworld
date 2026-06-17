@@ -20,7 +20,13 @@
       <div class="full form-helpers">
         <button type="button" class="btn" id="btn-random" title="Let Claude invent a fresh on-brand idea">🎲 Random idee</button>
         <button type="button" class="btn" id="btn-improve" title="Upgrade your rough brief into a production-ready one">✨ Verbeter brief</button>
+        <button type="button" class="btn" id="btn-treatment" title="Genereer eerst een hoog-niveau verhaal-treatment (logline, beats, twist, payoff) om te bekijken en bij te schaven vóór de 20+ scènes">🎬 Genereer treatment</button>
       </div>
+
+      <!-- Story-treatment review (front-end stap #1): hoog-niveau verhaal eerst
+           bekijken/bijschaven, dan met één klik in de brief vouwen. Gevuld door
+           jobs-page.js vanuit POST /api/v1/videos/treatment. -->
+      <div class="full" id="treatment-panel" hidden></div>
 
       <!-- 🧠 Self-learning zichtbaar (backlog P2): de performance-hint die elke
            nieuwe script-prompt meekrijgt. Gevuld door jobs-page.js vanuit
@@ -70,7 +76,7 @@
         </select>
       </label>
       <label class="field">Target seconds <span class="nl">· Doellengte (sec)</span>
-        <input name="targetSeconds" type="number" min="10" max="600" value="75">
+        <input name="targetSeconds" type="number" min="10" max="600" value="150">
       </label>
       <label class="field">Audience <span class="nl">· Doelgroep</span>
         <input name="audience" placeholder="kids 3-6">

@@ -29,13 +29,16 @@ public record AssemblyRequest(
     public record SceneInput(
             @Min(1) int seq,
             @NotBlank String imagePath,
-            @NotBlank String audioPath,
+            /** DEPRECATED — was the ElevenLabs voice WAV. Voices now come from the
+             *  Omni clip's own native audio, so this is optional and ignored; kept
+             *  only for backward-compatible request shapes. */
+            String audioPath,
             @Min(2) @Max(120) int durationSeconds,
             String narration,
-            /** Optional pre-rendered video clip from video-generation-service.
-             *  When present, the scene bypasses the Ken Burns filter graph and
-             *  the clip is rescaled/padded to the canvas. Voice audio still
-             *  comes from {@code audioPath} (Veo clips are rendered silent). */
+            /** Pre-rendered Google Flow / Omni clip. The scene bypasses the Ken
+             *  Burns graph, the clip is rescaled/padded to the canvas, and its OWN
+             *  native audio (Omni voice + ambient) is kept — no separate voice
+             *  track is mixed in any more. */
             String clipPath,
             /** Episode-structure phase id (hook, setup, development, climax,
              *  resolution, closer). Drives the transition style into this

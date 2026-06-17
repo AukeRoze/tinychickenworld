@@ -51,6 +51,8 @@ public class BibleLoader {
                     c.path("description").asText().trim(),
                     c.path("triggerWord").asText(""),
                     c.path("lifeStage").asText("").trim(),
+                    c.path("species").asText("").trim(),
+                    c.path("rosterNoun").asText("").trim(),
                     parseDna(c.path("dna"))
             ));
         }
@@ -100,7 +102,8 @@ public class BibleLoader {
                 n.path("build").asText("").trim(),
                 n.path("weight").asText("").trim(),
                 n.path("eyeColor").asText("").trim(),
-                n.path("antiAccessory").asText("").trim()
+                n.path("antiAccessory").asText("").trim(),
+                n.path("signatureAccessoryShort").asText("").trim()
         );
     }
 

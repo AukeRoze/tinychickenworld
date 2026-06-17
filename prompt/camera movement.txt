@@ -1,0 +1,262 @@
+﻿1. Slow Dolly In
+Camera: SLOW DOLLY IN (PUSH). The camera glides forward on a track toward the subject, subtly expanding background perspective and enhancing spatial depth.
+Prompt: A slow dolly-in toward a solitary character seated at a kitchen table at dusk, warm window light behind them, the room gradually expanding in depth as the camera moves closer, emphasizing their quiet emotional shift.
+
+
+
+
+2. Slow Dolly Out
+Camera: SLOW DOLLY OUT (PULL). The camera smoothly tracks backward from the subject, reducing their screen presence while progressively unveiling the surrounding environment.
+Prompt: A lone astronaut stands motionless on a barren alien plain at dusk as the camera performs a slow dolly out, gradually revealing the vast, desolate landscape under a fading purple sky.
+
+
+
+
+3. Fast Dolly In (RUSH)
+Camera: FAST DOLLY IN / RUSH. The camera surges forward toward the subject’s face, compressing space to trigger immediate urgency.
+Prompt: FAST DOLLY IN / RUSH on a determined detective as sirens echo in a narrow, rain-soaked alley at night, neon reflections flickering across wet pavement.
+
+
+
+
+4. The "Vertigo" Effect (Dolly Zoom)
+Camera: DOLLY ZOOM. The camera dollies BACK as the lens zooms IN, violently distorting perspective while locking the subject’s scale.
+Prompt: Dolly zoom (zolly): the camera moves backward while zooming in, violently warping and compressing the background. The subject stays the same size in frame despite extreme perspective distortion. A person frozen in fear, standing perfectly still, cinematic and tense.
+
+
+
+
+5. Macro Zoom
+Camera: Extreme macro zoom from face to microscopic—beginning as an intimate portrait, pushing through skin and iris into abstract cellular structures inside the eye.
+Prompt: A human eye staring unblinking directly into the camera.
+
+
+
+
+
+
+6. Hyper Zoom
+Camera: COSMIC HYPER-ZOOM (ORBIT TO STREET) A single, unbroken zoom races from Earth in deep space, through clouds and city blocks, and lands smoothly on a bustling café terrace.
+Prompt: COSMIC HYPER-ZOOM (ORBIT TO STREET) A single, unbroken zoom races from Earth in deep space, through clouds and city blocks, and lands smoothly on a bustling café terrace.
+
+
+
+
+7. Over-The-Shoulder (OTS)
+Camera: Over-the-shoulder shot; camera placed just behind a secondary figure’s shoulder (soft focus foreground), framing the primary subject.
+Prompt: Over-the-shoulder shot from a blurred detective’s shoulder, framing a suspect under harsh interrogation lights in a dim police interview room, cinematic contrast, shallow depth of field.
+
+
+
+
+8. Fisheye / Peephole
+Camera: FISHEYE LENS. Ultra-wide distortion with pronounced center bulge. Mimics peephole or security-camera perspective.
+Prompt: A fisheye lens view of a nervous man standing alone in a dim apartment hallway, walls curving unnaturally toward the edges, harsh overhead light, security-camera mood, cinematic tension, realistic lighting, shallow grime on the lens.
+
+
+
+
+9. Reveal From Behind (Wipe)
+Camera: LATERAL WIPE REVEAL. The frame begins fully obscured by a foreground element (wall, pillar, doorframe) and slides sideways to unveil the concealed subject.
+Prompt: Cinematic lateral wipe reveal from behind a concrete pillar, sliding sideways to reveal a person leaning against a wall, half-hidden and waiting, inside a stark parking garage with thick pillars and harsh overhead lights.
+
+
+
+
+10. The "Through" Shot (Fly-Through Aperture)
+Camera: FLY THROUGH. The camera glides through a narrow opening or window to unveil the subject beyond.
+Prompt: Cinematic fly-through as the camera passes through a narrow window into a sunlit courtyard, revealing a calm woman standing centered in the distance.
+
+
+
+
+11. Reveal from Blur (Fade In)
+Camera: FOCUS-PULL REVEAL. Shot opens fully defocused with soft bokeh; the lens smoothly pulls focus until the subject snaps into crisp clarity.
+Prompt: Cinematic focus pull reveals from full bokeh to sharp focus on a man seated alone with an unreadable expression inside a nighttime café, circular bokeh lights glowing in the background, shallow depth of field, moody cinematic lighting.
+
+
+
+
+12. Rack Focus (Foreground to Background)
+Camera: Rack focus: the shot opens with the foreground in crisp focus and a soft background; mid-shot, focus pulls smoothly as the foreground blurs and the background snaps sharp.
+Prompt: A cinematic rack focus shot: a glass of water in sharp focus in the foreground while a tense dining-table conversation blurs behind, then the focus shifts to the background as the glass softens.
+
+
+
+
+13. Tilt Up
+Camera: SLOW TILT UP. The camera rises vertically on a locked axis, framing boots first and finishing on the face.
+Prompt: A cinematic slow tilt-up shot from polished boots to the face of a sharply dressed, confident figure standing on an urban street with towering buildings behind them.
+
+
+
+
+14. Tilt Down
+Camera: SLOW TILT DOWN. The camera descends on a fixed axis, starting at the face and revealing the outfit to the boots.
+Prompt: A fashion model holds eye contact in a minimalist studio as the camera slowly tilts down from face to boots.
+
+
+
+
+15. Lateral Truck Left
+Camera: TRUCK LEFT — Camera glides laterally left on a dolly track, creating pronounced parallax between foreground and background.
+Prompt: Camera trucks left with strong parallax as a woman looks out from a balcony over a layered cityscape at sunset, bathed in warm cinematic light.
+
+
+
+
+
+
+
+
+16. Lateral Truck Right
+Camera: TRUCK RIGHT. The camera slides laterally right on track, creating pronounced parallax.
+Prompt: Camera trucks right with strong parallax. A woman looks out from a balcony over a layered cityscape at sunset, cinematic depth and motion.
+
+
+
+
+17. Orbit 180 (Half Circle)
+Camera: HALF ORBIT. The camera moves on a smooth curved path 180° around the subject, transitioning from frontal profile to rear view.
+Prompt: A cinematic half-orbit shot: the camera moves 180° around a lone man with his head slightly bowed, transitioning from front to back, set in an endless open desert plain.
+
+
+
+
+18. Fast 360 Orbit (Spin)
+Camera: FAST 360° ORBIT — the camera whips in a full circular path around the subject, causing the environment to streak and spin.
+Prompt: Fast 360° orbit around a fighter standing firm in a circular arena as lights blur into streaks.
+
+
+
+
+19. Slow Cinematic Arc
+Camera: Slow arc shot; the camera glides in a gentle, wide curve around the subject, gradually revealing her side profile.
+Prompt: Slow arc shot of a contemplative woman gazing off-camera in a quiet forest clearing with soft backlight.
+
+
+
+
+20. Pedestal Down
+Camera: PEDESTAL DOWN. The camera body lowers vertically from eye level to waist level in a smooth, controlled descent.
+Prompt: Pedestal down on a standing figure exhaling slowly inside a modern office with clean vertical lines.
+
+
+
+
+21. Pedestal Up
+Camera: PEDESTAL UP. The camera body rises vertically from waist level to eye level, creating a clear shift in perspective.
+Prompt: Pedestal up on a person rising emotionally amid a crowded street as the environment opens up.
+
+
+22. Crane Up (High Angle Reveal)
+Camera: CRANE UP. The camera rises and pulls back on a jib, finishing in a high-angle overhead view.
+Prompt: Crane up from a couple standing together as a vast beach unfolds beneath them.
+
+
+
+
+23. Crane Down (Landing)
+Camera: CRANE DOWN. The camera glides smoothly from a bird’s-eye view to the subject’s eye level.
+Prompt: Crane down onto a lone traveler waiting in a wide city plaza that narrows into focus.
+
+
+
+
+24. Smooth Optical Zoom In
+Camera: Smooth optical zoom-in with a locked-off camera; only the lens advances in focal length, compressing depth as soft bokeh blooms and the face gradually dominates the frame.
+Prompt: Smooth optical zoom-in on a calm face as it slowly fills the frame inside a softly lit interior with blurred background highlights.
+
+
+
+
+25. Smooth Optical Zoom Out
+Camera: Smooth optical zoom-out from a fixed camera position; the lens pulls wider, expanding spatial context while keeping the subject centered and stable.
+Prompt: Smooth optical zoom-out from a centered seated person as a wide room is gradually revealed around them.
+
+
+
+
+26. Snap Zoom (Crash Zoom)
+Camera: Snap zoom with an instantaneous, aggressive lens punch directly into the subject’s eyes, creating a jarring and high-impact framing shift.
+Prompt: Snap zoom straight into a standing woman’s eyes mid-realization against a chaotic, frozen background.
+
+
+
+
+27. Drone Flyover (High Altitude)
+Camera: High-altitude drone flyover, ultra-stable aerial push forward, gliding smoothly above the subject and sweeping across the landscape below.
+Prompt: High-altitude drone flyover of a small group walking through expansive rolling hills bathed in soft morning light.
+
+
+28. Epic Drone Reveal (Pedestal + Tilt)
+Camera: Epic drone reveal, starting low behind a mountain ridge, then pedestaling straight up while tilting down to unveil the subject and horizon.
+Prompt: Epic drone reveal rising from behind a mountain ridge to expose a lone figure standing at a cliff edge above a massive valley at sunrise.
+
+
+
+
+29. Large Scale Drone Orbit
+Camera: Wide-scale drone orbit, a smooth, continuous aerial circle around the subject, maintaining distance to showcase environmental magnitude.
+Prompt: Wide drone orbit circling a central structure within a vast natural landscape, emphasizing immense scale.
+
+
+
+
+30. Top-Down (God's Eye View)
+Camera: TOP-DOWN DRONE SHOT (GOD’S EYE). Camera locked directly overhead at 90°, slowly rotating.
+Prompt: Top-down rotating drone shot of a lone figure in a flowing red cloak centered in a circular ancient stone plaza with concentric carvings, soft mist, and shifting light.
+
+
+
+
+31. FPV Drone Dive (Aggressive)
+Camera: FPV DRONE DIVE. Fast, aggressive plunge down a building’s facade toward the subject.
+Prompt: Aggressive FPV drone dive racing down tall urban architecture toward a runner reaching the base of the building.
+32. Handheld (Documentary Style)
+Camera: HANDHELD CAMERA with natural micro-jitters, subtle sway, and human “breathing” drift—intentionally imperfect, never stabilized.
+Prompt: Handheld camera follows a person speaking candidly in a real-world interior with uncontrolled, practical lighting.
+
+
+
+
+33. Whip Pan
+Camera: WHIP PAN LEFT with aggressive lateral snap and heavy motion blur, masking a rapid transition between focal points.
+Prompt: Whip pan left reveals a new subject across two connected spaces fused by streaking motion blur.
+
+
+
+
+
+
+34. Dutch Angle (Roll)
+Camera: DUTCH ANGLE with a fixed Z-axis roll, tilting the frame so the horizon cuts diagonally through the shot.
+Prompt: Rolled camera frames an emotionally imbalanced character inside a tight, claustrophobic interior.
+
+
+
+
+35. Leading Shot (Backward Tracking)
+Camera: Backward tracking leading shot, eye-level, stabilized; the camera retreats smoothly at a matched pace to lock the subject in frame.
+Prompt: A determined person strides forward through a long corridor as the camera glides backward, holding constant distance and framing.
+
+
+
+
+36. Following Shot (Forward Tracking)
+Camera: Forward tracking follow shot, shoulder-height, stabilized; the camera advances behind the subject, matching speed to sustain perspective.
+Prompt: A lone figure walks away down a moody forest path as the camera follows closely from behind.
+
+
+
+
+37. Side Tracking (Parallel)
+Camera: Side-tracking parallel truck, locked profile, smooth lateral motion matching pace.
+Prompt: Side-tracking camera trucks parallel to a realistic female influencer walking briskly left to right on a photorealistic urban street.
+
+
+
+
+38. POV Walk
+Camera: First-person POV walk, subtle handheld sway, natural step bob.
+Prompt: First-person POV camera advances with gentle walking sway through a lived-in space, the subject implied by hair, hood edge, or shadow in frame.

@@ -143,13 +143,13 @@ public class ThumbnailGenerator {
             // ship with no text at all, variant 2 gets a tiny corner badge.
             // Analytics loop: variant 3's slot is given to the historically
             // best-performing layout once the orchestrator has enough data.
-            LayoutTemplate layout = layoutPicker.pickFaceDriven(v);
-            if (v == 3 && req.preferredLayout() != null && !req.preferredLayout().isBlank()) {
-                try {
-                    layout = LayoutTemplate.valueOf(req.preferredLayout());
-                    log.info("job={} variant 3 uses analytics-preferred layout {}", req.jobId(), layout);
-                } catch (IllegalArgumentException ignore) { /* unknown id — keep rotation */ }
-            }
+            // Thumbnail-tekststrategie (gebruikerswens 2026-06-14): twee varianten
+            // met de grote rainbow-hook (TOP + BOTTOM = A/B-plaatsing voor Test &
+            // Compare), één zónder tekst als controle — zo meet je of de tekst
+            // echt CTR-lift geeft. preferredLayout (analytics) kan v2 nog sturen.
+            String headline = hookHeadline(req);
+            LayoutTemplate layout = layoutForVariant(req, v);
+            String overlayText = layout == LayoutTemplate.NO_TEXT ? "" : headline;
             String[] moods = castMode ? CAST_VARIANT_MOODS : VARIANT_MOODS;
             String moodVariation = moods[(v - 1) % moods.length];
 
@@ -167,24 +167,9 @@ public class ThumbnailGenerator {
 
             // 2) Fallback: OpenAI text-to-image (legacy path — chicks may drift).
             if (base == null) {
-                StringBuilder prompt = new StringBuilder();
-                if (!bible.getStyle().isBlank()) prompt.append(bible.getStyle()).append(" ");
-                if (castMode && !bible.getCast().isBlank()) {
-                    prompt.append("Featuring the full cast together: ")
-                          .append(bible.getCast()).append(" ");
-                } else if (!bible.getMainCharacter().isBlank()) {
-                    prompt.append("Featuring ").append(bible.getMainCharacter()).append(" ");
-                }
-                prompt.append("Scene topic: ").append(req.topic()).append(". ");
-                if (req.hook() != null) prompt.append("Hook: ").append(req.hook()).append(". ");
-                prompt.append("Composition: ").append(layout.promptHint).append(" ");
-                prompt.append("Variant mood: ").append(moodVariation).append(". ");
-                prompt.append(castMode ? CAST_PROMPT_POLICY : PROMPT_POLICY);
-                // Reviewer direction LAST — gpt-image-1 weights terminal tokens
-                // most heavily, so the human correction wins over the policy.
-                prompt.append(hintClause(req));
+                String prompt = buildOpenAiPrompt(req, castMode, layout, moodVariation);
                 try {
-                    byte[] basePng = client.generatePng(prompt.toString());
+                    byte[] basePng = client.generatePng(prompt);
                     try (var in = new ByteArrayInputStream(basePng)) {
                         base = ImageIO.read(in);
                     }
@@ -203,7 +188,7 @@ public class ThumbnailGenerator {
             // bases skipped punchify entirely until now).
             base = punchify(base);
 
-            BufferedImage composed = overlayer.apply(base, layout, punchyCaption(req.title()));
+            BufferedImage composed = overlayer.apply(base, layout, overlayText);
             Path variantPath = dir.resolve("thumbnail-" + v + ".png");
             try {
                 ImageIO.write(composed, "png", variantPath.toFile());
@@ -260,24 +245,14 @@ public class ThumbnailGenerator {
             log.info("job={} no bible character ids — skipping anchor bases", req.jobId());
             return java.util.List.of();
         }
-        String framing = castMode
-                ? "group hero shot, all faces pushed close to the camera"
-                : "extreme close-up hero shot, face filling the frame";
+        String framing = framingFor(castMode);
         String[] moods = castMode ? CAST_VARIANT_MOODS : VARIANT_MOODS;
         java.util.List<com.youtubeauto.thumbnail.image.ImageServiceClient.ThumbScene> scenes =
                 new java.util.ArrayList<>();
         for (int v = 1; v <= VARIANTS; v++) {
             String mood = moods[(v - 1) % moods.length];
-            StringBuilder d = new StringBuilder();
-            d.append("Episode topic: ").append(req.topic()).append(". ");
-            if (req.hook() != null && !req.hook().isBlank()) {
-                d.append("Hook: ").append(req.hook()).append(". ");
-            }
-            d.append("The character(s) react with a strong, exaggerated emotion to this "
-                    + "episode's surprise / discovery. Variant mood: ").append(mood).append('.');
-            d.append(hintClause(req));
             scenes.add(new com.youtubeauto.thumbnail.image.ImageServiceClient.ThumbScene(
-                    v, d.toString(), chars, framing));
+                    v, buildAnchorDescription(req, mood), chars, framing));
         }
         return imageService.generateThumbnailBases(req.jobId(), scenes, "landscape");
     }
@@ -290,6 +265,101 @@ public class ThumbnailGenerator {
         if (h == null || h.isBlank()) return "";
         return " REVIEWER DIRECTION — MANDATORY, overrides any conflicting guidance above: "
                 + h.trim() + ".";
+    }
+
+    // ---- prompt builders (shared by generate() and describe()) ----------------
+    // Extracted so the dashboard can SHOW the exact thumbnail prompt(s) — the same
+    // text the generator builds — without generating any image. Single source of
+    // truth: generate() and describe() call these, so the preview never drifts
+    // from what actually runs.
+
+    /** The layout for variant {@code v}: the rainbow-hook A/B pair on 1 & 2 and a
+     *  no-text control on 3, with the analytics-preferred layout overriding
+     *  variant 2 when supplied. */
+    private LayoutTemplate layoutForVariant(GenerateThumbnailRequest req, int v) {
+        LayoutTemplate layout = switch (v) {
+            case 1 -> LayoutTemplate.HOOK_RAINBOW_TOP;
+            case 2 -> LayoutTemplate.HOOK_RAINBOW_BOTTOM;
+            default -> LayoutTemplate.NO_TEXT;   // controle (geen tekst)
+        };
+        if (v == 2 && req.preferredLayout() != null && !req.preferredLayout().isBlank()) {
+            try {
+                layout = LayoutTemplate.valueOf(req.preferredLayout());
+            } catch (IllegalArgumentException ignore) { /* unknown id — keep default */ }
+        }
+        return layout;
+    }
+
+    private String framingFor(boolean castMode) {
+        return castMode
+                ? "group hero shot, all faces pushed close to the camera"
+                : "extreme close-up hero shot, face filling the frame";
+    }
+
+    /** The full self-contained OpenAI (gpt-image-1) thumbnail prompt for one
+     *  variant — style + cast/character + topic + hook + composition + mood +
+     *  policy + reviewer direction. This is the legacy text-to-image path and the
+     *  most readable single representation of "the thumbnail prompt". */
+    private String buildOpenAiPrompt(GenerateThumbnailRequest req, boolean castMode,
+                                     LayoutTemplate layout, String moodVariation) {
+        StringBuilder prompt = new StringBuilder();
+        if (!bible.getStyle().isBlank()) prompt.append(bible.getStyle()).append(" ");
+        if (castMode && !bible.getCast().isBlank()) {
+            prompt.append("Featuring the full cast together: ")
+                  .append(bible.getCast()).append(" ");
+        } else if (!bible.getMainCharacter().isBlank()) {
+            prompt.append("Featuring ").append(bible.getMainCharacter()).append(" ");
+        }
+        prompt.append("Scene topic: ").append(req.topic()).append(". ");
+        if (req.hook() != null) prompt.append("Hook: ").append(req.hook()).append(". ");
+        prompt.append("Composition: ").append(layout.promptHint).append(" ");
+        prompt.append("Variant mood: ").append(moodVariation).append(". ");
+        prompt.append(castMode ? CAST_PROMPT_POLICY : PROMPT_POLICY);
+        // Reviewer direction LAST — gpt-image-1 weights terminal tokens most
+        // heavily, so the human correction wins over the policy.
+        prompt.append(hintClause(req));
+        return prompt.toString();
+    }
+
+    /** The per-variant description sent to image-service for the PRIMARY (live)
+     *  anchor path — the cast reference-conditioned Gemini render. image-service
+     *  wraps this with the cast's reference anchors + framing. */
+    private String buildAnchorDescription(GenerateThumbnailRequest req, String mood) {
+        StringBuilder d = new StringBuilder();
+        d.append("Episode topic: ").append(req.topic()).append(". ");
+        if (req.hook() != null && !req.hook().isBlank()) {
+            d.append("Hook: ").append(req.hook()).append(". ");
+        }
+        d.append("The character(s) react with a strong, exaggerated emotion to this "
+                + "episode's surprise / discovery. Variant mood: ").append(mood).append('.');
+        d.append(hintClause(req));
+        return d.toString();
+    }
+
+    /**
+     * Preview-only: the assembled thumbnail prompt(s) for every variant, WITHOUT
+     * generating any image. Reuses the exact builders {@link #generate} uses, so
+     * the dashboard shows precisely what would run. For each variant it returns
+     * both the live anchor (Gemini) description and the full OpenAI fallback
+     * prompt, plus the layout, mood, framing and the rendered overlay headline.
+     */
+    public com.youtubeauto.thumbnail.api.dto.ThumbnailPromptPreview describe(GenerateThumbnailRequest req) {
+        boolean castMode = isCastThumbnail(req);
+        String framing = framingFor(castMode);
+        String[] moods = castMode ? CAST_VARIANT_MOODS : VARIANT_MOODS;
+        java.util.List<com.youtubeauto.thumbnail.api.dto.ThumbnailPromptPreview.Variant> vs =
+                new java.util.ArrayList<>();
+        for (int v = 1; v <= VARIANTS; v++) {
+            LayoutTemplate layout = layoutForVariant(req, v);
+            String mood = moods[(v - 1) % moods.length];
+            String overlay = layout == LayoutTemplate.NO_TEXT ? "" : hookHeadline(req);
+            vs.add(new com.youtubeauto.thumbnail.api.dto.ThumbnailPromptPreview.Variant(
+                    v, layout.name(), mood, framing, overlay,
+                    buildAnchorDescription(req, mood),
+                    buildOpenAiPrompt(req, castMode, layout, mood)));
+        }
+        return new com.youtubeauto.thumbnail.api.dto.ThumbnailPromptPreview(
+                req.jobId(), castMode, vs);
     }
 
     /**
@@ -324,6 +394,29 @@ public class ThumbnailGenerator {
         if (caption.isBlank()) return "";
         // Uppercase + "!" — the punchy kids-channel look, at badge size.
         return caption.toUpperCase(java.util.Locale.ROOT) + "!";
+    }
+
+    /** Short, punchy ALL-CAPS hook headline for the big rainbow overlay, derived
+     *  from the episode title (first sentence, ≤5 words) — mirrors the supplied
+     *  "WHAT'S INSIDE?" example. Keeps a trailing "?" when the title is a
+     *  question, else adds "!". Falls back to the topic. The renderer wraps to
+     *  at most two lines. */
+    private String hookHeadline(GenerateThumbnailRequest req) {
+        String t = (req.title() == null || req.title().isBlank()) ? req.topic() : req.title();
+        if (t == null) return "";
+        t = t.replaceAll("#\\w+", "").trim();
+        // First sentence only (up to the first . ? !).
+        java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("^(.*?[?!.])\\s").matcher(t + " ");
+        if (m.find()) t = m.group(1).trim();
+        boolean question = t.endsWith("?");
+        t = t.replaceAll("[!?.]+$", "").trim();
+        String[] words = t.split("\\s+");
+        if (words.length > 5) {
+            t = String.join(" ", java.util.Arrays.copyOfRange(words, 0, 5));
+        }
+        if (t.isBlank()) return "";
+        return t.toUpperCase(java.util.Locale.ROOT) + (question ? "?" : "!");
     }
 
     /** Loads the supplied cast still for this variant (round-robin over the

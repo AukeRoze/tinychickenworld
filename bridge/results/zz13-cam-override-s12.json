@@ -1,0 +1,10 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                 "veoCameraOverride":  "extreme close-up, 85mm, very shallow depth",
+                 "seq":  12,
+                 "result":  "CAMERA_OVERRIDE_SET"
+             },
+    "executedAt":  "2026-06-15T16:23:50.6853395+02:00"
+}

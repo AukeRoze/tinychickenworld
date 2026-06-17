@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "hasClip":  true,
+                 "running":  false,
+                 "status":  "done â intro.mp4 refreshed at 13:31:18"
+             },
+    "executedAt":  "2026-06-14T16:05:46.7035304+02:00"
+}

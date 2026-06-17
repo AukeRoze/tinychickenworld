@@ -63,4 +63,29 @@ public class ThumbnailServiceClient {
                         .retrieve().bodyToMono(JsonNode.class),
                 java.time.Duration.ofMinutes(8), "thumbnail-service generate");
     }
+
+    /** Preview-only: the assembled thumbnail prompt(s) per variant (no image
+     *  generation). Cheap + idempotent — drives the dashboard "copy thumbnail
+     *  prompt" view, mirroring {@code ImageServiceClient.previewPrompts}. */
+    public JsonNode previewPrompt(UUID jobId, String topic, String title, String hook,
+                                  List<String> baseImagePaths, String preferredLayout,
+                                  String customHint, List<String> castPresent) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("jobId", jobId);
+        body.put("topic", topic);
+        body.put("title", title);
+        body.put("hook", hook);
+        body.put("baseImagePaths", baseImagePaths == null ? List.of() : baseImagePaths);
+        if (preferredLayout != null && !preferredLayout.isBlank())
+            body.put("preferredLayout", preferredLayout);
+        if (customHint != null && !customHint.isBlank())
+            body.put("customHint", customHint.trim());
+        if (castPresent != null && !castPresent.isEmpty())
+            body.put("castPresent", castPresent);
+        return Resilience.idempotent(
+                client.post().uri("/api/v1/thumbnails/preview-prompt")
+                        .bodyValue(body)
+                        .retrieve().bodyToMono(JsonNode.class),
+                java.time.Duration.ofSeconds(30), "thumbnail-service preview-prompt");
+    }
 }

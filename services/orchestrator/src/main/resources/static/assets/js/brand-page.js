@@ -83,6 +83,60 @@ function wire(kind, videoId, btnId, statusId, recompositeBtnId) {
 wire("intro", "intro-video", "rebuild-intro", "intro-status", "recomposite-intro");
 wire("outro", "outro-video", "rebuild-outro", "outro-status", "recomposite-outro");
 
+// ── Intro/outro Veo-prompt copy (QA) ─────────────────────────────────────
+// GET /api/v1/brand/clip-prompts → { intro:{motion,still,negative}, outro:{…} }.
+// Per clip a button reveals a read-only textarea (motion + start-still +
+// negative) and copies the exact prompt, so the brand clips can be QA'd just
+// like the per-scene prompts. NB: these clips bypass VeoPromptCompiler, so this
+// is verbatim what Veo receives.
+(() => {
+  let cache = null;
+  async function load() {
+    if (!cache) cache = await api.get("/api/v1/brand/clip-prompts", { key: "clip-prompts" });
+    return cache;
+  }
+  function compose(p) {
+    return "=== MOTION (→ AI Video) ===\n" + (p.motion || "")
+         + "\n\n=== START-STILL (→ image) ===\n" + (p.still || "")
+         + "\n\n=== NEGATIVE ===\n" + (p.negative || "");
+  }
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const t = document.createElement("textarea");
+        t.value = text; document.body.appendChild(t); t.select();
+        document.execCommand("copy"); t.remove();
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  function wireCopy(kind) {
+    const btn = document.getElementById(`copy-${kind}-prompt`);
+    const ta = document.getElementById(`${kind}-prompt-text`);
+    if (!btn || !ta) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const all = await load();
+        const text = compose((all && all[kind]) || {});
+        ta.value = text;
+        ta.hidden = false;
+        const ok = await copyText(text);
+        toast(ok ? `${kind} Veo-prompt gekopieerd ✓`
+                 : "Prompt getoond — selecteer de tekst om te kopiëren", ok ? "info" : "warn");
+      } catch (e) {
+        toast("Kon de intro/outro-prompt niet laden", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+  wireCopy("intro");
+  wireCopy("outro");
+})();
+
 // ── Bible hot-reload (stack-breed) ───────────────────────────────────────
 // POST /api/v1/brand/bible/reload → per-service resultaat. Voor handmatige
 // channel.yml-edits; Cast-edits triggeren de reload al automatisch.
@@ -687,3 +741,51 @@ async function loadTransitions() {
   } catch (e) { tHost.textContent = "Kon overgangen niet laden."; }
 }
 loadTransitions();
+
+// ── Negative-constraints editor (negative-constraints.txt, hot-reload) ──────
+async function loadNegativeConstraints() {
+  const host = document.getElementById("negative-constraints-host");
+  if (!host) return;
+  try {
+    const data = await api.get("/api/v1/brand/negative-constraints", { key: "neg-con" });
+    const items = (data && data.items) || [];
+    host.replaceChildren();
+
+    const ta = document.createElement("textarea");
+    ta.value = items.join("\n");
+    ta.rows = Math.max(6, items.length + 2);
+    ta.spellcheck = false;
+    ta.placeholder = "Eén negative-constraint per regel…";
+    ta.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;" +
+        "border:1px solid var(--border,#ccc);border-radius:8px;background:var(--bg,#fff);" +
+        "color:inherit;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical";
+    host.appendChild(ta);
+
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:8px";
+    const save = document.createElement("button");
+    save.className = "btn";
+    save.textContent = "💾 Opslaan";
+    save.title = "Schrijft negative-constraints.txt en herlaadt de bible";
+    const note = document.createElement("span");
+    note.className = "small";
+    note.style.color = "var(--muted)";
+    bar.appendChild(save);
+    bar.appendChild(note);
+    host.appendChild(bar);
+
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      note.textContent = "opslaan…";
+      try {
+        const res = await api.post("/api/v1/brand/negative-constraints",
+            { text: ta.value }, { key: "neg-con-save" });
+        const n = (res && res.count != null) ? res.count : ta.value.split("\n").filter(s => s.trim()).length;
+        note.textContent = `${n} punten opgeslagen ✓`;
+        toast(`Negative constraints opgeslagen (${n}) ✓`, "info");
+      } catch (e) { note.textContent = ""; /* api.js toasted */ }
+      finally { save.disabled = false; }
+    });
+  } catch (e) { host.textContent = "Kon negative constraints niet laden."; }
+}
+loadNegativeConstraints();

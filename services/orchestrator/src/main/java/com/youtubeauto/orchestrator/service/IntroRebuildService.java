@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.youtubeauto.orchestrator.client.AssemblyServiceClient;
 import com.youtubeauto.orchestrator.client.ImageServiceClient;
 import com.youtubeauto.orchestrator.client.VideoGenerationServiceClient;
-import com.youtubeauto.orchestrator.client.VoiceServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -67,7 +66,8 @@ public class IntroRebuildService {
             + "over each other, lip-sync, lip syncing, mouthing words, talking mouth, "
             + "wide open beak, gaping beak, exaggerated mouth movement, flapping beak, "
             + "deformed proportions, body morphing, changing body size, "
-            + "text, watermark";
+            + "text, watermark, typography, overlay text, subtitles, generic title, "
+            + "letters in the sky, caption";
 
     /** Shared channel-banner world so intro + outro match the brand banner. */
     static final String BANNER_WORLD =
@@ -78,10 +78,11 @@ public class IntroRebuildService {
 
     private static final String STILL_DESC =
             "A calm, bright " + BANNER_WORLD + ". The three little chickens stand together in the "
-            + "lower centre, visible from the chest up, smiling warmly at the camera, with calm "
-            + "open meadow and sky around and above them so a title can be placed over the scene "
-            + "later. Calm, centred, uncluttered composition. No signboard, no sign, no banner "
-            + "and NO text anywhere.";
+            + "lower centre, framed as a MEDIUM shot — fully visible from the waist up so their "
+            + "wings and round bodies are comfortably inside the frame with room to move — smiling "
+            + "warmly at the camera, with calm open meadow and sky around and above them so a title "
+            + "can be placed over the scene later. Calm, centred, uncluttered composition. No "
+            + "signboard, no sign, no banner and NO text anywhere.";
 
     private static final String MOTION_DESC =
             "Open on all THREE little cartoon chickens ALREADY standing together in the lower "
@@ -90,19 +91,27 @@ public class IntroRebuildService {
             + "in frame the ENTIRE time. They greet the viewer ONE BY ONE in a BRISK, warm "
             + "rhythm — three quick greeting turns packed into the FIRST FOUR SECONDS, each turn "
             + "about ONE second, immediately one after another with NO long pauses between them "
-            + "(the dubbed voices follow this exact timing): seconds 0.5-1.6 Pip gives a little "
-            + "wing-wave and tips her straw hat (her beak clearly opens and closes during HER "
-            + "second only); seconds 1.7-2.8 Mo gives a small nod and head tilt (HIS beak moves "
-            + "during his second only); seconds 2.9-4.0 Bo nudges his round glasses up with a "
-            + "wing-tip and gives a cheerful little bob (HIS beak moves during his second only). "
+            + "(the dubbed voices follow this exact timing). As EACH chicken greets it clearly "
+            + "performs its OWN signature quirk so the viewer instantly learns who is who: "
+            + "seconds 0.5-1.6 Pip gives a little wing-wave and her signature DOUBLE WINK — two "
+            + "quick winks in a row with the SAME right eye — her beak clearly opening and "
+            + "closing during HER second only; seconds 1.7-2.8 Mo does his signature move — a "
+            + "quick tug to snug his RED knitted scarf at the neck with one wing-tip (the scarf "
+            + "stays firmly on, never removed) — with a small nod, HIS beak moving during his "
+            + "second only; seconds 2.9-4.0 Bo does her signature move — pushing her ROUND "
+            + "glasses up the beak with a wing-tip — and a cheerful little bob, HER beak moving "
+            + "during her second only. "
             + "From second 4 onward all three SETTLE, sit still together in the lower centre and "
             + "smile warmly at the camera with beaks CLOSED, leaving calm open space above them. "
             // The assembly HOLDS the final Veo frame while the title appears, so the
             // clip must END on an open-eyed pose — a closed/mid-blink last frame
             // freezes shut eyes under the title and looks bad.
-            + "END the clip with ALL THREE chickens' EYES WIDE OPEN, bright and looking warmly "
-            + "at the camera, smiling — the FINAL frame must have every chicken's eyes FULLY "
-            + "OPEN, never closed, never mid-blink, never half-closed. NO signboard, "
+            + "From second 4.0 until the very final frame, freeze all blinking: ALL THREE "
+            + "chickens' EYES MUST BE WIDE OPEN, bright and looking warmly at the camera, smiling "
+            + "— the FINAL frame must have every chicken's eyes FULLY OPEN, never closed, never "
+            + "mid-blink, never half-closed. (This eyes-open rule applies ONLY from second 4.0 on "
+            + "— Pip's double-wink in her 0.5-1.6s greeting is intended and MUST still happen.) "
+            + "NO signboard, "
             + "no sign, no banner and NO text anywhere in the scene. STABILITY: Pip's straw hat "
             + "stays FIRMLY on her head the entire time — it never flies off, lifts or falls. "
             + "Each chicken STAYS in the exact same spot it starts in (same left/middle/right "
@@ -133,7 +142,6 @@ public class IntroRebuildService {
     private final ImageServiceClient imageClient;
     private final VideoGenerationServiceClient videoGenClient;
     private final AssemblyServiceClient assemblyClient;
-    private final VoiceServiceClient voiceClient;
     private final SceneImageQc sceneImageQc;
     private final com.youtubeauto.orchestrator.config.OrchestratorProperties props;
 
@@ -206,6 +214,12 @@ public class IntroRebuildService {
     public String status() { return status; }
     public boolean running() { return running; }
 
+    // Read-only prompt accessors for the Brand-page "copy Veo prompt" QA button.
+    // These brand clips bypass VeoPromptCompiler, so this is VERBATIM what Veo gets.
+    public String veoMotionPrompt()   { return MOTION_DESC; }
+    public String veoStillPrompt()    { return STILL_DESC; }
+    public String veoNegativePrompt() { return IDENTITY_NEG; }
+
     /** Resolve the cached Veo clip path: in-memory first, then the disk marker. */
     private String resolveClip() {
         if (lastClipPath != null && !lastClipPath.isBlank()) return lastClipPath;
@@ -274,10 +288,9 @@ public class IntroRebuildService {
             String clip = c0.path("clipPath").asText();
             rememberClip(clip);   // remember (memory + disk) for cheap re-composites
 
-            // Synthesize the self-intros in the SAME voices used in the episodes,
-            // so the chicks speak with branded ElevenLabs voices instead of Veo's
-            // off-brand synthetic audio. Best-effort: empty list = keep Veo audio.
-            List<String> voiceLines = synthVoiceLines(voiceClient, job, INTRO_LINES);
+            // Voices come from the Omni clip's own native audio now (ElevenLabs
+            // removed) — empty list = keep the clip's audio.
+            List<String> voiceLines = List.of();
 
             status = "3/3 — compositing title + sound…";
             log.info("Intro rebuild {}: composite {} ({} branded voices)", job, clip, voiceLines.size());
@@ -312,7 +325,7 @@ public class IntroRebuildService {
             status = "re-compositing title + sound (no Veo)…";
             String clip = resolveClip();
             log.info("Intro re-composite from cached clip {}", clip);
-            List<String> voiceLines = synthVoiceLines(voiceClient, job, INTRO_LINES);
+            List<String> voiceLines = List.of();   // Omni clip carries its own audio
             assemblyClient.buildIntro(clip, voiceLines);
             status = "done — intro.mp4 re-composited at " + LocalTime.now().withNano(0);
         } catch (Exception e) {
@@ -323,37 +336,7 @@ public class IntroRebuildService {
         }
     }
 
-    /**
-     * Synthesize a short ordered set of one-line utterances via the voice-service
-     * (one scene per line, so each comes back as its own MP3) and return the
-     * audio paths IN THE SAME ORDER as {@code lines}. Shared by intro + outro.
-     * Best-effort: any failure returns an empty list so the caller falls back to
-     * the clip's own audio rather than breaking the rebuild.
-     *
-     * @param lines ordered [{speaker, text}] maps; speaker = character id (pip/mo/bo).
-     */
-    static List<String> synthVoiceLines(VoiceServiceClient voiceClient, UUID job,
-                                        List<Map<String, String>> lines) {
-        try {
-            List<Map<String, Object>> scenes = new ArrayList<>();
-            for (int i = 0; i < lines.size(); i++) {
-                scenes.add(Map.of("seq", i + 1, "lines", List.of(lines.get(i))));
-            }
-            JsonNode resp = voiceClient.synthesize(job, scenes);
-            Map<Integer, String> bySeq = new HashMap<>();
-            for (JsonNode s : resp.path("scenes")) {
-                String p = s.path("audioPath").asText("");
-                if (!p.isBlank()) bySeq.put(s.path("seq").asInt(), p);
-            }
-            List<String> ordered = new ArrayList<>();
-            for (int i = 1; i <= lines.size(); i++) {
-                String p = bySeq.get(i);
-                if (p != null) ordered.add(p);
-            }
-            return ordered;
-        } catch (Exception e) {
-            log.warn("intro/outro voice synth failed ({}) — falling back to clip audio", e.toString());
-            return List.of();
-        }
-    }
+    // synthVoiceLines REMOVED — intro/outro voices came from ElevenLabs; the Omni
+    // clip now carries its own native audio, so callers pass an empty list and the
+    // assembly keeps the clip's audio.
 }

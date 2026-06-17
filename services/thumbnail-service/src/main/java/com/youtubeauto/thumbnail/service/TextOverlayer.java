@@ -52,6 +52,8 @@ public class TextOverlayer {
             case TEXT_BOTTOM -> drawTextBottom(g, title, W, H);
             case TEXT_OUTLINE_CENTER -> drawTextCenter(g, title, W, H);
             case TEXT_TOP_BANNER -> drawTextBanner(g, title, W, H);
+            case HOOK_RAINBOW_TOP -> drawRainbowHook(g, title, W, H, true);
+            case HOOK_RAINBOW_BOTTOM -> drawRainbowHook(g, title, W, H, false);
         }
 
         g.dispose();
@@ -167,6 +169,73 @@ public class TextOverlayer {
         drawScrim(g, bx, by, badgeW, badgeH);
         drawOutlined(g, line, bx + padX, by + padY + fm.getAscent(), font,
                 new Color(255, 235, 0), Color.BLACK, 5f);
+    }
+
+    // ---------- big rainbow hook headline (gebruikerswens 2026-06-14) ----------
+
+    /** Felle kids-kleuren, per letter doorgecycled — rood/oranje/geel/groen/
+     *  blauw/paars/roze, in de stijl van het aangeleverde "WHAT'S INSIDE?"-
+     *  voorbeeld. */
+    private static final Color[] RAINBOW = {
+            new Color(0xFF4D4D), new Color(0xFF9F1C), new Color(0xFFE600),
+            new Color(0x3CCB5A), new Color(0x3AA0FF), new Color(0xC04DFF),
+            new Color(0xFF5FA2)
+    };
+
+    /** Grote ALL-CAPS hook-headline met per-letter regenboogkleuren + dikke
+     *  zwarte rand, boven- of onderin. Tot 2 regels; vult ~90% breedte. */
+    private void drawRainbowHook(Graphics2D g, String title, int W, int H, boolean top) {
+        if (title == null || title.isBlank()) return;
+        String text = title.toUpperCase(java.util.Locale.ROOT);
+        int maxWidth = (int) (W * 0.90);
+        Font font = font(fitFontSize(g, text, maxWidth, 2, 64, 150));
+        java.util.List<String> lines = wrap(g, text, font, maxWidth);
+        FontMetrics fm = g.getFontMetrics(font);
+        int lineH = fm.getHeight();
+        int totalH = lineH * lines.size();
+        int blockTop = top ? (int) (H * 0.05) : H - totalH - (int) (H * 0.06);
+        int y = blockTop + fm.getAscent();
+        for (String line : lines) {
+            int lineW = fm.stringWidth(line);
+            int x = (W - lineW) / 2;
+            drawRainbowLine(g, line, x, y, font, 13f);
+            y += lineH;
+        }
+    }
+
+    /** Draws one line letter-by-letter, cycling the rainbow palette, each glyph
+     *  with a soft drop shadow + thick black outline (same grammar as
+     *  {@link #drawOutlined} but per-character colours). */
+    private void drawRainbowLine(Graphics2D g, String line, int startX, int baseY,
+                                 Font font, float outlineWidth) {
+        g.setFont(font);
+        FontRenderContext frc = g.getFontRenderContext();
+        FontMetrics fm = g.getFontMetrics(font);
+        Stroke oldStroke = g.getStroke();
+        Paint oldPaint = g.getPaint();
+        int x = startX;
+        int colorIdx = 0;
+        for (int i = 0; i < line.length(); i++) {
+            String ch = line.substring(i, i + 1);
+            int adv = fm.stringWidth(ch);
+            if (ch.isBlank()) { x += adv; colorIdx++; continue; }
+            TextLayout tl = new TextLayout(ch, font, frc);
+            Shape shape = tl.getOutline(AffineTransform.getTranslateInstance(x, baseY));
+            // soft drop shadow
+            g.setColor(new Color(0, 0, 0, 90));
+            g.translate(5, 5); g.fill(shape); g.translate(-5, -5);
+            // thick black outline
+            g.setStroke(new BasicStroke(outlineWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.setColor(Color.BLACK);
+            g.draw(shape);
+            // rainbow fill
+            g.setColor(RAINBOW[colorIdx % RAINBOW.length]);
+            g.fill(shape);
+            colorIdx++;
+            x += adv;
+        }
+        g.setStroke(oldStroke);
+        g.setPaint(oldPaint);
     }
 
     // ---------- helpers ----------

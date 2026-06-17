@@ -1,0 +1,14 @@
+{
+  "method": "POST",
+  "path": "/api/v1/videos",
+  "body": {
+    "topic": "Who is in the Egg?",
+    "brief": "The ENTIRE episode takes place at ONE single location: the Big Oak Tree (an enormous ancient oak on a low hill, with a rope swing, scattered acorns and a carved MEET HERE sign). Do NOT switch settings; every scene stays at the Big Oak. Pip discovers a mysterious smooth egg nestled among the oak roots. The trio wonder whose egg it is and decide to keep it warm. Include one clear funny beat (Bo gag), one tender emotional beat, and the KEY MOMENT is the egg finally hatching into a little duckling. All dialogue is spoken in clear English.",
+    "lesson": "With patience and teamwork, you can care for something until it is ready.",
+    "mood": "wonder, gentle, warm",
+    "angle": "Pip the curious discoverer; Mo the calm explainer; Bo the comic relief",
+    "motionMode": "veo",
+    "targetSeconds": 180,
+    "seriesId": "little-discoveries"
+  }
+}

@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "endFramesActive":  false,
+                 "endFrameEnabled":  false,
+                 "endFrameAllScenes":  true
+             },
+    "executedAt":  "2026-06-14T10:39:26.6542490+02:00"
+}

@@ -1,0 +1,16 @@
+{
+  "method": "POST",
+  "service": "orchestrator",
+  "path": "/api/v1/videos",
+  "body": {
+    "topic": "The chicks chase a floating dandelion seed and turn it into a wish-game",
+    "brief": "Pip spots a single dandelion puff drifting on the breeze and is instantly enchanted ('Oh! Oh oh oh!'). The three chase it across the sunny garden, just missing it again and again (rule of three). Mo calmly explains the seed is travelling on the wind to grow a new flower somewhere far away. Bo turns the chase into gentle slapstick and invents a wish-game: catch it, close your eyes, make a wish. End warm at golden hour as the seed floats up and away. Show exactly ONE clear character quirk per scene so kids learn the cast: Pip's double right-eye wink, Mo snugging his red scarf, Bo pushing her round glasses up.",
+    "lesson": "Dandelion seeds float on the wind to grow new flowers in new places.",
+    "mood": "playful, energetic, warm wonder",
+    "angle": "Pip the curious chaser, Mo the calm explainer, Bo the comic relief",
+    "motionMode": "veo",
+    "privacyStatus": "private",
+    "seriesId": "little-discoveries",
+    "episodeNumber": 4
+  }
+}

@@ -44,7 +44,7 @@ public class BibleReloadService {
         Map<String, String> t = new LinkedHashMap<>();
         OrchestratorProperties.Services s = props.services();
         t.put("script-service", s.script());
-        t.put("voice-service", s.voice());
+        // voice-service removed (Omni native audio) — no reload fan-out.
         t.put("image-service", s.image());
         t.put("thumbnail-service", s.thumbnail());
         t.put("video-generation-service", s.videoGen());

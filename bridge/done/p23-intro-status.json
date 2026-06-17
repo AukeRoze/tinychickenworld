@@ -1,0 +1,5 @@
+{
+  "method": "GET",
+  "service": "orchestrator",
+  "path": "/api/v1/intro/status"
+}

@@ -1,0 +1,8 @@
+﻿{
+    "status":  202,
+    "body":  {
+                 "status":  "recompositing",
+                 "running":  true
+             },
+    "executedAt":  "2026-06-14T11:47:38.6518735+02:00"
+}

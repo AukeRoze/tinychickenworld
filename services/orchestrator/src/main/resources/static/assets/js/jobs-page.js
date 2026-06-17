@@ -485,6 +485,92 @@ setInterval(refresh, POLL_MS);
   syncImprove();
 })();
 
+// Story-treatment (front-end stap #1): genereer een hoog-niveau verhaal eerst,
+// bekijk/bewerk het, en vouw het met één klik in de brief — zo stuur je het
+// verhaal vóórdat de 20+ scènes geschreven worden. Additief: faalt de call of
+// klik je 'm niet, dan werkt het formulier precies als voorheen.
+(function () {
+  const form = document.getElementById("new-job-form");
+  const btn = document.getElementById("btn-treatment");
+  const panel = document.getElementById("treatment-panel");
+  if (!form || !btn || !panel) return;
+
+  let current = null;
+
+  function fmt(t) {
+    const out = [];
+    if (t.logline) out.push("LOGLINE: " + t.logline);
+    if (t.theme) out.push("THEMA / LES: " + t.theme);
+    if (Array.isArray(t.characterArcs) && t.characterArcs.length) {
+      out.push("", "PERSONAGES:");
+      for (const a of t.characterArcs) out.push("- " + (a.character || "?") + ": " + (a.arc || ""));
+    }
+    if (Array.isArray(t.beats) && t.beats.length) {
+      out.push("", "BEATS:");
+      t.beats.forEach((b, i) => out.push((i + 1) + ". " + (b.name || "") + " — " +
+        (b.what || "") + (b.emotion ? "  (" + b.emotion + ")" : "")));
+    }
+    if (t.hook) out.push("", "HOOK (0-8s): " + t.hook);
+    if (t.twist) out.push("TWIST: " + t.twist);
+    if (t.lessonPayoff) out.push("PAYOFF: " + t.lessonPayoff);
+    return out.join("\n");
+  }
+
+  function renderPanel(text) {
+    panel.hidden = false;
+    panel.innerHTML = "";
+    const h = document.createElement("div");
+    h.style.cssText = "font-weight:600;margin-bottom:6px";
+    h.textContent = "🎬 Treatment — bekijk & schaaf bij, klik dan 'Gebruik als brief'";
+    const ta = document.createElement("textarea");
+    ta.rows = 14;
+    ta.style.cssText = "width:100%;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace";
+    ta.value = text;
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "btn approve";
+    use.style.marginTop = "6px";
+    use.textContent = "✅ Gebruik als brief";
+    use.addEventListener("click", () => {
+      if (form.elements.brief) form.elements.brief.value = ta.value;
+      if (current) {
+        if (form.elements.hook && !form.elements.hook.value.trim() && current.hook)
+          form.elements.hook.value = current.hook;
+        if (form.elements.lesson && !form.elements.lesson.value.trim() && current.theme)
+          form.elements.lesson.value = current.theme;
+      }
+      panel.hidden = true;
+      if (form.elements.brief) form.elements.brief.focus();
+      if (typeof toast === "function") toast("Treatment in de brief gezet ✓", "info");
+    });
+    panel.appendChild(h);
+    panel.appendChild(ta);
+    panel.appendChild(use);
+  }
+
+  btn.addEventListener("click", async () => {
+    const topic = form.elements.topic && form.elements.topic.value.trim();
+    if (!topic) { alert("Vul eerst een topic in."); return; }
+    const body = { topic };
+    for (const k of ["brief", "lesson", "mood", "angle", "hook", "audience"]) {
+      const el = form.elements[k];
+      if (el && el.value.trim()) body[k] = el.value.trim();
+    }
+    const ts = form.elements.targetSeconds && form.elements.targetSeconds.value;
+    if (ts) body.targetSeconds = Number(ts);
+    const old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "… treatment…";
+    try {
+      const t = await api.post("/api/v1/videos/treatment", body, { key: "treatment" });
+      if (t && t.error) { alert("Kon de treatment niet genereren: " + t.error); return; }
+      current = t || {};
+      renderPanel(fmt(current));
+    } catch (e) { /* api.js toonde de fout al */ }
+    finally { btn.textContent = old; btn.disabled = false; }
+  });
+})();
+
 // 🧠 Self-learning zichtbaar (backlog P2): toon op het create-form de
 // performance-hint die elke nieuwe script-prompt meekrijgt. Zelfde bron als
 // req.performanceHint in de pipeline: InsightsAggregator.performanceHint(),

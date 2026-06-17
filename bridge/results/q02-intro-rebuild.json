@@ -1,0 +1,8 @@
+﻿{
+    "status":  202,
+    "body":  {
+                 "running":  true,
+                 "status":  "started"
+             },
+    "executedAt":  "2026-06-14T15:27:15.5395110+02:00"
+}

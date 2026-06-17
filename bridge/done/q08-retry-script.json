@@ -1,0 +1,5 @@
+{
+  "method": "POST",
+  "service": "orchestrator",
+  "path": "/api/v1/videos/d005d1c5-1a24-4c71-95ee-a698f9836114/retry"
+}

@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "source": "camera movement.txt",
+  "description": "Bibliotheek van cinematische camerabewegingen voor de Veo prompt-pipeline. 'motion_intensity' geeft aan hoe sterk de beweging is; high-moves kunnen botsen met frame-chaining/morphing (zie veo-endframe-en-refs memo).",
+  "moves": [
+    {
+      "id": "slow-dolly-in",
+      "number": 1,
+      "name": "Slow Dolly In",
+      "category": "dolly",
+      "motion_intensity": "low",
+      "camera": "SLOW DOLLY IN (PUSH). The camera glides forward on a track toward the subject, subtly expanding background perspective and enhancing spatial depth.",
+      "example_prompt": "A slow dolly-in toward a solitary character seated at a kitchen table at dusk, warm window light behind them, the room gradually expanding in depth as the camera moves closer, emphasizing their quiet emotional shift.",
+      "tags": ["intimacy", "emotional-beat", "focus-on-subject"]
+    },
+    {
+      "id": "slow-dolly-out",
+      "number": 2,
+      "name": "Slow Dolly Out",
+      "category": "dolly",
+      "motion_intensity": "low",
+      "camera": "SLOW DOLLY OUT (PULL). The camera smoothly tracks backward from the subject, reducing their screen presence while progressively unveiling the surrounding environment.",
+      "example_prompt": "A lone astronaut stands motionless on a barren alien plain at dusk as the camera performs a slow dolly out, gradually revealing the vast, desolate landscape under a fading purple sky.",
+      "tags": ["reveal", "isolation", "scale"]
+    },
+    {
+      "id": "fast-dolly-in",
+      "number": 3,
+      "name": "Fast Dolly In (Rush)",
+      "category": "dolly",
+      "motion_intensity": "high",
+      "camera": "FAST DOLLY IN / RUSH. The camera surges forward toward the subject's face, compressing space to trigger immediate urgency.",
+      "example_prompt": "FAST DOLLY IN / RUSH on a determined detective as sirens echo in a narrow, rain-soaked alley at night, neon reflections flickering across wet pavement.",
+      "tags": ["urgency", "tension", "impact"]
+    },
+    {
+      "id": "dolly-zoom-vertigo",
+      "number": 4,
+      "name": "Vertigo Effect (Dolly Zoom)",
+      "category": "special",
+      "motion_intensity": "high",
+      "camera": "DOLLY ZOOM. The camera dollies BACK as the lens zooms IN, violently distorting perspective while locking the subject's scale.",
+      "example_prompt": "Dolly zoom (zolly): the camera moves backward while zooming in, violently warping and compressing the background. The subject stays the same size in frame despite extreme perspective distortion. A person frozen in fear, standing perfectly still, cinematic and tense.",
+      "tags": ["unease", "psychological", "realization"]
+    },
+    {
+      "id": "macro-zoom",
+      "number": 5,
+      "name": "Macro Zoom",
+      "category": "zoom",
+      "motion_intensity": "medium",
+      "camera": "Extreme macro zoom from face to microscopic-beginning as an intimate portrait, pushing through skin and iris into abstract cellular structures inside the eye.",
+      "example_prompt": "A human eye staring unblinking directly into the camera.",
+      "tags": ["detail", "abstract", "transition"]
+    },
+    {
+      "id": "hyper-zoom",
+      "number": 6,
+      "name": "Hyper Zoom",
+      "category": "zoom",
+      "motion_intensity": "high",
+      "camera": "COSMIC HYPER-ZOOM (ORBIT TO STREET) A single, unbroken zoom races from Earth in deep space, through clouds and city blocks, and lands smoothly on a bustling cafe terrace.",
+      "example_prompt": "COSMIC HYPER-ZOOM (ORBIT TO STREET) A single, unbroken zoom races from Earth in deep space, through clouds and city blocks, and lands smoothly on a bustling cafe terrace.",
+      "tags": ["scale", "establishing", "spectacle"]
+    },
+    {
+      "id": "over-the-shoulder",
+      "number": 7,
+      "name": "Over-The-Shoulder (OTS)",
+      "category": "framing",
+      "motion_intensity": "low",
+      "camera": "Over-the-shoulder shot; camera placed just behind a secondary figure's shoulder (soft focus foreground), framing the primary subject.",
+      "example_prompt": "Over-the-shoulder shot from a blurred detective's shoulder, framing a suspect under harsh interrogation lights in a dim police interview room, cinematic contrast, shallow depth of field.",
+      "tags": ["dialogue", "confrontation", "perspective"]
+    },
+    {
+      "id": "fisheye-peephole",
+      "number": 8,
+      "name": "Fisheye / Peephole",
+      "category": "special",
+      "motion_intensity": "low",
+      "camera": "FISHEYE LENS. Ultra-wide distortion with pronounced center bulge. Mimics peephole or security-camera perspective.",
+      "example_prompt": "A fisheye lens view of a nervous man standing alone in a dim apartment hallway, walls curving unnaturally toward the edges, harsh overhead light, security-camera mood, cinematic tension, realistic lighting, shallow grime on the lens.",
+      "tags": ["surveillance", "unease", "stylized"]
+    },
+    {
+      "id": "lateral-wipe-reveal",
+      "number": 9,
+      "name": "Reveal From Behind (Wipe)",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "LATERAL WIPE REVEAL. The frame begins fully obscured by a foreground element (wall, pillar, doorframe) and slides sideways to unveil the concealed subject.",
+      "example_prompt": "Cinematic lateral wipe reveal from behind a concrete pillar, sliding sideways to reveal a person leaning against a wall, half-hidden and waiting, inside a stark parking garage with thick pillars and harsh overhead lights.",
+      "tags": ["reveal", "transition", "mystery"]
+    },
+    {
+      "id": "fly-through-aperture",
+      "number": 10,
+      "name": "Through Shot (Fly-Through Aperture)",
+      "category": "special",
+      "motion_intensity": "high",
+      "camera": "FLY THROUGH. The camera glides through a narrow opening or window to unveil the subject beyond.",
+      "example_prompt": "Cinematic fly-through as the camera passes through a narrow window into a sunlit courtyard, revealing a calm woman standing centered in the distance.",
+      "tags": ["reveal", "transition", "spectacle"]
+    },
+    {
+      "id": "focus-pull-reveal",
+      "number": 11,
+      "name": "Reveal from Blur (Fade In)",
+      "category": "focus",
+      "motion_intensity": "low",
+      "camera": "FOCUS-PULL REVEAL. Shot opens fully defocused with soft bokeh; the lens smoothly pulls focus until the subject snaps into crisp clarity.",
+      "example_prompt": "Cinematic focus pull reveals from full bokeh to sharp focus on a man seated alone with an unreadable expression inside a nighttime cafe, circular bokeh lights glowing in the background, shallow depth of field, moody cinematic lighting.",
+      "tags": ["reveal", "intro", "mood"]
+    },
+    {
+      "id": "rack-focus",
+      "number": 12,
+      "name": "Rack Focus (Foreground to Background)",
+      "category": "focus",
+      "motion_intensity": "low",
+      "camera": "Rack focus: the shot opens with the foreground in crisp focus and a soft background; mid-shot, focus pulls smoothly as the foreground blurs and the background snaps sharp.",
+      "example_prompt": "A cinematic rack focus shot: a glass of water in sharp focus in the foreground while a tense dining-table conversation blurs behind, then the focus shifts to the background as the glass softens.",
+      "tags": ["shift-attention", "tension", "depth"]
+    },
+    {
+      "id": "tilt-up",
+      "number": 13,
+      "name": "Tilt Up",
+      "category": "tilt",
+      "motion_intensity": "low",
+      "camera": "SLOW TILT UP. The camera rises vertically on a locked axis, framing boots first and finishing on the face.",
+      "example_prompt": "A cinematic slow tilt-up shot from polished boots to the face of a sharply dressed, confident figure standing on an urban street with towering buildings behind them.",
+      "tags": ["reveal", "introduction", "power"]
+    },
+    {
+      "id": "tilt-down",
+      "number": 14,
+      "name": "Tilt Down",
+      "category": "tilt",
+      "motion_intensity": "low",
+      "camera": "SLOW TILT DOWN. The camera descends on a fixed axis, starting at the face and revealing the outfit to the boots.",
+      "example_prompt": "A fashion model holds eye contact in a minimalist studio as the camera slowly tilts down from face to boots.",
+      "tags": ["reveal", "fashion", "detail"]
+    },
+    {
+      "id": "truck-left",
+      "number": 15,
+      "name": "Lateral Truck Left",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "TRUCK LEFT - Camera glides laterally left on a dolly track, creating pronounced parallax between foreground and background.",
+      "example_prompt": "Camera trucks left with strong parallax as a woman looks out from a balcony over a layered cityscape at sunset, bathed in warm cinematic light.",
+      "tags": ["parallax", "movement", "scenic"]
+    },
+    {
+      "id": "truck-right",
+      "number": 16,
+      "name": "Lateral Truck Right",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "TRUCK RIGHT. The camera slides laterally right on track, creating pronounced parallax.",
+      "example_prompt": "Camera trucks right with strong parallax. A woman looks out from a balcony over a layered cityscape at sunset, cinematic depth and motion.",
+      "tags": ["parallax", "movement", "scenic"]
+    },
+    {
+      "id": "orbit-180",
+      "number": 17,
+      "name": "Orbit 180 (Half Circle)",
+      "category": "orbit",
+      "motion_intensity": "high",
+      "camera": "HALF ORBIT. The camera moves on a smooth curved path 180 degrees around the subject, transitioning from frontal profile to rear view.",
+      "example_prompt": "A cinematic half-orbit shot: the camera moves 180 degrees around a lone man with his head slightly bowed, transitioning from front to back, set in an endless open desert plain.",
+      "tags": ["dynamic", "spectacle", "reveal"]
+    },
+    {
+      "id": "fast-360-orbit",
+      "number": 18,
+      "name": "Fast 360 Orbit (Spin)",
+      "category": "orbit",
+      "motion_intensity": "high",
+      "camera": "FAST 360 ORBIT - the camera whips in a full circular path around the subject, causing the environment to streak and spin.",
+      "example_prompt": "Fast 360 orbit around a fighter standing firm in a circular arena as lights blur into streaks.",
+      "tags": ["energy", "action", "spectacle"]
+    },
+    {
+      "id": "slow-cinematic-arc",
+      "number": 19,
+      "name": "Slow Cinematic Arc",
+      "category": "orbit",
+      "motion_intensity": "medium",
+      "camera": "Slow arc shot; the camera glides in a gentle, wide curve around the subject, gradually revealing her side profile.",
+      "example_prompt": "Slow arc shot of a contemplative woman gazing off-camera in a quiet forest clearing with soft backlight.",
+      "tags": ["contemplative", "elegant", "reveal"]
+    },
+    {
+      "id": "pedestal-down",
+      "number": 20,
+      "name": "Pedestal Down",
+      "category": "pedestal",
+      "motion_intensity": "low",
+      "camera": "PEDESTAL DOWN. The camera body lowers vertically from eye level to waist level in a smooth, controlled descent.",
+      "example_prompt": "Pedestal down on a standing figure exhaling slowly inside a modern office with clean vertical lines.",
+      "tags": ["calm", "shift-perspective", "subtle"]
+    },
+    {
+      "id": "pedestal-up",
+      "number": 21,
+      "name": "Pedestal Up",
+      "category": "pedestal",
+      "motion_intensity": "low",
+      "camera": "PEDESTAL UP. The camera body rises vertically from waist level to eye level, creating a clear shift in perspective.",
+      "example_prompt": "Pedestal up on a person rising emotionally amid a crowded street as the environment opens up.",
+      "tags": ["uplift", "shift-perspective", "emotional-beat"]
+    },
+    {
+      "id": "crane-up",
+      "number": 22,
+      "name": "Crane Up (High Angle Reveal)",
+      "category": "crane",
+      "motion_intensity": "high",
+      "camera": "CRANE UP. The camera rises and pulls back on a jib, finishing in a high-angle overhead view.",
+      "example_prompt": "Crane up from a couple standing together as a vast beach unfolds beneath them.",
+      "tags": ["reveal", "scale", "ending"]
+    },
+    {
+      "id": "crane-down",
+      "number": 23,
+      "name": "Crane Down (Landing)",
+      "category": "crane",
+      "motion_intensity": "high",
+      "camera": "CRANE DOWN. The camera glides smoothly from a bird's-eye view to the subject's eye level.",
+      "example_prompt": "Crane down onto a lone traveler waiting in a wide city plaza that narrows into focus.",
+      "tags": ["establishing", "intro", "scale"]
+    },
+    {
+      "id": "optical-zoom-in",
+      "number": 24,
+      "name": "Smooth Optical Zoom In",
+      "category": "zoom",
+      "motion_intensity": "low",
+      "camera": "Smooth optical zoom-in with a locked-off camera; only the lens advances in focal length, compressing depth as soft bokeh blooms and the face gradually dominates the frame.",
+      "example_prompt": "Smooth optical zoom-in on a calm face as it slowly fills the frame inside a softly lit interior with blurred background highlights.",
+      "tags": ["focus-on-subject", "intimacy", "subtle"]
+    },
+    {
+      "id": "optical-zoom-out",
+      "number": 25,
+      "name": "Smooth Optical Zoom Out",
+      "category": "zoom",
+      "motion_intensity": "low",
+      "camera": "Smooth optical zoom-out from a fixed camera position; the lens pulls wider, expanding spatial context while keeping the subject centered and stable.",
+      "example_prompt": "Smooth optical zoom-out from a centered seated person as a wide room is gradually revealed around them.",
+      "tags": ["reveal", "context", "subtle"]
+    },
+    {
+      "id": "snap-zoom",
+      "number": 26,
+      "name": "Snap Zoom (Crash Zoom)",
+      "category": "zoom",
+      "motion_intensity": "high",
+      "camera": "Snap zoom with an instantaneous, aggressive lens punch directly into the subject's eyes, creating a jarring and high-impact framing shift.",
+      "example_prompt": "Snap zoom straight into a standing woman's eyes mid-realization against a chaotic, frozen background.",
+      "tags": ["impact", "realization", "shock"]
+    },
+    {
+      "id": "drone-flyover",
+      "number": 27,
+      "name": "Drone Flyover (High Altitude)",
+      "category": "drone",
+      "motion_intensity": "high",
+      "camera": "High-altitude drone flyover, ultra-stable aerial push forward, gliding smoothly above the subject and sweeping across the landscape below.",
+      "example_prompt": "High-altitude drone flyover of a small group walking through expansive rolling hills bathed in soft morning light.",
+      "tags": ["establishing", "scale", "scenic"]
+    },
+    {
+      "id": "epic-drone-reveal",
+      "number": 28,
+      "name": "Epic Drone Reveal (Pedestal + Tilt)",
+      "category": "drone",
+      "motion_intensity": "high",
+      "camera": "Epic drone reveal, starting low behind a mountain ridge, then pedestaling straight up while tilting down to unveil the subject and horizon.",
+      "example_prompt": "Epic drone reveal rising from behind a mountain ridge to expose a lone figure standing at a cliff edge above a massive valley at sunrise.",
+      "tags": ["reveal", "scale", "spectacle"]
+    },
+    {
+      "id": "large-scale-drone-orbit",
+      "number": 29,
+      "name": "Large Scale Drone Orbit",
+      "category": "drone",
+      "motion_intensity": "high",
+      "camera": "Wide-scale drone orbit, a smooth, continuous aerial circle around the subject, maintaining distance to showcase environmental magnitude.",
+      "example_prompt": "Wide drone orbit circling a central structure within a vast natural landscape, emphasizing immense scale.",
+      "tags": ["scale", "establishing", "spectacle"]
+    },
+    {
+      "id": "top-down-gods-eye",
+      "number": 30,
+      "name": "Top-Down (God's Eye View)",
+      "category": "drone",
+      "motion_intensity": "medium",
+      "camera": "TOP-DOWN DRONE SHOT (GOD'S EYE). Camera locked directly overhead at 90 degrees, slowly rotating.",
+      "example_prompt": "Top-down rotating drone shot of a lone figure in a flowing red cloak centered in a circular ancient stone plaza with concentric carvings, soft mist, and shifting light.",
+      "tags": ["stylized", "symmetry", "establishing"]
+    },
+    {
+      "id": "fpv-drone-dive",
+      "number": 31,
+      "name": "FPV Drone Dive (Aggressive)",
+      "category": "drone",
+      "motion_intensity": "high",
+      "camera": "FPV DRONE DIVE. Fast, aggressive plunge down a building's facade toward the subject.",
+      "example_prompt": "Aggressive FPV drone dive racing down tall urban architecture toward a runner reaching the base of the building.",
+      "tags": ["energy", "action", "spectacle"]
+    },
+    {
+      "id": "handheld-documentary",
+      "number": 32,
+      "name": "Handheld (Documentary Style)",
+      "category": "handheld",
+      "motion_intensity": "medium",
+      "camera": "HANDHELD CAMERA with natural micro-jitters, subtle sway, and human 'breathing' drift-intentionally imperfect, never stabilized.",
+      "example_prompt": "Handheld camera follows a person speaking candidly in a real-world interior with uncontrolled, practical lighting.",
+      "tags": ["realism", "intimacy", "documentary"]
+    },
+    {
+      "id": "whip-pan",
+      "number": 33,
+      "name": "Whip Pan",
+      "category": "pan",
+      "motion_intensity": "high",
+      "camera": "WHIP PAN LEFT with aggressive lateral snap and heavy motion blur, masking a rapid transition between focal points.",
+      "example_prompt": "Whip pan left reveals a new subject across two connected spaces fused by streaking motion blur.",
+      "tags": ["transition", "energy", "impact"]
+    },
+    {
+      "id": "dutch-angle",
+      "number": 34,
+      "name": "Dutch Angle (Roll)",
+      "category": "special",
+      "motion_intensity": "low",
+      "camera": "DUTCH ANGLE with a fixed Z-axis roll, tilting the frame so the horizon cuts diagonally through the shot.",
+      "example_prompt": "Rolled camera frames an emotionally imbalanced character inside a tight, claustrophobic interior.",
+      "tags": ["unease", "psychological", "tension"]
+    },
+    {
+      "id": "leading-shot",
+      "number": 35,
+      "name": "Leading Shot (Backward Tracking)",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "Backward tracking leading shot, eye-level, stabilized; the camera retreats smoothly at a matched pace to lock the subject in frame.",
+      "example_prompt": "A determined person strides forward through a long corridor as the camera glides backward, holding constant distance and framing.",
+      "tags": ["movement", "determination", "follow"]
+    },
+    {
+      "id": "following-shot",
+      "number": 36,
+      "name": "Following Shot (Forward Tracking)",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "Forward tracking follow shot, shoulder-height, stabilized; the camera advances behind the subject, matching speed to sustain perspective.",
+      "example_prompt": "A lone figure walks away down a moody forest path as the camera follows closely from behind.",
+      "tags": ["movement", "immersion", "follow"]
+    },
+    {
+      "id": "side-tracking",
+      "number": 37,
+      "name": "Side Tracking (Parallel)",
+      "category": "tracking",
+      "motion_intensity": "medium",
+      "camera": "Side-tracking parallel truck, locked profile, smooth lateral motion matching pace.",
+      "example_prompt": "Side-tracking camera trucks parallel to a realistic female influencer walking briskly left to right on a photorealistic urban street.",
+      "tags": ["movement", "parallax", "follow"]
+    },
+    {
+      "id": "pov-walk",
+      "number": 38,
+      "name": "POV Walk",
+      "category": "handheld",
+      "motion_intensity": "medium",
+      "camera": "First-person POV walk, subtle handheld sway, natural step bob.",
+      "example_prompt": "First-person POV camera advances with gentle walking sway through a lived-in space, the subject implied by hair, hood edge, or shadow in frame.",
+      "tags": ["immersion", "realism", "perspective"]
+    }
+  ]
+}

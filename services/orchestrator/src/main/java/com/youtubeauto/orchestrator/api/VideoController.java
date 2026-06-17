@@ -33,6 +33,9 @@ public class VideoController {
     private final ObjectMapper mapper;
     private final CostEstimator costEstimator;
     private final com.youtubeauto.orchestrator.repository.QcFindingRepository qcFindingRepo;
+    private final com.youtubeauto.orchestrator.service.VeoPromptCompiler veoPromptCompiler;
+    private final com.youtubeauto.orchestrator.client.ImageServiceClient imageServiceClient;
+    private final com.youtubeauto.orchestrator.client.ScriptServiceClient scriptClient;
 
     /** Per-scene QC findings for the job page — shows WHICH scenes the vision-QC
      *  flagged (and from which source: scene-qc, clip-qc, auto-fix, …). */
@@ -64,6 +67,33 @@ public class VideoController {
             try { qa = mapper.readTree(job.getQaBoardJson()); } catch (Exception ignore) {}
         }
         out.put("qaBoard", qa);
+
+        // Story score (front-end #4): the SCRIPT-stage scores so the user sees the
+        // story quality (and WHY) at the script-review gate — before the full QA
+        // board (which adds the vision axes) is computed later in the pipeline.
+        // structure/critic are persisted on the job; the per-axis critic scores
+        // are read best-effort from the script-service.
+        Map<String, Object> storyScore = new HashMap<>();
+        storyScore.put("structureScore", job.getStructureScore());
+        storyScore.put("criticScore", job.getCriticScore());
+        try {
+            if (job.getScriptJobId() != null) {
+                JsonNode sb = scriptClient.get(job.getScriptJobId()).path("script");
+                if (sb != null && !sb.isMissingNode()) {
+                    storyScore.put("comedy", sb.hasNonNull("comedy") ? sb.get("comedy").asInt() : null);
+                    storyScore.put("emotionalImpact",
+                            sb.hasNonNull("emotionalImpact") ? sb.get("emotionalImpact").asInt() : null);
+                    storyScore.put("childPsychology",
+                            sb.hasNonNull("childPsychology") ? sb.get("childPsychology").asInt() : null);
+                    storyScore.put("storyArc", sb.path("storyArc").asText(null));
+                }
+            }
+        } catch (Exception ignore) { /* scores are informative — never block the page */ }
+        out.put("storyScore", storyScore);
+        // Overall QA-board score (0-100) for the per-step score dot on the
+        // pipeline stepper. Null until the QA board has run.
+        out.put("qaBoardScore", job.getQaBoardScore());
+
         try {
             CostEstimator.Result c = costEstimator.estimate(job);
             out.put("cost", Map.of("estimateEur", c.estimateEur(), "capEur", c.capEur()));
@@ -162,7 +192,45 @@ public class VideoController {
                 try { locked.add(Integer.parseInt(part.trim())); } catch (Exception ignore) {}
             }
         }
+        // Composed IMAGE/still prompts per scene (best-effort) for the dashboard
+        // "copy image prompts" button — fetched from the image-service preview
+        // endpoint so the text matches exactly what the active provider feeds its
+        // model. Any failure (service down, parse) just leaves the prompts empty.
+        Map<Integer, String> imagePrompts = new HashMap<>();
+        try {
+            List<Map<String, Object>> previewScenes = new ArrayList<>();
+            for (JsonNode s : mapper.readTree(job.getAssemblyScenesJson())) {
+                String vd = s.path("visualDesc").asText("");
+                if (vd.isBlank()) continue;   // preview requires a non-blank visualDesc
+                List<String> chars = new ArrayList<>();
+                for (JsonNode c : s.path("characters")) {
+                    String cid = c.asText("");
+                    if (!cid.isBlank()) chars.add(cid);
+                }
+                Map<String, Object> ps = new HashMap<>();
+                ps.put("seq", s.path("seq").asInt());
+                ps.put("visualDesc", vd);
+                ps.put("characters", chars);
+                ps.put("locationId", s.path("locationId").asText(""));
+                ps.put("timeOfDay", s.path("timeOfDay").asText(""));
+                ps.put("weather", s.path("weather").asText(""));
+                previewScenes.add(ps);
+            }
+            if (!previewScenes.isEmpty()) {
+                String imgFormat =
+                        com.youtubeauto.orchestrator.service.VideoFormat.parse(job.getFormat()).imageFormat;
+                JsonNode resp = imageServiceClient.previewPrompts(id, previewScenes, imgFormat);
+                if (resp != null) {
+                    for (JsonNode ps : resp.path("scenes")) {
+                        String p = ps.path("prompt").asText("");
+                        if (!p.isBlank()) imagePrompts.put(ps.path("seq").asInt(), p);
+                    }
+                }
+            }
+        } catch (Exception ignore) { /* image-prompt preview is best-effort */ }
+
         List<SceneSummary> out = new ArrayList<>();
+        String prevPhase = null;
         try {
             for (JsonNode s : mapper.readTree(job.getAssemblyScenesJson())) {
                 int seq = s.path("seq").asInt();
@@ -185,9 +253,66 @@ public class VideoController {
                 // Still's last-modified millis → a ?v= cache token so a regenerated
                 // image refreshes in the UI (and only when it actually changed).
                 long imageVersion = stillMtime(id, seq);
+                String qcReject = s.path("qcRejectReason").asText("");
+                boolean hasRejectedClip = !s.path("qcRejectedClipPath").asText("").isBlank();
+                // Full compiled Veo prompt for the "copy all prompts" button —
+                // mirrors PipelineOrchestrator's per-scene compile call (motionDesc
+                // fallback, scene fields, manual/auto camera move). Best-effort:
+                // any problem leaves veoPrompt null and the rest of the row stands.
+                String phase = s.path("phase").asText("");
+                String veoPrompt = null;
+                try {
+                    String motionDesc = s.path("motionDesc").asText("");
+                    String visualDesc = s.path("visualDesc").asText("");
+                    String vd = (!motionDesc.isBlank() && !"null".equals(motionDesc))
+                            ? motionDesc
+                            : (!visualDesc.isBlank() ? visualDesc : narration);
+                    List<String> sceneChars = new ArrayList<>();
+                    for (JsonNode c : s.path("characters")) {
+                        String cid = c.asText("");
+                        if (!cid.isBlank()) sceneChars.add(cid);
+                    }
+                    String type = switch (phase) {
+                        case "hook", "climax" -> "hero";
+                        case "closer"         -> "outro";
+                        default               -> "standard";
+                    };
+                    String cameraMove = s.path("cameraMove").asText("");
+                    boolean firstSetup = "setup".equals(phase) && "hook".equals(prevPhase);
+                    if (cameraMove.isBlank() && "standard".equals(type) && !firstSetup) {
+                        String auto = veoPromptCompiler.autoCameraMove(phase, seq);
+                        if (auto != null) cameraMove = auto;
+                    }
+                    List<java.util.Map<String, Object>> sceneLines = new ArrayList<>();
+                    for (JsonNode l : s.path("lines")) {
+                        String tx = l.path("text").asText("");
+                        if (!tx.isBlank()) {
+                            java.util.Map<String, Object> m = new java.util.HashMap<>();
+                            m.put("speaker", l.path("speaker").asText(""));
+                            m.put("text", tx);
+                            sceneLines.add(m);
+                        }
+                    }
+                    veoPrompt = veoPromptCompiler.compile(
+                            vd, phase, sceneChars,
+                            s.path("locationId").asText(""),
+                            s.path("timeOfDay").asText(""),
+                            s.path("weather").asText(""),
+                            s.path("goal").asText(""),
+                            s.path("emotion").asText(""),
+                            s.path("motionSpeed").asText(""),
+                            cameraMove,
+                            s.path("veoCameraOverride").asText(""),
+                            job.getMood(), sceneLines);
+                } catch (Exception ignore) { /* prompt preview is best-effort */ }
+                prevPhase = phase;
                 out.add(new SceneSummary(
                         seq,
-                        s.path("durationSeconds").asInt(0),
+                        // Fixed-clip-length floor so the dashboard shows the same
+                        // length the assembly renders AND the compiler states in the
+                        // prompt — one shared source (N2), no drifting magic 10s.
+                        Math.max(com.youtubeauto.orchestrator.service.VeoPromptCompiler.CLIP_SECONDS,
+                                s.path("durationSeconds").asInt(0)),
                         s.path("phase").asText(""),
                         narration,
                         !s.path("clipPath").asText("").isBlank(),
@@ -197,7 +322,11 @@ public class VideoController {
                         hasEndStill,
                         hasEndStill ? endStillSeq : -1,
                         imageVersion,
-                        silentBeat));
+                        silentBeat,
+                        hasRejectedClip,
+                        qcReject.isBlank() ? null : qcReject,
+                        veoPrompt,
+                        imagePrompts.get(seq)));
             }
         } catch (Exception e) {
             return List.of();
@@ -268,6 +397,20 @@ public class VideoController {
         return ResponseEntity.created(URI.create("/api/v1/videos/" + r.id())).body(r);
     }
 
+    /** Story-treatment preview (front-end stage #1): synchronous, creates NO job.
+     *  The dashboard shows + lets the user edit the result, then submits the
+     *  episode with the approved treatment folded into the brief. Proxies to the
+     *  script-service so the front-end stays single-origin. */
+    @PostMapping("/treatment")
+    public ResponseEntity<JsonNode> treatment(@RequestBody CreateVideoRequest req) {
+        String audience = (req.audience() != null && !req.audience().isBlank())
+                ? req.audience() : "kids_3_6";
+        int target = req.targetSeconds() != null ? req.targetSeconds() : 180;
+        return ResponseEntity.ok(scriptClient.treatment(
+                req.topic(), audience, target,
+                req.brief(), req.lesson(), req.mood(), req.angle(), req.hook(), null));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<VideoJobResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(orchestrator.get(id));
@@ -301,6 +444,22 @@ public class VideoController {
     public ResponseEntity<VideoJobResponse> reassemble(@PathVariable UUID id) {
         orchestrator.reassemble(id);
         return ResponseEntity.ok(orchestrator.get(id));
+    }
+
+    /**
+     * 📥 Import hand-made scene clips (e.g. produced in Google Flow) into this
+     * job. Looks for {@code bible/afleveringen/{episode}/scene-{seq}.mp4} per
+     * scene, copies each into the job's clip slot and sets its clipPath. The
+     * clip's own audio is ignored — the channel voices are laid over it at
+     * assembly. Manual: press Reassemble afterwards to build the master. No Veo
+     * cost. {@code episode} is optional (defaults to the job's episodeNumber).
+     */
+    @PostMapping("/{id}/import-clips")
+    public ResponseEntity<?> importClips(@PathVariable UUID id,
+                                         @RequestParam(required = false) String episode) {
+        VideoJob job = jobRepo.findById(id).orElse(null);
+        if (job == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(orchestrator.importExternalClips(id, episode));
     }
 
     /**

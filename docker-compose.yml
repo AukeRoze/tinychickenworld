@@ -56,26 +56,8 @@ services:
         condition: service_healthy
     expose: ["8081"]   # internal-only (orchestrator -> script-service:8081); dev-ports override publishes it
 
-  voice-service:
-    build: ./services/voice-service
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8083' || exit 1"]
-      <<: *java-health
-    environment:
-      VOICE_MODE: ${VOICE_MODE:-silent}
-      VOICE_ENABLED: ${VOICE_ENABLED:-true}
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
-      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
-      VOICE_ID_PIP: ${VOICE_ID_PIP:-}
-      VOICE_ID_MO: ${VOICE_ID_MO:-}
-      VOICE_ID_BO: ${VOICE_ID_BO:-}
-      WORK_ROOT: /workdir
-      BIBLE_PATH: /bible/channel.yml
-    volumes:
-      - ./workdir:/workdir
-      - ./bible:/bible:ro
-    expose: ["8083"]   # internal-only (orchestrator -> voice-service:8083)
+  # voice-service REMOVED — voices now come from the Omni clip's own native audio
+  # (ElevenLabs fully decommissioned). See FLOW-IMPORT.md.
 
   image-service:
     build: ./services/image-service
@@ -222,7 +204,6 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
       SCRIPT_URL: http://script-service:8081
-      VOICE_URL: http://voice-service:8083
       IMAGE_URL: http://image-service:8084
       THUMBNAIL_URL: http://thumbnail-service:8086
       ASSEMBLY_URL: http://video-assembly-service:8082
@@ -234,6 +215,14 @@ services:
       INTRO_PATH: /bible/intro.mp4
       OUTRO_PATH: /bible/outro.mp4
       BIBLE_PATH: /bible/channel.yml
+      # Veo kill-switch (te duur / te onbetrouwbaar): false = NOOIT Veo. Scenes
+      # komen van geuploade Flow-clips (import-clips). Zet op true om Veo terug
+      # te zetten.
+      VEO_ENABLED: ${VEO_ENABLED:-false}
+      # Clips-only montage: true = weiger te monteren als een scene geen
+      # geuploade clip heeft (geen Ken Burns-fallback). false = stille
+      # Ken Burns-still voor scenes zonder clip.
+      CLIPS_ONLY: ${CLIPS_ONLY:-true}
       # Review gates — flip to override bible defaults
       REVIEW_AFTER_SCRIPT: ${REVIEW_AFTER_SCRIPT:-true}
       REVIEW_AFTER_ASSETS: ${REVIEW_AFTER_ASSETS:-false}

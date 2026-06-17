@@ -1,0 +1,19 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "39466e5b-e9f5-4660-9d1c-7df05de56ec5",
+                 "topic":  "Who is in the Egg?",
+                 "status":  "FAILED",
+                 "step":  "submitting script",
+                 "error":  "script-service FAILED: Failed to parse script JSON: model returned no scenes (empty/malformed script JSON) â retry the job",
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null,
+                 "facebookVideoId":  null,
+                 "facebookUrl":  null,
+                 "tiktokPublishId":  null,
+                 "instagramMediaId":  null,
+                 "instagramUrl":  null
+             },
+    "executedAt":  "2026-06-16T17:19:44.8307653+02:00"
+}

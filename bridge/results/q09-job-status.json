@@ -1,0 +1,19 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "d005d1c5-1a24-4c71-95ee-a698f9836114",
+                 "topic":  "The chicks chase a floating dandelion seed and turn it into a wish-game",
+                 "status":  "SCRIPT_GENERATING",
+                 "step":  "submitting script",
+                 "error":  null,
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null,
+                 "facebookVideoId":  null,
+                 "facebookUrl":  null,
+                 "tiktokPublishId":  null,
+                 "instagramMediaId":  null,
+                 "instagramUrl":  null
+             },
+    "executedAt":  "2026-06-14T16:19:13.2424271+02:00"
+}

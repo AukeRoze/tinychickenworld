@@ -8,7 +8,6 @@ import com.youtubeauto.orchestrator.client.ScriptServiceClient;
 import com.youtubeauto.orchestrator.client.ThumbnailServiceClient;
 import com.youtubeauto.orchestrator.client.UploadServiceClient;
 import com.youtubeauto.orchestrator.client.VideoGenerationServiceClient;
-import com.youtubeauto.orchestrator.client.VoiceServiceClient;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.domain.JobStatus;
 import com.youtubeauto.orchestrator.domain.VideoJob;
@@ -81,7 +80,7 @@ class PipelineOrchestratorRerenderVisualsTest {
 
         orchestrator = new PipelineOrchestrator(
                 repo,
-                mock(ScriptServiceClient.class), mock(VoiceServiceClient.class),
+                mock(ScriptServiceClient.class),
                 mock(ImageServiceClient.class), mock(VideoGenerationServiceClient.class),
                 mock(AssemblyServiceClient.class), mock(UploadServiceClient.class),
                 mock(ThumbnailServiceClient.class), mock(PropAnchorService.class),

@@ -9,11 +9,30 @@ public record Character(
         /** Series-wide age/stage. Same for all scenes in one video; you edit
          *  the bible to age the cast across episodes. */
         String lifeStage,
+        /** Biological species, bible {@code characters[].species} (e.g. "chicken",
+         *  "duck"). Used to count a mixed cast correctly. May be "". */
+        String species,
+        /** The word used in the roster COUNT, bible {@code characters[].rosterNoun}
+         *  (e.g. "duckling"); falls back to species, then "chicken". May be "". */
+        String rosterNoun,
         /** Canonical iconic identity — the "character DNA" injected into every
          *  prompt so identity is afdwingbaar, not hoped-for. Never null
          *  (BibleLoader supplies an empty Dna when the bible omits it). */
         Dna dna
 ) {
+    /** Back-compat 6-arg form (no species/rosterNoun) → both default to "". */
+    public Character(String id, String name, String description, String triggerWord,
+                     String lifeStage, Dna dna) {
+        this(id, name, description, triggerWord, lifeStage, "", "", dna);
+    }
+
+    /** The display noun for the roster count: rosterNoun, else species, else
+     *  "chicken" — so the duckling never gets counted as a chicken. */
+    public String displayNoun() {
+        if (rosterNoun != null && !rosterNoun.isBlank()) return rosterNoun.trim().toLowerCase();
+        if (species != null && !species.isBlank()) return species.trim().toLowerCase();
+        return "chicken";
+    }
     /**
      * The unmistakable, repeated identity of a character. Lives in the bible
      * (characters[].dna) so it is the single source of truth across image, Veo
@@ -32,9 +51,11 @@ public record Character(
             String build,            // body proportions / shape
             String weight,           // felt weight + how it moves (Veo motion hint)
             String eyeColor,         // iris colour + highlight description
-            String antiAccessory     // accessories this character must NEVER wear (anti-swap)
+            String antiAccessory,    // accessories this character must NEVER wear (anti-swap)
+            String signatureAccessoryShort // short noun for THIS character's own accessory
+                                           // (the accessory-guard rewrite target)
     ) {
-        public static Dna empty() { return new Dna("", "", "", "", "", "", "", "", "", ""); }
+        public static Dna empty() { return new Dna("", "", "", "", "", "", "", "", "", "", ""); }
 
         public boolean hasAccessory() { return notBlank(accessory); }
         public boolean hasSilhouette() { return notBlank(silhouette); }
@@ -45,6 +66,7 @@ public record Character(
         public boolean hasWeight() { return notBlank(weight); }
         public boolean hasEyeColor() { return notBlank(eyeColor); }
         public boolean hasAntiAccessory() { return notBlank(antiAccessory); }
+        public boolean hasSignatureAccessoryShort() { return notBlank(signatureAccessoryShort); }
 
         private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
     }

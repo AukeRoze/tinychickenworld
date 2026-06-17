@@ -2,6 +2,7 @@ package com.youtubeauto.image.api;
 
 import com.youtubeauto.image.api.dto.GenerateImageRequest;
 import com.youtubeauto.image.api.dto.GenerateImageResponse;
+import com.youtubeauto.image.api.dto.PreviewPromptsResponse;
 import com.youtubeauto.image.service.ImageGenerationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,5 +25,12 @@ public class ImageController {
     @PostMapping("/thumbnail")
     public ResponseEntity<GenerateImageResponse> thumbnail(@Valid @RequestBody GenerateImageRequest req) {
         return ResponseEntity.ok(service.generateThumbnail(req));
+    }
+
+    /** Preview-only: the composed image prompt per scene (no generation), for the
+     *  dashboard "copy image prompts" button. */
+    @PostMapping("/preview-prompts")
+    public ResponseEntity<PreviewPromptsResponse> previewPrompts(@Valid @RequestBody GenerateImageRequest req) {
+        return ResponseEntity.ok(service.previewPrompts(req));
     }
 }

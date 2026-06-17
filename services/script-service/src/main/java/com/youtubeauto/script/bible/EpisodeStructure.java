@@ -12,9 +12,13 @@ public record EpisodeStructure(
         List<EpisodePhase> phases,
         int rehookEverySeconds,
         int minScenesTotal,
-        int maxScenesTotal
+        int maxScenesTotal,
+        /** When true the WHOLE episode must play in ONE location (bible
+         *  rules.singleLocation). Drives both the prompt guidance and the
+         *  StructureValidator. Default false keeps the legacy variety rule. */
+        boolean singleLocation
 ) {
     public static EpisodeStructure empty() {
-        return new EpisodeStructure(75, List.of(), 12, 12, 18);
+        return new EpisodeStructure(75, List.of(), 12, 12, 18, false);
     }
 }

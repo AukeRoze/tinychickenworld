@@ -3,12 +3,12 @@ package com.youtubeauto.orchestrator.api;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.service.IntroRebuildService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.http.MediaType;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -61,10 +61,9 @@ public class IntroController {
 
     /** Streams the current intro clip for in-UI preview. */
     @GetMapping(value = "/current.mp4", produces = "video/mp4")
-    public ResponseEntity<Resource> current() {
+    public void current(@RequestHeader HttpHeaders headers, HttpServletResponse response) throws IOException {
         Path p = Paths.get(props.brand().introPath());
-        if (!Files.exists(p)) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok().contentType(MediaType.parseMediaType("video/mp4"))
-                .body(new FileSystemResource(p));
+        if (!Files.exists(p)) { response.sendError(404); return; }
+        VideoStreaming.serve(p, headers, response);
     }
 }

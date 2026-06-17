@@ -47,6 +47,27 @@ public class ComedyValidator {
 
     private static final Set<String> CAST = Set.of("pip", "mo", "bo");
 
+    /** Physical-IMPACT/collision foley (mirror of the orchestrator's
+     *  OnomatopoeiaGuard). A line that is PURELY one of these is routed to the
+     *  SFX layer at compile-time, so it is NOT a spoken comedy beat and must not
+     *  be counted as one (P3: keep the comedy contract aligned with the split). */
+    private static final Set<String> IMPACT_SFX = Set.of(
+            "bonk", "plop", "plonk", "thud", "thunk", "thump", "bump", "splat",
+            "clunk", "clonk", "donk", "whump", "flump", "flop", "oof", "oomph",
+            "smack", "thwack", "crunch");
+
+    /** True when the whole line is impact-onomatopoeia ("Bonk!", "plop plop"). */
+    private static boolean isPureImpact(String text) {
+        if (text == null || text.isBlank()) return false;
+        boolean any = false;
+        for (String t : text.toLowerCase(Locale.ROOT).split("[^a-z]+")) {
+            if (t.isBlank()) continue;
+            any = true;
+            if (!IMPACT_SFX.contains(t)) return false;
+        }
+        return any;
+    }
+
     public record Result(List<String> violations, List<String> warnings) {
         public boolean failed() { return !violations.isEmpty(); }
     }
@@ -58,9 +79,19 @@ public class ComedyValidator {
         if (scenes == null || scenes.isEmpty()) return new Result(violations, warnings);
 
         // ---- 1. Sound-effect beats: at least TWO across the dialogue. ----
+        // A line that is PURELY impact onomatopoeia ("Bonk!") is moved to the SFX
+        // layer at compile-time (OnomatopoeiaGuard), so it is no longer a SPOKEN
+        // beat — don't count it here, and nudge the writer toward a vocalised
+        // exclamation that survives as speech (P3).
         int soundBeats = 0;
         for (GeneratedScript.Scene s : scenes) {
             for (GeneratedScript.Line l : lines(s)) {
+                if (isPureImpact(l.text())) {
+                    warnings.add("\"" + l.text().trim() + "\" is impact foley, not speech — it will be "
+                            + "moved to the SFX layer; use a vocalised exclamation (\"Whoosh!\", "
+                            + "\"Wheee!\", \"Boing!\") for a SPOKEN sound beat");
+                    continue;
+                }
                 for (String tok : tokens(l.text())) {
                     if (SOUND_WORDS.contains(tok) || STRETCHED.matcher(tok).matches()) soundBeats++;
                 }
@@ -68,8 +99,9 @@ public class ComedyValidator {
         }
         if (soundBeats < 2) {
             violations.add(String.format(
-                    "Only %d sound-effect beat(s) in dialogue — the brand voice requires at least TWO "
-                    + "(e.g. \"Whoosh!\", \"Plop!\", \"Bonk!\" spoken as dialogue)", soundBeats));
+                    "Only %d SPOKEN sound-effect beat(s) in dialogue — the brand voice requires at least TWO "
+                    + "vocalised exclamations (e.g. \"Whoosh!\", \"Wheee!\", \"Boing!\"); a pure impact "
+                    + "sound like \"Bonk!\" does not count (it becomes foley)", soundBeats));
         }
 
         // ---- 2. Mo's running gag: exactly one calm everyday comparison. ----

@@ -1,0 +1,11 @@
+﻿{
+    "status":  500,
+    "body":  {
+                 "type":  "about:blank",
+                 "title":  "Internal Server Error",
+                 "status":  500,
+                 "detail":  "HttpMessageNotReadableException: JSON parse error: Invalid UTF-8 middle byte 0x3f",
+                 "instance":  "/api/v1/videos"
+             },
+    "executedAt":  "2026-06-16T17:11:47.7888576+02:00"
+}

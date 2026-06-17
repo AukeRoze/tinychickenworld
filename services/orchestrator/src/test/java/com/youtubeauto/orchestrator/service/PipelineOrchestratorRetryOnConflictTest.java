@@ -36,13 +36,13 @@ class PipelineOrchestratorRetryOnConflictTest {
     @BeforeEach
     void setUp() {
         repo = mock(VideoJobRepository.class);
-        // Constructor order = the 25 final fields of PipelineOrchestrator in
+        // Constructor order = the 24 final fields of PipelineOrchestrator in
         // declaration order (see PipelineOrchestratorStateMachineTest); only
         // the repository is needed here.
         orch = new PipelineOrchestrator(
                 repo, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null);
         jobId = UUID.randomUUID();
     }
 

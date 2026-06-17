@@ -49,14 +49,40 @@ public class AssemblyService {
     private static final Set<String> SCORE_PHASES = Set.of(
             "hook", "setup", "development", "climax", "resolution", "closer");
 
+    /**
+     * Seconds the FIRST scene's voice is held back when a branded intro is
+     * attached, so the chick speaks only AFTER the intro→episode dissolve has
+     * resolved and she is fully in frame (feedback 2026-06-13). Must stay ≥ the
+     * intro dissolve in {@link Concatenator#concatHeterogeneous}
+     * (DISSOLVE_INTRO = 2.0s) plus a small settle margin. SceneClipBuilder
+     * clamps this against the scene length, and shifting the voice does NOT
+     * change any clip duration, so caption timing / A/V sync are untouched.
+     * Verhoogd 1.8→2.0s mee met de langere 2.0s intro-dissolve (feedback 2026-06-14).
+     */
+    private static final double FIRST_SCENE_VOICE_LEAD_IN = 2.0;
+
+    /**
+     * Lead-in voor ELKE NIET-eerste scène (gebruikersfeedback 2026-06-14: "de hele
+     * zin komt te vroeg"). De stem startte op frame 0 van de scèneclip, dus de
+     * gesproken regel kwam vóór de kip goed in beweging/beeld was. We schuiven elke
+     * regel een halve beat op zodat hij landt nadat de scène is begonnen. Verandert
+     * geen clipduur (adelay binnen de scène) — alleen het instapmoment van de stem.
+     * Tunebaar; verhoog/verlaag als het nog te vroeg/laat voelt.
+     */
+    private static final double DEFAULT_VOICE_LEAD_IN = 0.5;
+
     public AssemblyResult assemble(AssemblyRequest req) {
         Workspace ws = workspaces.create(req.jobId());
         int w = req.width()  != null && req.width()  > 0 ? req.width()  : props.output().width();
         int h = req.height() != null && req.height() > 0 ? req.height() : props.output().height();
         log.info("Assembling job={} canvas={}x{} in {}", req.jobId(), w, h, ws.root());
 
-        // Step 2 — scene clips in parallel
-        List<Path> clips = buildSceneClipsParallel(req.scenes(), ws, w, h);
+        // Step 2 — scene clips in parallel. When a branded intro is attached, the
+        // FIRST scene's voice is shifted a beat later so it lands AFTER the
+        // intro→episode dissolve (feedback 2026-06-13: "stemgeluid begint voordat
+        // de eerste kip echt in beeld is"). 0 when there's no intro.
+        double firstSceneVoiceLeadIn = existing(req.introPath()) ? FIRST_SCENE_VOICE_LEAD_IN : 0.0;
+        List<Path> clips = buildSceneClipsParallel(req.scenes(), ws, w, h, firstSceneVoiceLeadIn);
 
         // Step 3 — concat scenes (with title card opener + end-card + logo + color grade).
         // Per-scene phases (aligned to clip order = scenes sorted by seq) drive
@@ -312,7 +338,7 @@ public class AssemblyService {
     }
 
     private List<Path> buildSceneClipsParallel(List<SceneInput> scenes, Workspace ws,
-                                               int w, int h) {
+                                               int w, int h, double firstSceneVoiceLeadIn) {
         int parallelism = Math.max(1, props.ffmpeg().sceneParallelism());
         ExecutorService pool = Executors.newFixedThreadPool(parallelism);
         MotionSelector.MotionPicker picker = motionSelector.startVideo();
@@ -324,9 +350,13 @@ public class AssemblyService {
                     boolean isHook = "hook".equalsIgnoreCase(s.phase()) || s.seq() == 1;
                     motionBySeq.put(s.seq(), isHook ? MotionPreset.ZOOM_IN : picker.next());
                 });
+        // The voice lead-in applies ONLY to the very first clip (lowest seq) —
+        // that's the scene the intro dissolves into.
+        int firstSeq = scenes.stream().mapToInt(SceneInput::seq).min().orElse(Integer.MIN_VALUE);
         try {
             List<Callable<Path>> tasks = scenes.stream().sorted(Comparator.comparingInt(SceneInput::seq))
                     .<Callable<Path>>map(scene -> () -> {
+                        double leadIn = scene.seq() == firstSeq ? firstSceneVoiceLeadIn : DEFAULT_VOICE_LEAD_IN;
                         boolean hasClip = scene.clipPath() != null
                                 && !scene.clipPath().isBlank()
                                 && Files.exists(Paths.get(scene.clipPath()));
@@ -334,10 +364,10 @@ public class AssemblyService {
                             log.info("scene seq={} using pre-rendered Veo clip {}",
                                     scene.seq(), scene.clipPath());
                             return sceneBuilder.buildFromClip(scene, w, h,
-                                    ws.root(), ws.sceneClip(scene.seq()));
+                                    ws.root(), ws.sceneClip(scene.seq()), leadIn);
                         }
                         return sceneBuilder.build(scene, motionBySeq.get(scene.seq()),
-                                w, h, ws.root(), ws.sceneClip(scene.seq()));
+                                w, h, ws.root(), ws.sceneClip(scene.seq()), leadIn);
                     })
                     .toList();
             List<Future<Path>> futures = pool.invokeAll(tasks);

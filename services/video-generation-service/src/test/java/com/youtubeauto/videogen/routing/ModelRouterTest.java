@@ -87,7 +87,9 @@ class ModelRouterTest {
 
         assertEquals("veo-3.1-generate-preview",
                 router.pick(SceneType.HERO, 8, false).modelId());
-        assertEquals("veo-3.1-lite-generate-preview",
+        // veo3_1_lite alias now resolves to GA Fast: the Lite preview id 404s in
+        // production, so the alias is remapped to veo-3.1-fast-generate-001.
+        assertEquals("veo-3.1-fast-generate-001",
                 router.pick(SceneType.STANDARD, 8, false).modelId());  // no standard route → defaultModel alias
         assertEquals("veo-3.0-fast-generate-001",
                 router.fallback(8).modelId());

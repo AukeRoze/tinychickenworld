@@ -1,0 +1,11 @@
+﻿{
+    "status":  404,
+    "body":  {
+                 "type":  "about:blank",
+                 "title":  "Not Found",
+                 "status":  404,
+                 "detail":  "Not found: api/v1/system/veo-flags",
+                 "instance":  "/api/v1/system/veo-flags"
+             },
+    "executedAt":  "2026-06-14T10:35:41.4867915+02:00"
+}

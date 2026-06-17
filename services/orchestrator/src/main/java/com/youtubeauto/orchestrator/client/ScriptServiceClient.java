@@ -65,4 +65,27 @@ public class ScriptServiceClient {
                         .retrieve().bodyToMono(JsonNode.class),
                 java.time.Duration.ofSeconds(30), "script-service get");
     }
+
+    /** Story-treatment preview (front-end stage #1) — synchronous, creates no
+     *  job. Idempotent: a re-fire just recomputes a (cheap) treatment. */
+    public JsonNode treatment(String topic, String audience, int targetSeconds,
+                              String brief, String lesson, String mood, String angle,
+                              String hook, Integer numScenes) {
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("topic", topic);
+        body.put("audience", audience);
+        body.put("targetSeconds", targetSeconds);
+        if (numScenes != null) body.put("numScenes", numScenes);
+        if (brief  != null && !brief.isBlank())  body.put("brief",  brief);
+        if (lesson != null && !lesson.isBlank()) body.put("lesson", lesson);
+        if (mood   != null && !mood.isBlank())   body.put("mood",   mood);
+        if (angle  != null && !angle.isBlank())  body.put("angle",  angle);
+        if (hook   != null && !hook.isBlank())   body.put("hook",   hook);
+        return Resilience.idempotent(
+                client.post()
+                        .uri("/api/v1/scripts/treatment")
+                        .bodyValue(body)
+                        .retrieve().bodyToMono(JsonNode.class),
+                java.time.Duration.ofSeconds(90), "script-service treatment");
+    }
 }

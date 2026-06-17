@@ -1,0 +1,10 @@
+# Negative constraints — one rule per line. Lines starting with # are ignored.
+# These are appended to every AI Video Prompt's "Negative Constraints" section.
+# The cast-size anti-duplication rule ("no extra chickens / no Nth chicken") is
+# always added automatically and is NOT listed here.
+# Editable from the Brand page (no rebuild needed — Save + bible reload).
+No morphing, no flicker, no accessory swaps, no gaping mouths
+No Dutch or non-English speech
+No on-screen text, signs, banners or watermarks
+Keep every character's identity, colours, proportions and signature accessories (straw hat, bandana, scarf, eyeglasses) perfectly stable across all frames
+Pip's straw hat must never come off

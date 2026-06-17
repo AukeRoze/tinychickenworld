@@ -1,0 +1,14 @@
+{
+  "method": "POST",
+  "path": "/api/v1/videos",
+  "body": {
+    "topic": "Who is in the Egg?",
+    "brief": "Pip discovers a mysterious smooth egg at the foot of the Big Oak Tree. The trio wonder whose egg it is and decide to keep it warm. The key moment is the egg finally hatching into a little duckling. All dialogue is spoken in clear English.",
+    "lesson": "With patience and teamwork, you can care for something until it is ready.",
+    "mood": "wonder, gentle, warm",
+    "angle": "Pip the curious discoverer; Mo the calm explainer; Bo the comic relief",
+    "motionMode": "veo",
+    "targetSeconds": 180,
+    "seriesId": "little-discoveries"
+  }
+}

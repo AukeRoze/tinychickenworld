@@ -1,0 +1,30 @@
+DIRECTOR'S BRIEF & ENVIRONMENT
+- Visual Style: High-end 3D Pixar-style animation, vibrant color palette, beautiful bokeh background with shallow depth of field.
+- Camera Setup: Medium shot with ample open space in the top half of the frame.
+- Shot Type: Single, unbroken continuous shot within a single scene. Absolutely no camera cuts or scene changes.
+- Aspect ratio / quality: 16:9 landscape, 1080p, 24fps, fluid animation.
+- Setting: "The Blooming Wonderland" - a bright, warm golden-hour meadow with soft rolling green hills, a friendly red barn, a windmill, scattered sunflowers, and a glowing low sun.
+
+CHARACTER ROSTER (STRICT LIMIT: EXACTLY 3 CHICKENS)
+From the first frame to the last frame, exactly three unique cartoon chickens stand fully visible in the lower center. They are anchored in their starting positions and never swap places, disappear, or walk out of frame.
+1. Pip (Left Position): The smallest, a round cream-white chick wearing a permanent straw hat and a red neck bandana.
+2. Mo (Middle Position): The largest, a broad blue-grey chick wearing a red knitted neck scarf.
+3. Bo (Right Position): The thinnest, a slim tan chick wearing round thin-framed glasses and a green neck scarf.
+
+CHRONOLOGICAL ACTION & CAMERA MOVEMENT
+The video follows a strict, sequential timeline driven by a smooth camera tracking motion. All dialogue is spoken aloud in clear, natural, child-friendly ENGLISH with accurate lip-sync - ONLY the talking chick's beak moves while the other two keep their beaks closed:
+- [0:00 - 0:02] Pip's Introduction: The camera subtly centers on Pip. She waves her wing, does a quick double-wink with her right eye, and says out loud: "Hi! I'm Pip!" Mo and Bo stay still with closed beaks.
+- [0:02 - 0:04] Mo's Introduction: The camera smoothly glides to Mo. He nods warmly, uses a wing-tip to gently tug his red scarf, and says out loud: "I'm Mo!" Pip and Bo keep their beaks closed.
+- [0:04 - 0:06] Bo's Introduction: The camera glides to Bo. She does a cheerful little bob, pushes her glasses up her beak with a wing-tip, and says out loud: "And I'm Bo!" Pip and Mo keep their beaks closed.
+- [0:06 - 0:08] Group Welcome: The camera gently pans back and pulls out into a perfectly centered, wide medium shot of all three. Together in perfect unison, they joyfully flap their wings once and say together: "Welcome to Tiny Chicken World!"
+- [0:08 - End] Final Freeze: Immediately after the group welcome, all three chickens settle. They sit perfectly still, looking directly at the camera with warm smiles and their beaks firmly CLOSED. Their blinking completely freezes; all three keep their eyes wide open, bright, and smiling until the very final frame.
+
+AUDIO (generate natively and perfectly in sync)
+- Speech: the chicks SPEAK their lines out loud in clear, natural, cheerful, child-friendly ENGLISH with accurate lip-sync. Only the chick whose turn it is moves its beak; the other two keep their beaks closed. Every spoken word is ENGLISH, never Dutch or any other language. No singing.
+- Ambient: a soft, warm meadow ambience - a gentle breeze, faint distant birdsong, the soft creak of the windmill.
+- Sound effects: a light, soft wing-flap whoosh on the unison flap; subtle feathery rustles on each wave and bob.
+- No background music (the music track is added later in post for consistency). No narration. No on-screen text or captions.
+
+ENVIRONMENTAL MOTION & RESTRICTIONS
+- Background Motion: Minimal and calm. A soft breeze, a few drifting flower petals, and two butterflies fluttering far in the distance.
+- Negative Constraints: No text, no signs, no banners, no watermarks. No character duplication, no extra chickens, no morphing, no gaping mouths, no Dutch or non-English speech, and no mid-blink/half-closed eyes in the final frame. Pip's hat must never fall off.

@@ -45,7 +45,7 @@ class StructureValidatorTest {
     private static EpisodeStructure structure() {
         return new EpisodeStructure(120, List.of(
                 phase("hook"), phase("development"), phase("climax"), phase("closer")),
-                12, 1, 99);
+                12, 1, 99, false);
     }
 
     private static EpisodePhase phase(String id) {

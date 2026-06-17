@@ -1,0 +1,5 @@
+{
+  "method": "POST",
+  "service": "orchestrator",
+  "path": "/api/v1/brand/bible/reload"
+}

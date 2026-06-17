@@ -1,0 +1,12 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "orchestrator":  true,
+                 "script-service":  true,
+                 "voice-service":  true,
+                 "image-service":  true,
+                 "thumbnail-service":  true,
+                 "video-generation-service":  true
+             },
+    "executedAt":  "2026-06-14T14:54:43.8136338+02:00"
+}

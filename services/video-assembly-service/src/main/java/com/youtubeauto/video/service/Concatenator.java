@@ -1021,8 +1021,19 @@ public class Concatenator {
             boolean thinBars = cx <= fullW * 0.08 && cy <= fullH * 0.08
                     && cw >= fullW * 0.84 && ch >= fullH * 0.84;
             if (!thinBars) return null;                     // dark scene, not bars
-            log.warn("Input {} carries baked-in black bars — stripping crop={}:{}:{}:{}",
-                    clip.getFileName(), cw, ch, cx, cy);
+            // OVERSCAN GUARD (feedback 2026-06-13: "klein randje links/rechts"):
+            // cropdetect with limit=24 + round=2 is conservative — it stops a
+            // pixel or two INSIDE the bar, so a faint dark sliver survives the
+            // crop and then gets scaled into the sharp foreground. Shave a few
+            // extra px off every edge so the residue is gone for good. We only
+            // ever bite into ~2px of real content, invisible after the
+            // blur-fill+scale, and we never let the crop collapse.
+            final int OVERSCAN = 4;     // px to trim off EACH cropped edge
+            if (cx > 0 && cw > 2 * OVERSCAN) { cx += OVERSCAN; cw -= 2 * OVERSCAN; }
+            if (cy > 0 && ch > 2 * OVERSCAN) { cy += OVERSCAN; ch -= 2 * OVERSCAN; }
+            log.warn("Input {} carries baked-in black bars — stripping crop={}:{}:{}:{} "
+                    + "(incl. {}px overscan per cropped edge)",
+                    clip.getFileName(), cw, ch, cx, cy, OVERSCAN);
             return cw + ":" + ch + ":" + cx + ":" + cy;
         } catch (Exception e) {
             log.debug("cropdetect on {} failed ({}) — skipping bar strip",
@@ -1100,7 +1111,15 @@ public class Concatenator {
         // other boundary snappy. Offsets are cumulative — each xfade overlaps
         // the prior tail — and clamped to half the shorter clip so very short
         // clips can't error out. Mirrors the per-scene chain in concat().
-        final double DISSOLVE_INTRO = 1.1;   // intro → episode
+        // intro → episode: bewust TRAAG (gevoelde, dromerige hand-off het verhaal
+        // in). Verlengd 1.1 -> 1.6 -> 2.0s (feedback 2026-06-14: "te lang gebeurt
+        // er niks na de intro — film mag langzaam uitfaden EN eerder vanuit de
+        // intro beginnen, ~2s"). Een langere dissolve laat de film visueel eerder
+        // starten (hij speelt al onder de uitfadende intro), dus minder dode tijd.
+        // De intro heeft genoeg staart: de voice-tail-marge in IntroBuilder is mee
+        // verhoogd naar 2.2s, dus de laatste gesproken regel eindigt vóór deze
+        // dissolve begint. (Cap blijft = halve kortste clip.)
+        final double DISSOLVE_INTRO = 2.0;   // intro → episode (was 1.6)
         final double DISSOLVE_OUTRO = 0.8;   // episode → outro
         final double DISSOLVE_OTHER = 0.5;
         String prevV = "v0", prevA = "a0";
@@ -1120,10 +1139,13 @@ public class Concatenator {
              .append('[').append(outV).append("];");
             // Audio: same crossfade length as the video (keeps A/V durations in
             // lock-step) but with an EXPONENTIAL fade-in curve on the incoming
-            // side — the long 1.1s intro dissolve otherwise pulled the
+            // side — the long 1.6s intro dissolve otherwise pulled the
             // episode's first spoken line audibly under the intro. With c2=exp
             // the incoming audio stays near-silent until the visual blend is
-            // almost done, then arrives with the cut.
+            // almost done, then arrives with the cut. Belt-and-braces: the FIRST
+            // scene's voice is ALSO shifted ~1.8s later in SceneClipBuilder
+            // (AssemblyService.FIRST_SCENE_VOICE_LEAD_IN), so even this curve's
+            // residual can't speak before the chick is fully in frame.
             f.append('[').append(prevA).append("][a").append(i).append(']')
              .append("acrossfade=d=").append(String.format(java.util.Locale.ROOT, "%.3f", d))
              .append(":c1=tri:c2=exp")

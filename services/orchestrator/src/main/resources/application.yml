@@ -86,6 +86,14 @@ app:
     targetSeconds: ${TARGET_SECONDS:180}   # ~3 min default (landscape). Override per job or via env.
     burnSubtitles: ${BURN_SUBTITLES:false}   # OFF by default — clean image. Opt in per request when wanted.
     motionMode: ${MOTION_MODE_DEFAULT:ken_burns}   # ken_burns (default) | veo
+  autofix:
+    # Cost guard. Each Auto-Fix reroll re-renders a Veo clip (paid, ~€0.50/s),
+    # so this caps how many clips ONE Auto-Fix run may re-spend, regardless of
+    # how many scenes score below target. Lowered 8 → 3 at Auke's request
+    # ("never re-generate Veo lightly"). The other Auto-Fix knobs keep their
+    # @Value defaults (max-iterations 3, default-target 90, axis-threshold 70).
+    # Auto-Fix is still user-triggered only; this just bounds the manual run.
+    max-rerolls: ${AUTOFIX_MAX_REROLLS:3}
   brand:
     introPath: ${INTRO_PATH:/bible/intro.mp4}
     outroPath: ${OUTRO_PATH:/bible/outro.mp4}
@@ -122,4 +130,6 @@ pipeline:
   thumbnail-gate:
     enabled: ${THUMBNAIL_GATE_ENABLED:true}
   distribution-gate:
-    enabled: ${DISTRIBUTION_GATE_ENABLED:true}
+    # Auto-doorgaan na de upload (Auke 17 jun) — geen handmatige distributie-poort.
+    # Zet DISTRIBUTION_GATE_ENABLED=true terug voor de handmatige stap.
+    enabled: ${DISTRIBUTION_GATE_ENABLED:false}

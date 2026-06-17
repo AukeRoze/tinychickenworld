@@ -1,0 +1,19 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "id":  "e2ec9448-2e63-45bb-8801-794d5d299723",
+                 "topic":  "Who\u0027s in the Egg? A mysterious egg appears in the vegetable garden - and it WOBBLES",
+                 "status":  "ASSEMBLING",
+                 "step":  "ffmpeg assembly",
+                 "error":  null,
+                 "videoPath":  "/workdir/e2ec9448-2e63-45bb-8801-794d5d299723/out/final.mp4",
+                 "youtubeVideoId":  "FKBQ6br-RfM",
+                 "youtubeUrl":  "https://www.youtube.com/watch?v=FKBQ6br-RfM",
+                 "facebookVideoId":  null,
+                 "facebookUrl":  null,
+                 "tiktokPublishId":  null,
+                 "instagramMediaId":  null,
+                 "instagramUrl":  null
+             },
+    "executedAt":  "2026-06-14T13:09:35.7411082+02:00"
+}

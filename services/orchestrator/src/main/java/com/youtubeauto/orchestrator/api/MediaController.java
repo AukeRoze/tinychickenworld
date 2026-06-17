@@ -4,13 +4,14 @@ import com.youtubeauto.orchestrator.domain.VideoJob;
 import com.youtubeauto.orchestrator.repository.VideoJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -35,12 +36,17 @@ public class MediaController {
     private final VideoJobRepository jobRepo;
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
 
-    /** A scene's raw Veo clip for inline preview on the job page — WITHOUT
-     *  voice/music (those join at assembly). Resolves the clipPath the
-     *  orchestrator stored on the assembly scene; falls back to the
-     *  video-generation-service disk convention. 404 = Ken Burns scene. */
+    /** A scene's raw video clip for preview on the job page — WITHOUT voice/music
+     *  (those join at assembly). ORIGIN-INDEPENDENT: serves whatever clip the
+     *  scene points at, whether it was imported from Google Flow or rendered by
+     *  Veo. Resolves the clipPath the orchestrator stored on the assembly scene;
+     *  falls back to the per-scene disk convention
+     *  ({@code /workdir/jobs/<id>/scenes/<seq>/clip.mp4} — the same path
+     *  import-clips writes to). 404 = scene has no clip (Ken Burns still). */
     @GetMapping("/dashboard/{id}/scene/{seq}/clip.mp4")
-    public ResponseEntity<Resource> sceneClip(@PathVariable UUID id, @PathVariable int seq) {
+    public void sceneClip(@PathVariable UUID id, @PathVariable int seq,
+                          @RequestHeader HttpHeaders headers,
+                          HttpServletResponse response) throws IOException {
         Path p = null;
         VideoJob job = jobRepo.findById(id).orElse(null);
         if (job != null && job.getAssemblyScenesJson() != null && !job.getAssemblyScenesJson().isBlank()) {
@@ -67,8 +73,44 @@ public class MediaController {
         if (p == null || !Files.exists(p)) {
             p = Paths.get("/workdir", "jobs", id.toString(), "scenes", String.valueOf(seq), "clip.mp4");
         }
-        if (!Files.exists(p)) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok().contentType(MediaType.valueOf("video/mp4")).body(new FileSystemResource(p));
+        if (!Files.exists(p)) { response.sendError(404); return; }
+        VideoStreaming.serve(p, headers, response);
+    }
+
+    /** A scene's Veo clip die door de clip-QC werd AFGEKEURD, bewaard als
+     *  clip.rejected.mp4 naast de scène. Laat de gebruiker oordelen of de QC
+     *  terecht afkeurde (en eventueel via de override toch gebruiken). Resolves
+     *  qcRejectedClipPath van de assembly-scène; valt terug op de
+     *  disk-conventie. 404 = geen afgekeurde clip bewaard. Zelfde
+     *  /workdir-padveiligheid als {@link #sceneClip}. */
+    @GetMapping("/dashboard/{id}/scene/{seq}/rejected-clip.mp4")
+    public void sceneRejectedClip(@PathVariable UUID id, @PathVariable int seq,
+                                  @RequestHeader HttpHeaders headers,
+                                  HttpServletResponse response) throws IOException {
+        Path p = null;
+        VideoJob job = jobRepo.findById(id).orElse(null);
+        if (job != null && job.getAssemblyScenesJson() != null && !job.getAssemblyScenesJson().isBlank()) {
+            try {
+                for (com.fasterxml.jackson.databind.JsonNode s : mapper.readTree(job.getAssemblyScenesJson())) {
+                    if (s.path("seq").asInt() == seq) {
+                        String cp = s.path("qcRejectedClipPath").asText("");
+                        if (!cp.isBlank()) {
+                            Path candidate = Paths.get(cp).normalize();
+                            if (candidate.startsWith(Paths.get("/workdir"))) p = candidate;
+                        }
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("sceneRejectedClip {}/{}: assemblyScenes JSON unreadable ({}) — using convention path",
+                        id, seq, e.getMessage());
+            }
+        }
+        if (p == null || !Files.exists(p)) {
+            p = Paths.get("/workdir", "jobs", id.toString(), "scenes", String.valueOf(seq), "clip.rejected.mp4");
+        }
+        if (!Files.exists(p)) { response.sendError(404); return; }
+        VideoStreaming.serve(p, headers, response);
     }
 
     /** A scene's generated still — workdir/{id}/images/scene_NN.png. */
@@ -112,22 +154,24 @@ public class MediaController {
 
     /** The assembled master MP4 for inline playback. */
     @GetMapping("/dashboard/{id}/master.mp4")
-    public ResponseEntity<Resource> masterVideo(@PathVariable UUID id) {
+    public void masterVideo(@PathVariable UUID id, @RequestHeader HttpHeaders headers,
+                            HttpServletResponse response) throws IOException {
         VideoJob job = jobRepo.findById(id).orElse(null);
-        if (job == null || job.getVideoPath() == null) return ResponseEntity.notFound().build();
+        if (job == null || job.getVideoPath() == null) { response.sendError(404); return; }
         Path p = Paths.get(job.getVideoPath());
-        if (!Files.exists(p)) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok().contentType(MediaType.valueOf("video/mp4")).body(new FileSystemResource(p));
+        if (!Files.exists(p)) { response.sendError(404); return; }
+        VideoStreaming.serve(p, headers, response);
     }
 
     /** The auto-derived vertical Short for inline playback / download. */
     @GetMapping("/dashboard/{id}/short.mp4")
-    public ResponseEntity<Resource> shortVideo(@PathVariable UUID id) {
+    public void shortVideo(@PathVariable UUID id, @RequestHeader HttpHeaders headers,
+                           HttpServletResponse response) throws IOException {
         VideoJob job = jobRepo.findById(id).orElse(null);
-        if (job == null || job.getShortPath() == null) return ResponseEntity.notFound().build();
+        if (job == null || job.getShortPath() == null) { response.sendError(404); return; }
         Path p = Paths.get(job.getShortPath());
-        if (!Files.exists(p)) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok().contentType(MediaType.valueOf("video/mp4")).body(new FileSystemResource(p));
+        if (!Files.exists(p)) { response.sendError(404); return; }
+        VideoStreaming.serve(p, headers, response);
     }
 
     /** Root → the new UI (the classic dashboard at "/" is gone). */

@@ -1,0 +1,19 @@
+﻿{
+    "status":  201,
+    "body":  {
+                 "id":  "39466e5b-e9f5-4660-9d1c-7df05de56ec5",
+                 "topic":  "Who is in the Egg?",
+                 "status":  "PENDING",
+                 "step":  null,
+                 "error":  null,
+                 "videoPath":  null,
+                 "youtubeVideoId":  null,
+                 "youtubeUrl":  null,
+                 "facebookVideoId":  null,
+                 "facebookUrl":  null,
+                 "tiktokPublishId":  null,
+                 "instagramMediaId":  null,
+                 "instagramUrl":  null
+             },
+    "executedAt":  "2026-06-16T17:12:36.1643589+02:00"
+}

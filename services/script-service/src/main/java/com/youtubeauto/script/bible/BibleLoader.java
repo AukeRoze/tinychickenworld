@@ -116,6 +116,7 @@ public class BibleLoader {
         int rehook = node.path("rules").path("rehookEverySeconds").asInt(12);
         int minScenes = node.path("rules").path("minScenesTotal").asInt(12);
         int maxScenes = node.path("rules").path("maxScenesTotal").asInt(18);
+        boolean singleLocation = node.path("rules").path("singleLocation").asBoolean(false);
         List<EpisodePhase> phases = new ArrayList<>();
         for (JsonNode p : node.path("phases")) {
             List<String> reqs = new ArrayList<>();
@@ -130,6 +131,6 @@ public class BibleLoader {
                     reqs
             ));
         }
-        return new EpisodeStructure(total, phases, rehook, minScenes, maxScenes);
+        return new EpisodeStructure(total, phases, rehook, minScenes, maxScenes, singleLocation);
     }
 }

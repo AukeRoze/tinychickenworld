@@ -78,14 +78,17 @@ public class ModelRouter {
         return 8;
     }
 
-    /** The cheapest real-motion route (Veo Lite, 720p). Used by the cost-cap
-     *  downshift: a moving lite clip (€0.05/s) beats a frozen Ken Burns still
-     *  every time — the still/motion mix was the most visible AI-tell in the
-     *  ep-2 audit. */
+    /** The cheapest real-motion route (Veo Fast, 720p). Used by the cost-cap
+     *  downshift: a moving clip beats a frozen Ken Burns still every time — the
+     *  still/motion mix was the most visible AI-tell in the ep-2 audit.
+     *  NOTE: this was previously the Lite tier (veo-3.1-lite-generate-preview),
+     *  but that preview id 404s in production ("Publisher Model ... was not found
+     *  or your project does not have access to it"). Veo 3.1 Fast is GA and
+     *  verified working, so the cheapest tier now routes to Fast (€0.10/s). */
     public ModelRoute cheapest(int requestedDuration) {
         int dur = snapDuration("veo",
                 Math.min(requestedDuration, bible.getVideoGen().veo().maxClipSeconds()));
-        return new ModelRoute("veo-3.1-lite-generate-preview", "720p", dur);
+        return new ModelRoute("veo-3.1-fast-generate-001", "720p", dur);
     }
 
     public ModelRoute fallback(int requestedDuration) {
@@ -109,16 +112,20 @@ public class ModelRouter {
      * Maps friendly bible aliases to the OFFICIAL Vertex AI model ids.
      *   veo3_1_fast → veo-3.1-fast-generate-001       (GA workhorse, 720p)
      *   veo3_1      → veo-3.1-generate-001            (GA premium, 1080p)
-     *   veo3_1_lite → veo-3.1-lite-generate-preview   (preview; cheapest, 720p)
-     *   veo3        → veo-3.0-fast-generate-001       (legacy GA — retired ~2026-06-30)
+     *   veo3_1_lite → veo-3.1-fast-generate-001        (Lite preview 404s in this
+     *                                                    project; remapped to GA Fast)
+     *   veo3        → veo-3.0-fast-generate-001        (legacy GA — retired ~2026-06-30)
      * Veo 3.1 Fast/Standard are now GA ("-001", no allowlist); they replace the
-     * Veo 3.0 endpoints, which are being deprecated. Lite is still preview.
+     * Veo 3.0 endpoints, which are being deprecated. The Lite preview model
+     * (veo-3.1-lite-generate-preview) is NOT accessible in this GCP project — it
+     * returns a 404 "Publisher Model ... was not found", so the veo3_1_lite alias
+     * resolves to GA Fast instead to keep real-motion clips working.
      */
     private String normaliseModelId(String raw) {
         if (raw == null) return "veo-3.1-fast-generate-001";
         String s = raw.trim();
         return switch (s) {
-            case "veo3_1_lite"        -> "veo-3.1-lite-generate-preview";
+            case "veo3_1_lite"        -> "veo-3.1-fast-generate-001";  // Lite preview 404s; route to GA Fast
             case "veo3_1_fast"        -> "veo-3.1-fast-generate-001";
             case "veo3_1"             -> "veo-3.1-generate-001";
             case "veo3", "veo3_fast"  -> "veo-3.0-fast-generate-001";

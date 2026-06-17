@@ -44,6 +44,8 @@ public class ScriptOrchestrator {
     private final StructureValidator structureValidator;
     private final ComedyValidator comedyValidator;
     private final PacingValidator pacingValidator;
+    private final TransformationValidator transformationValidator;
+    private final AccessoryValidator accessoryValidator;
     private final ScriptCritic critic;
     private final com.youtubeauto.script.config.CriticProperties criticProps;
     private final DialoguePolisher dialoguePolisher;
@@ -79,6 +81,8 @@ public class ScriptOrchestrator {
         int criticRewrites = 0;
         int comedyRewrites = 0;
         int pacingRewrites = 0;
+        int transformRewrites = 0;
+        int accessoryRewrites = 0;
         String structureFeedback = null;
         String criticFeedback = null;
         var episodeStructure = bibleLoader.getBible().episodeStructure();
@@ -145,6 +149,44 @@ public class ScriptOrchestrator {
                 if (comedy.failed()) {
                     log.warn("Job {} comedy gate still failing, proceeding (backstop = critic + human gate): {}",
                             jobId, comedy.violations());
+                }
+
+                // Deterministic LIVE-TRANSFORMATION gate — a scene that both
+                // introduces a new character AND describes it hatching/being
+                // revealed asks the video model for an egg→duckling morph it
+                // can't do in one shot. One targeted re-prompt to split it into
+                // a crack beat + a clean reveal beat; never blocks the final
+                // attempt (human gate stays the backstop).
+                TransformationValidator.Result trans = transformationValidator.validate(r.script());
+                if (trans.failed() && transformRewrites < 1 && attempt < dedupeProps.maxRetries()) {
+                    transformRewrites++;
+                    criticFeedback = "MANDATORY TRANSFORMATION FIXES: " + String.join("; ", trans.violations());
+                    log.warn("Job {} transformation gate fail (rewrite {}/1): {}",
+                            jobId, transformRewrites, trans.violations());
+                    continue;
+                }
+                if (trans.failed()) {
+                    log.warn("Job {} transformation gate still failing, proceeding (backstop = human gate): {}",
+                            jobId, trans.violations());
+                }
+
+                // Deterministic ACCESSORY-OWNERSHIP gate — a character may only
+                // touch/wear ITS OWN accessory; an accessory it forbids ("Mo's
+                // glasses", "Bo's hat") contradicts the DNA never-wear lock and
+                // morphs the character. Primary, source-level prevention; the
+                // orchestrator's compile-time guard stays the backstop. One
+                // targeted re-prompt, never blocks the final attempt.
+                AccessoryValidator.Result acc = accessoryValidator.validate(r.script());
+                if (acc.failed() && accessoryRewrites < 1 && attempt < dedupeProps.maxRetries()) {
+                    accessoryRewrites++;
+                    criticFeedback = "MANDATORY ACCESSORY FIXES: " + String.join("; ", acc.violations());
+                    log.warn("Job {} accessory gate fail (rewrite {}/1): {}",
+                            jobId, accessoryRewrites, acc.violations());
+                    continue;
+                }
+                if (acc.failed()) {
+                    log.warn("Job {} accessory gate still failing, proceeding (backstop = compile-time guard + human gate): {}",
+                            jobId, acc.violations());
                 }
 
                 // Cheap qualitative critic — scores arc / re-hook / ending /

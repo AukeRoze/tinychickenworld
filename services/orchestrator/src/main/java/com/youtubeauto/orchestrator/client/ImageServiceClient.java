@@ -33,4 +33,18 @@ public class ImageServiceClient {
                         .retrieve().bodyToMono(JsonNode.class),
                 java.time.Duration.ofMinutes(15), "image-service generate");
     }
+
+    /** Preview-only: the composed image prompt per scene (no generation). Cheap +
+     *  idempotent — used best-effort by the dashboard "copy image prompts" button. */
+    public JsonNode previewPrompts(UUID jobId, List<Map<String, Object>> scenes, String format) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("jobId", jobId);
+        body.put("scenes", scenes);
+        body.put("format", format);
+        return Resilience.idempotent(
+                client.post().uri("/api/v1/images/preview-prompts")
+                        .bodyValue(body)
+                        .retrieve().bodyToMono(JsonNode.class),
+                java.time.Duration.ofSeconds(30), "image-service preview-prompts");
+    }
 }

@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Bakes the branded intro. Takes the Veo "chickens introduce themselves" clip
- * (≈8s) and flies the channel LOGO into the TOP-LEFT corner with a quick
+ * (≈8s) and flies the channel LOGO into the TOP-RIGHT corner with a quick
  * ease-out swoop + sparkle — no title text, no egg. (Kijkersfeedback
  * 2026-06-12: de letter-voor-letter "TINY CHICKEN WORLD"-tekst + het gouden ei
  * mochten eruit; het logo zegt hetzelfde in één beeld en houdt de open rustig.
@@ -47,17 +47,36 @@ public class IntroBuilder {
     private static final double LOGO_AT    = 1.0;   // logo starts its fly-in
     private static final double FLY_DUR    = 0.7;   // swoop duration (ease-out)
     private static final double HOLD_AFTER = 1.4;   // beat after the logo lands
+    // Het logo vliegt aan het EIND ook weer weg (gebruikerswens 2026-06-14: "moet
+    // wegvliegen voordat de video begint"). FLY_OUT_LEAD = aantal seconden vóór het
+    // intro-einde dat het logo volledig buiten beeld is — ruim genoeg om de 2.0s
+    // intro→scène-1 dissolve te clearen, zodat er geen logo meer staat als de
+    // aflevering invloeit.
+    private static final double FLY_OUT_LEAD = 2.2;
 
-    // Logo landing position (top-left) + size. Vergroot 240 → 340 op
-    // gebruikerswens (2026-06-12); x/y iets ruimer zodat het grotere logo niet
-    // tegen de rand plakt. (Outro-logo blijft 220 — bewust kleiner, want daar
-    // botst het anders met de end-screen-elementen.)
-    private static final int LOGO_W = 340;
-    private static final int LOGO_X = 64;
+    // BLINK-BACKOFF (kijkersfeedback 2026-06-13: "2 van de 3 kippen met ogen
+    // dicht na de intro"). De tpad-clone bevroor het ALLERLAATSTE frame van de
+    // Veo-clip, en dat landde op een knipper — die bevroren blik bleef seconden
+    // staan. We bevriezen nu een fractie VÓÓR het echte einde: een knipper duurt
+    // ~0.1-0.2s, dus een frame ~0.45s eerder valt vrijwel zeker op open ogen.
+    // De afgesneden staart wordt door de langere tpad-hold gecompenseerd, dus de
+    // totale introduur verandert niet. Alleen actief als de clip lang genoeg is.
+    private static final double BLINK_BACKOFF = 0.45;  // s vóór clip-einde om te bevriezen
+
+    // Logo landing position (TOP-RIGHT) + size. Gebruikerswens 14 juni 2026:
+    // logo iets kleiner (480 → 400) én naar de rechterbovenhoek i.p.v. links.
+    // X wordt afgeleid uit de framebreedte (1920) zodat het logo met dezelfde
+    // 64px-marge tegen de rechterrand landt als het eerder links had. (Outro-logo
+    // blijft 220 top-left — bewust kleiner, want daar botst het anders met de
+    // end-screen-elementen.)
+    private static final int FRAME_W = 1920;
+    private static final int LOGO_W = 400;   // 480 → 400 (gebruikerswens 14 juni: iets kleiner)
+    private static final int LOGO_X = FRAME_W - LOGO_W - 64;  // top-right, 64px marge
     private static final int LOGO_Y = 56;
-    // Fly-in start: just off-screen beyond the top-left corner.
-    private static final int LOGO_FROM_X = -440;
-    private static final int LOGO_FROM_Y = -440;
+    // Fly-in start: just off-screen beyond the top-RIGHT corner (ruim genoeg dat
+    // het logo volledig buiten beeld begint).
+    private static final int LOGO_FROM_X = FRAME_W + 640;
+    private static final int LOGO_FROM_Y = -640;
 
     /** Back-compat: no spoken-voice track (keeps the Veo clip's own audio). */
     public String build(String clipPath) {
@@ -129,31 +148,84 @@ public class IntroBuilder {
         double lastVoiceEnd = prevEnd;
 
         // Total = logo timeline OR the voices, whichever needs more room.
-        // The voice tail needs 1.9s: the intro→episode concat runs a SLOW
-        // 1.1s DISSOLVE that overlaps (and audio-crossfades!) the intro's
-        // tail — Bo's "And I'm Bo!" must end BEFORE that fade starts, plus
-        // breathing room. (History: 0.6s margin ate her line entirely.)
+        // The voice tail needs 2.2s: the intro→episode concat runs a SLOW
+        // 2.0s DISSOLVE (Concatenator.DISSOLVE_INTRO) that overlaps (and
+        // audio-crossfades!) the intro's tail — Bo's "And I'm Bo!" must end
+        // BEFORE that fade starts, plus breathing room. The 2.2s margin still
+        // clears the 2.0s dissolve; if DISSOLVE_INTRO is raised further, raise
+        // this too. (History: 1.9s cleared the old 1.6s dissolve; 0.6s ate her
+        // line entirely.)
         // Vaste minimumduur 12s, maar nooit korter dan wat de stemmen nodig
-        // hebben (de voice-staart van 1.9s blijft leidend als die langer is).
-        double totalDur = Math.max(MIN_DUR, Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 1.9));
+        // hebben (de voice-staart van 2.2s blijft leidend als die langer is).
+        double totalDur = Math.max(MIN_DUR, Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 2.2));
 
+        // BLINK-BACKOFF: when the clip is held to fill the intro, freeze a frame
+        // a touch BEFORE the true end so the held frame can't land on a terminal
+        // blink (feedback 2026-06-13). We trim the last BLINK_BACKOFF seconds off
+        // the LIVE clip, then tpad clones the new (earlier, eyes-open) last frame.
+        // Only when there is genuinely a hold (totalDur > clipDur) and the clip is
+        // long enough to spare the tail; otherwise behave exactly as before.
+        // Fill the intro to totalDur WITHOUT a static freeze. The old approach
+        // froze a single frame near the end and held it ~4s; that frame kept
+        // landing on a blink, so the chickens sat with shut eyes under the logo
+        // (feedback 13 juni — bleef terugkomen, ook na een verse render). Now we
+        // BOOMERANG: play the clip forward, then append a REVERSED tail so the
+        // chickens keep MOVING for the rest of the intro. A blink is then a
+        // natural ~0.1s flicker mid-motion — never a multi-second frozen shut-eye
+        // pose. The reversed tail's first frame equals the last forward frame, so
+        // the turn is seamless. Total = clipDur + holdPad = totalDur exactly.
+        double holdPad = Math.max(0, totalDur - clipDur);
+        final String SCALE =
+                "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1";
         StringBuilder fc = new StringBuilder();
-        fc.append("[0:v]scale=1920:1080:force_original_aspect_ratio=increase,")
-          .append("crop=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration=")
-          .append(fmt(Math.max(0, totalDur - clipDur))).append("[base];");
+        boolean boomerang = holdPad > 0.05 && clipDur > holdPad + 0.5;
+        if (boomerang) {
+            // forward [0..clipDur] + reverse of [clipDur-holdPad .. clipDur].
+            fc.append("[0:v]").append(SCALE).append(",split[ifwd][irev];");
+            fc.append("[ifwd]setpts=PTS-STARTPTS[fwd];");
+            fc.append("[irev]trim=start=").append(fmt(clipDur - holdPad))
+              .append(":end=").append(fmt(clipDur))
+              .append(",setpts=PTS-STARTPTS,reverse[rev];");
+            fc.append("[fwd][rev]concat=n=2:v=1:a=0[base];");
+        } else if (holdPad > 0.05) {
+            // Clip too short to source a clean reverse tail — fall back to the
+            // old clone-freeze, backed off a touch to avoid a terminal blink.
+            double backoff = clipDur > BLINK_BACKOFF + 1.0 ? BLINK_BACKOFF : 0.0;
+            double liveDur = clipDur - backoff;
+            double pad = Math.max(0, totalDur - liveDur);
+            fc.append("[0:v]").append(SCALE).append(",");
+            if (backoff > 0) {
+                fc.append("trim=duration=").append(fmt(liveDur)).append(",setpts=PTS-STARTPTS,");
+            }
+            fc.append("tpad=stop_mode=clone:stop_duration=").append(fmt(pad)).append("[base];");
+        } else {
+            // Clip already long enough — no fill needed.
+            fc.append("[0:v]").append(SCALE).append("[base];");
+        }
         if (haveLogo) {
-            // Logo fly-in TOP-LEFT: swoops in diagonally from just off-screen
-            // with a quadratic ease-out (fast in, soft landing) + a quick
-            // alpha fade so the first frames never pop. Lands on the same
-            // corner as the outro logo, so the branding bookends the video.
-            String t0 = fmt(LOGO_AT), d = fmt(FLY_DUR);
-            String ease = "pow(max(0,1-(t-" + t0 + ")/" + d + "),2)";
+            // Logo fly-in TOP-RIGHT, hold, then fly-OUT before the episode starts
+            // (gebruikerswens 2026-06-14: "logo moet wegvliegen voordat de video
+            // begint"). Eén positie-factor f stuurt béide bewegingen:
+            //   fIn  = quadratische ease-OUT op de weg IN  (snel in, zachte landing);
+            //   fOut = quadratische ease-IN  op de weg UIT (versnelt het beeld uit).
+            // f=0 → gelande hoek, f=1 → buiten beeld (zelfde off-screen hoek als de
+            // fly-in, dus het logo verlaat het beeld waar het binnenkwam). fIn en
+            // fOut overlappen niet (hold ertussen), dus f blijft netjes in [0,1].
+            // Het logo is FLY_OUT_LEAD seconden vóór het intro-einde volledig weg,
+            // ruim vóór de intro→scène-1 dissolve.
+            String tIn = fmt(LOGO_AT), dIn = fmt(FLY_DUR);
+            double flyOutStart = Math.max(logoLanded + HOLD_AFTER,
+                                          totalDur - FLY_OUT_LEAD - FLY_DUR);
+            String tOut = fmt(flyOutStart), dOut = fmt(FLY_DUR);
+            String fIn  = "pow(max(0,1-(t-" + tIn + ")/" + dIn + "),2)";
+            String fOut = "pow(min(1,max(0,(t-" + tOut + ")/" + dOut + ")),2)";
+            String f = "(" + fIn + "+" + fOut + ")";
             fc.append("[").append(logoIdx).append(":v]scale=").append(LOGO_W).append(":-1,format=rgba,")
-              .append("fade=t=in:st=").append(t0).append(":d=0.25:alpha=1[logo];");
+              .append("fade=t=in:st=").append(tIn).append(":d=0.25:alpha=1[logo];");
             fc.append("[base][logo]overlay=")
-              .append("x='").append(LOGO_X).append("-").append(LOGO_X - LOGO_FROM_X).append("*").append(ease).append("'")
-              .append(":y='").append(LOGO_Y).append("-").append(LOGO_Y - LOGO_FROM_Y).append("*").append(ease).append("'")
-              .append(":enable='gte(t,").append(t0).append(")'[v];");
+              .append("x='").append(LOGO_X).append("-").append(LOGO_X - LOGO_FROM_X).append("*").append(f).append("'")
+              .append(":y='").append(LOGO_Y).append("-").append(LOGO_Y - LOGO_FROM_Y).append("*").append(f).append("'")
+              .append(":enable='gte(t,").append(tIn).append(")'[v];");
         } else {
             fc.append("[base]null[v];");
         }

@@ -95,7 +95,7 @@ function statusKind(status) {
 
 // Pipeline stepper — mirrors the classic dashboard's phase model so you can see
 // exactly which production stage a job is in.
-const PHASES = ["Script", "Voice + Images", "Video (Veo)", "Assembly",
+const PHASES = ["Script", "Voice + Images", "Video", "Assembly",
                 "Thumbnail", "Planning", "Upload", "Distribution"];
 const PHASE_OF = {
   PENDING: [0, "queued"], SCRIPT_GENERATING: [0, "active"], SCRIPT_REVIEW_PENDING: [0, "review"],
@@ -139,6 +139,7 @@ let costData = null;         // GET /api/v1/videos/{id}/cost (nieuw endpoint)
 let costFailed = false;      // oudere build zonder /cost → niet elke 5s opnieuw proberen
 let distRows = null;         // GET /api/v1/distribution (YouTube/Facebook-status)
 let seriesNames = null;      // id → naam uit GET /api/v1/series (lazy, eenmalig)
+let lastReview = null;       // laatst geladen /review-payload (voor de score-bolletjes op de stepper)
 
 function progressPct(status) {
   const p = PROGRESS[status];
@@ -207,6 +208,28 @@ function renderStepper(job) {
     lab.textContent = label;
     step.appendChild(dot);
     step.appendChild(lab);
+    // Score-bolletje per stap (Auke 17 jun): klein gekleurd cijfer op de stappen
+    // die een score hebben — Script = verhaal-criticus, Assembly = QA-board (0-100).
+    // Pas zichtbaar zodra /review die score levert; ontbreekt 'ie, geen bolletje.
+    let stepScore = null;
+    if (lastReview) {
+      if (i === 0 && lastReview.storyScore && lastReview.storyScore.criticScore != null) {
+        stepScore = lastReview.storyScore.criticScore;
+      } else if (i === 3 && lastReview.qaBoardScore != null) {
+        stepScore = lastReview.qaBoardScore;
+      }
+    }
+    if (stepScore != null) {
+      const k = stepScore >= 80 ? "success" : stepScore >= 60 ? "warning" : "danger";
+      const badge = document.createElement("span");
+      badge.textContent = stepScore;
+      badge.title = "Score voor deze stap: " + stepScore + "/100";
+      badge.style.cssText =
+        "display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;" +
+        "padding:0 4px;margin-top:3px;font-size:10px;font-weight:700;color:#fff;text-align:center;" +
+        "background:var(--" + k + ",#888)";
+      step.appendChild(badge);
+    }
     wrap.appendChild(step);
   });
   // ── Voortgangsbalk onder de stepper: 0-100% met live "wat doet hij nu" ──
@@ -332,6 +355,29 @@ function renderGate(job) {
 
   if (job.status === "THUMBNAIL_REVIEW_PENDING") {
     card.appendChild(thumbRegenRow(id, card));
+  }
+
+  // Script-gate (#4): toon de VERHAAL-score zodat je vóór akkoord ziet hoe sterk
+  // het verhaal is (en waar het zwak is) — niet alleen blind approve/reject.
+  if (job.status === "SCRIPT_REVIEW_PENDING") {
+    const sc = document.createElement("div");
+    sc.className = "small";
+    sc.style.cssText = "margin:4px 0 8px";
+    sc.textContent = "📖 Verhaal-score laden…";
+    card.appendChild(sc);
+    api.get(`/api/v1/videos/${id}/review`, { key: "gate-story" }).then(data => {
+      const s = data && data.storyScore;
+      if (!s) { sc.remove(); return; }
+      const parts = [];
+      if (s.criticScore != null) parts.push("Verhaal-criticus " + s.criticScore + "/100");
+      if (s.structureScore != null) parts.push("Structuur " + s.structureScore + "/100");
+      if (s.comedy != null) parts.push("Humor " + s.comedy + "/10");
+      if (s.emotionalImpact != null) parts.push("Emotie " + s.emotionalImpact + "/10");
+      if (s.childPsychology != null) parts.push("Kind-veilig " + s.childPsychology + "/10");
+      if (!parts.length) { sc.textContent = "📖 Verhaal-score nog niet berekend."; return; }
+      sc.innerHTML = "📖 <strong>Verhaal-score</strong> — " + parts.join(" · ") +
+        (s.storyArc ? "  ·  arc: " + s.storyArc : "");
+    }).catch(() => sc.remove());
   }
 
   const row = document.createElement("div");
@@ -547,6 +593,30 @@ function renderActions(job) {
     items.push(actionItem("Re-assemble", "",
       "Rebuild the final video from the EXISTING assets (script, scene images, voice) — nothing is regenerated. Use to apply assembly / outro / thumbnail changes at no extra generation cost.",
       () => api.post(`/api/v1/videos/${id}/reassemble`)));
+    // 📥 Flow-clips importeren: zet de in Google Flow gemaakte scène-clips
+    // (bible/afleveringen/<aflevering>/scene-<nr>.mp4) als de beweging van elke
+    // scène en hermonteer met de stemmen eroverheen. Geen Veo, geen kosten.
+    items.push(actionItem("📥 Flow-clips importeren", "",
+      "Zet je in Google Flow gemaakte clips (bible/afleveringen/<aflevering>/scene-<nr>.mp4) " +
+      "als de beweging van elke scène en hermonteert met de stemmen eroverheen. Geen Veo, geen kosten. " +
+      "Ontbreekt er een clip, dan meldt 'ie welke scène-nummers nog ontbreken.",
+      async () => {
+        const ep = (prompt("Welke aflevering? (mapnaam onder bible/afleveringen/)",
+            String(job.episodeNumber || 1)) || "").trim();
+        if (!ep) throw new Error("cancelled");
+        const res = await api.post(
+            `/api/v1/videos/${id}/import-clips?episode=${encodeURIComponent(ep)}`,
+            undefined, { key: "import-clips" });
+        const imported = (res && res.importedSeqs) || [];
+        const missing = (res && res.missingSeqs) || [];
+        if (missing.length) {
+          toast(`${imported.length} clip(s) geïmporteerd. Ontbreekt nog: scène ${missing.join(", ")} `
+              + `— upload die en probeer opnieuw.`, "error", 9000);
+          throw new Error("missing clips");
+        }
+        toast(`${imported.length} clip(s) geïmporteerd — hermonteren…`, "info");
+        return api.post(`/api/v1/videos/${id}/reassemble`, undefined, { key: "import-reassemble" });
+      }));
   }
   // 🔁 Re-render beelden (nieuwe cast): na een character-redesign alle visuals
   // vers genereren op de huidige refs — script en stemmen blijven staan.
@@ -661,6 +731,15 @@ function renderReview(ctx) {
       v.className = "master-video";
       v.src = `/dashboard/${encodeURIComponent(id)}/master.mp4`;
       card.appendChild(v);
+      // ⧉ Apart tabblad voor de volledige master (geen 5s-poll die 'm afkapt).
+      const mNew = document.createElement("a");
+      mNew.className = "btn sm";
+      mNew.textContent = "⧉ open in nieuw venster";
+      mNew.title = "Open de master-video in een apart tabblad — speelt volledig af, geen last van de 5s-refresh.";
+      mNew.href = `/dashboard/${encodeURIComponent(id)}/master.mp4`;
+      mNew.target = "_blank";
+      mNew.rel = "noopener";
+      card.appendChild(mNew);
     }
     // Auto-derived vertical Short (hook + meest energieke moment, 9:16) —
     // inline afspeelbaar naast de master, plus downloadknop voor de upload.
@@ -1444,6 +1523,8 @@ async function loadReview() {
   if (lastJob && (lastJob.status === "DISTRIBUTION_PENDING" || lastJob.status === "COMPLETED")) {
     try { distRows = await api.get("/api/v1/distribution", { key: "dist-rows" }); } catch (e) {}
   }
+  lastReview = review;            // voedt de score-bolletjes op de stepper
+  if (lastJob) renderStepper(lastJob);   // herteken met de verse scores
   renderReview({ review, localizations, languages, cost: costData });
 }
 
@@ -1541,29 +1622,15 @@ function stillFrame(seq, label, version) {
 }
 
 /**
- * Scene image(s) for the right column. Normal scenes show one still. "Hero"
- * scenes that also have a directed end-still show TWO frames side by side —
- * "Start" → "Eind" — so it's clear Veo interpolates between them.
+ * Scene image for the right column — a single start still. The old "Start →
+ * Eind" two-up view is removed (2026-06-14): end frames are pipeline-wide off
+ * (start→end interpolation caused character morphing), so every scene runs
+ * start-only and there is no end still to show.
  * Returns { frame, img } where img is the START still (for cache-busting on regen).
  */
 function sceneImage(s) {
-  const seq = s.seq;
-  const start = stillFrame(seq, s.hasEndStill ? "Start" : null, s.imageVersion);
-  if (!s.hasEndStill || s.endStillSeq < 0) {
-    return { frame: start.frame, img: start.img };
-  }
-  // Two-up: start → end, with an arrow between, so the directed motion reads.
-  const wrap = document.createElement("div");
-  wrap.className = "scene-img-pair";
-  const arrow = document.createElement("div");
-  arrow.className = "scene-img-arrow";
-  arrow.textContent = "→";
-  arrow.title = "Veo animates from the Start frame to the End frame (directed motion)";
-  const end = stillFrame(s.endStillSeq, "Eind");
-  wrap.appendChild(start.frame);
-  wrap.appendChild(arrow);
-  wrap.appendChild(end.frame);
-  return { frame: wrap, img: start.img };
+  const start = stillFrame(s.seq, null, s.imageVersion);
+  return { frame: start.frame, img: start.img };
 }
 
 /** Eénmalige uitleg-box bovenaan de scènelijst: wat doen de per-scène-knoppen,
@@ -1587,7 +1654,6 @@ function sceneActionsHelp() {
   const rows = [
     ["↻ Regen", "Maakt het startbeeld opnieuw uit de scripttekst. Je kunt een correctie meegeven (bv. “geen tweede kip”). Alleen een beeld — goedkoop."],
     ["✎ Edit", "Pas de scène-omschrijving aan en genereer het beeld daaruit opnieuw."],
-    ["↻/＋ Eindbeeld", "Maakt een eindbeeld zodat Veo van start → eind beweegt (geregisseerde beweging). Geen Veo-kosten."],
     ["🔊 Re-voice", "Pas de dialoog aan en laat alleen deze scène opnieuw inspreken. Beeld blijft."],
     ["🎬 Maak/Reroll clip", "Maakt de Veo-clip van deze scène (kost ±1 clip) en hermonteert. Kies links het model."],
     ["🔒 Lock / 🔓 Unlock", "DIT is de belangrijke: een Lock beschermt een scène tegen de AUTOMATISCHE systemen — de vision-QC en de Auto-Fix-lus laten een gelockte scène met rust en vervangen het beeld niet meer. Handig zodra een scène er precies goed uitziet. Jij kunt 'm met de knoppen hierboven nog wél handmatig aanpassen; de lock is een hek tegen de robot, niet tegen jou. Unlock geeft 'm weer vrij voor de automatische passes."],
@@ -1605,6 +1671,291 @@ function sceneActionsHelp() {
   return d;
 }
 
+/** Eén scène → leesbaar promptblok. `which`: "desc" (omschrijving + dialoog),
+ *  "veo" (gecompileerde Veo-videoprompt), "image" (gecomponeerde image/still-
+ *  prompt) of "both" (alles wat beschikbaar is). */
+function scenePromptBlock(s, which) {
+  const head = `=== Scene ${s.seq}` +
+      (s.phase ? ` · ${s.phase}` : "") +
+      (s.durationSeconds ? ` · ${s.durationSeconds}s` : "") + " ===";
+  const parts = [head];
+  if (which === "desc" || which === "both") {
+    const desc = s.visualDesc || s.narration || "";
+    if (desc) parts.push((which === "both" ? "[Description]\n" : "") + desc);
+    const lines = (s.lines || [])
+        .map(l => `${l.speaker || "?"}: ${l.text || ""}`).join("\n");
+    if (lines) parts.push("[Dialogue]\n" + lines);
+  }
+  if ((which === "image" || which === "both") && s.imagePrompt) {
+    parts.push((which === "both" ? "[AI Image Prompt]\n" : "") + s.imagePrompt);
+  }
+  if ((which === "veo" || which === "both") && s.veoPrompt) {
+    parts.push((which === "both" ? "[AI Video Prompt]\n" : "") + s.veoPrompt);
+  }
+  return parts.join("\n");
+}
+
+/** Alle scènes samengevoegd tot één tekstblok (gescheiden door een lege regel). */
+function buildPromptText(scenes, which) {
+  return (scenes || []).map(s => scenePromptBlock(s, which)).join("\n\n");
+}
+
+/** Kopieer tekst naar het klembord (met fallback voor oudere browsers). */
+async function copyText(text, okMsg) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    toast(okMsg || "Gekopieerd ✓", "info");
+  } catch (e) {
+    toast("Kopiëren mislukt — selecteer de tekst en kopieer handmatig.", "error");
+  }
+}
+
+/** Modal die ALLE scène-prompts toont (omschrijving + volledige Veo-prompt),
+ *  met knoppen om alles in één keer te kopiëren. */
+function openPromptsModal(scenes) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;" +
+      "display:flex;align-items:center;justify-content:center;padding:24px";
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  const box = document.createElement("div");
+  box.style.cssText =
+      "background:var(--bg,#fff);color:inherit;border-radius:12px;max-width:900px;" +
+      "width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;" +
+      "box-shadow:0 12px 48px rgba(0,0,0,.4)";
+
+  const head = document.createElement("div");
+  head.style.cssText =
+      "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 16px;" +
+      "border-bottom:1px solid var(--border,#e5e5e5)";
+  const title = document.createElement("strong");
+  title.textContent = `Alle scène-prompts (${scenes.length})`;
+  title.style.marginRight = "auto";
+  head.appendChild(title);
+
+  const haveVeo = scenes.some(s => s.veoPrompt);
+  const haveImage = scenes.some(s => s.imagePrompt);
+
+  // Het tekstgebied dat de modal toont — wisselt met de weergavekeuze.
+  const ta = document.createElement("textarea");
+  ta.readOnly = true;
+  ta.style.cssText =
+      "flex:1;width:100%;border:0;resize:none;padding:14px 16px;font:12px/1.5 " +
+      "ui-monospace,Menlo,Consolas,monospace;background:transparent;color:inherit;outline:none";
+
+  let mode = (haveVeo || haveImage) ? "both" : "desc";
+  const render = () => { ta.value = buildPromptText(scenes, mode); };
+
+  const mkToggle = (label, m, help) => {
+    const b = document.createElement("button");
+    b.className = "btn sm";
+    b.textContent = label;
+    if (help) b.title = help;
+    b.addEventListener("click", () => {
+      mode = m;
+      render();
+      [...head.querySelectorAll("[data-mode]")].forEach(x =>
+          x.classList.toggle("approve", x.dataset.mode === m));
+    });
+    b.dataset.mode = m;
+    if (m === mode) b.classList.add("approve");
+    return b;
+  };
+  head.appendChild(mkToggle("Omschrijvingen", "desc",
+      "Toon per scène alleen de korte omschrijving + dialoog."));
+  if (haveImage) {
+    head.appendChild(mkToggle("Image-prompts", "image",
+        "Toon per scène alleen de gecomponeerde image/still-prompt (om in je beeld-tool te plakken)."));
+  }
+  if (haveVeo) {
+    head.appendChild(mkToggle("Veo-prompts", "veo",
+        "Toon per scène alleen de volledige gecompileerde Veo-videoprompt."));
+  }
+  if (haveVeo || haveImage) {
+    head.appendChild(mkToggle("Alles", "both",
+        "Toon per scène de omschrijving + image-prompt + Veo-videoprompt."));
+  }
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "btn sm approve";
+  copyBtn.textContent = "📋 Kopieer alles";
+  copyBtn.title = "Kopieert de getoonde prompts (alle scènes) in één keer naar het klembord.";
+  copyBtn.addEventListener("click", () =>
+      copyText(ta.value, `Alle ${scenes.length} scène-prompts gekopieerd ✓`));
+  head.appendChild(copyBtn);
+
+  const x = document.createElement("button");
+  x.className = "btn sm";
+  x.textContent = "✕";
+  x.title = "Sluiten";
+  x.addEventListener("click", close);
+  head.appendChild(x);
+
+  render();
+  box.appendChild(head);
+  box.appendChild(ta);
+
+  const foot = document.createElement("div");
+  foot.className = "sub small";
+  foot.style.cssText = "padding:8px 16px;border-top:1px solid var(--border,#e5e5e5)";
+  foot.textContent = haveVeo
+      ? "Tip: de Veo-prompt is de volledige gecompileerde prompt (camera, camera-move, " +
+        "setting, performance + identity-locks) zoals de pipeline 'm naar Veo stuurt."
+      : "Nog geen gecompileerde Veo-prompts beschikbaar (verschijnt zodra de scènes klaar zijn). " +
+        "Hieronder de scène-omschrijvingen + dialoog.";
+  box.appendChild(foot);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  // Esc sluit de modal.
+  const onKey = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+}
+
+/** Eén thumbnail-variant → leesbaar promptblok. `which`: "full" (volledige
+ *  OpenAI-prompt), "anchor" (live Gemini-beschrijving) of "both". */
+function thumbVariantBlock(v, which) {
+  let head = `### Variant ${v.variant} — layout ${v.layout}`;
+  head += v.overlayHeadline ? ` — overlaytekst: "${v.overlayHeadline}"` : " — (geen tekst, controle)";
+  head += `\nMood: ${v.mood}\nFraming: ${v.framing}`;
+  const parts = [];
+  if ((which === "full" || which === "both") && v.openAiPrompt) {
+    parts.push((which === "both" ? "[Volledige prompt]\n" : "") + v.openAiPrompt);
+  }
+  if ((which === "anchor" || which === "both") && v.anchorPrompt) {
+    parts.push((which === "both" ? "[Live anchor-beschrijving (Gemini, ref-conditioned)]\n" : "") + v.anchorPrompt);
+  }
+  return head + "\n\n" + parts.join("\n\n");
+}
+
+function buildThumbPromptText(data, which) {
+  return (data.variants || []).map(v => thumbVariantBlock(v, which)).join("\n\n———\n\n");
+}
+
+/** Modal met de thumbnail-prompt(s) per variant — zelfde stijl als de scène-
+ *  promptmodal, kopieerbaar in één keer. */
+function openThumbnailPromptModal(data) {
+  const variants = (data && data.variants) || [];
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;" +
+      "display:flex;align-items:center;justify-content:center;padding:24px";
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  const box = document.createElement("div");
+  box.style.cssText =
+      "background:var(--bg,#fff);color:inherit;border-radius:12px;max-width:900px;" +
+      "width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;" +
+      "box-shadow:0 12px 48px rgba(0,0,0,.4)";
+
+  const head = document.createElement("div");
+  head.style.cssText =
+      "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 16px;" +
+      "border-bottom:1px solid var(--border,#e5e5e5)";
+  const title = document.createElement("strong");
+  title.textContent = `Thumbnail-prompt (${variants.length} varianten, ${data && data.castMode ? "cast" : "solo"})`;
+  title.style.marginRight = "auto";
+  head.appendChild(title);
+
+  const ta = document.createElement("textarea");
+  ta.readOnly = true;
+  ta.style.cssText =
+      "flex:1;width:100%;border:0;resize:none;padding:14px 16px;font:12px/1.5 " +
+      "ui-monospace,Menlo,Consolas,monospace;background:transparent;color:inherit;outline:none";
+
+  let mode = "full";
+  const render = () => { ta.value = buildThumbPromptText(data, mode); };
+  const mkToggle = (label, m, help) => {
+    const b = document.createElement("button");
+    b.className = "btn sm";
+    b.textContent = label;
+    if (help) b.title = help;
+    b.dataset.mode = m;
+    if (m === mode) b.classList.add("approve");
+    b.addEventListener("click", () => {
+      mode = m;
+      render();
+      [...head.querySelectorAll("[data-mode]")].forEach(x =>
+          x.classList.toggle("approve", x.dataset.mode === m));
+    });
+    return b;
+  };
+  head.appendChild(mkToggle("Volledige prompt", "full",
+      "De volledige, op zichzelf staande thumbnail-prompt per variant (zoals de OpenAI-fallback 'm voert)."));
+  head.appendChild(mkToggle("Live (Gemini)", "anchor",
+      "De beschrijving die de live anchor-route naar de image-service stuurt (ref-conditioned cast)."));
+  head.appendChild(mkToggle("Alles", "both", "Beide: volledige prompt + live anchor-beschrijving."));
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "btn sm approve";
+  copyBtn.textContent = "📋 Kopieer alles";
+  copyBtn.title = "Kopieert de getoonde thumbnail-prompt(s) in één keer naar het klembord.";
+  copyBtn.addEventListener("click", () =>
+      copyText(ta.value, `Thumbnail-prompt (${variants.length} varianten) gekopieerd ✓`));
+  head.appendChild(copyBtn);
+
+  const x = document.createElement("button");
+  x.className = "btn sm";
+  x.textContent = "✕";
+  x.title = "Sluiten";
+  x.addEventListener("click", close);
+  head.appendChild(x);
+
+  render();
+  box.appendChild(head);
+  box.appendChild(ta);
+
+  const foot = document.createElement("div");
+  foot.className = "sub small";
+  foot.style.cssText = "padding:8px 16px;border-top:1px solid var(--border,#e5e5e5)";
+  foot.textContent =
+      "De live pipeline rendert de thumbnail via de cast-referenties (anchor-route); " +
+      "de volledige prompt is de zelfstandige fallback. Beide komen 1-op-1 uit de thumbnail-service.";
+  box.appendChild(foot);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const onKey = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+}
+
+/** Toolbar bovenaan de scènelijst met de "alle prompts"-knoppen. */
+function scenePromptsBar(scenes) {
+  const bar = document.createElement("div");
+  bar.className = "scene-acts";
+  bar.style.cssText = "margin:4px 0 8px";
+  bar.appendChild(sceneItem("📋 Alle prompts",
+      "Toont alle scène-prompts (omschrijving + volledige Veo-prompt) in één venster, " +
+      "met een knop om ze in één keer te kopiëren.",
+      () => openPromptsModal(scenes)));
+  bar.appendChild(sceneItem("🖼️ Thumbnail-prompt",
+      "Toont de thumbnail-prompt(s) per variant — dezelfde tekst die de pipeline naar het " +
+      "beeldmodel stuurt — kopieerbaar, net als de scène-prompts.",
+      async () => {
+        try {
+          const data = await api.get(`/api/v1/videos/${id}/thumbnail-prompt`, { key: "thumb-prompt" });
+          openThumbnailPromptModal(data);
+        } catch (e) {
+          toast("Thumbnail-prompt ophalen mislukt — draait de thumbnail-service?", "error");
+        }
+      }));
+  return bar;
+}
+
 // One row per scene: script (dialogue + visual description) on the LEFT,
 // the scene image (or placeholder) + per-scene actions on the RIGHT.
 function renderScenes(scenes) {
@@ -1615,6 +1966,7 @@ function renderScenes(scenes) {
   const list = document.createElement("div");
   list.className = "scene-rows";
   list.appendChild(sceneActionsHelp());
+  list.appendChild(scenePromptsBar(scenes));
   for (const s of scenes) {
     const seq = s.seq;
     const row = document.createElement("div");
@@ -1632,6 +1984,20 @@ function renderScenes(scenes) {
     const isHero = !isSilentBeat && /^(hook|climax)$/i.test(s.phase || "");
     if (isHero) {
       row.style.cssText += "border:2px solid rgba(212,160,23,.55);border-radius:10px;padding:10px";
+    }
+    // 😄 HUMOR-SCÈNE — de ene speciale lach-beat. Een duidelijke oranje rand +
+    // lach-badge zodat de reviewer 'm meteen herkent (los van de gouden hero/
+    // stille-scène-rand). Sluit hero/silent uit zodat de randen elkaar niet
+    // overschrijven.
+    const isHumor = !isSilentBeat && !isHero && /^humor$/i.test(s.phase || "");
+    if (isHumor) {
+      row.style.cssText += "border:2px solid #f5821f;border-radius:10px;padding:10px;" +
+          "box-shadow:0 0 10px rgba(245,130,31,.28);" +
+          "background:linear-gradient(rgba(245,130,31,.06),rgba(245,130,31,.02))";
+      const badge = document.createElement("div");
+      badge.style.cssText = "color:#d9700f;font-weight:700;font-size:12px;margin-bottom:4px";
+      badge.textContent = "😄 HUMOR-SCÈNE — de lach-beat; hier moet de grap duidelijk landen.";
+      row.appendChild(badge);
     }
     if (isSilentBeat) {
       row.style.cssText += "border:2px solid #d4a017;border-radius:10px;" +
@@ -1651,7 +2017,7 @@ function renderScenes(scenes) {
     head.className = "script-head";
     const bits = ["Scene " + seq];
     if (s.durationSeconds) bits.push(s.durationSeconds + "s");
-    if (s.phase) bits.push(isHero ? "🌟 " + s.phase : s.phase);
+    if (s.phase) bits.push(isHero ? "🌟 " + s.phase : isHumor ? "😄 " + s.phase : s.phase);
     if (s.hasClip) bits.push("🎬");
     if (s.locked) bits.push("🔒");
     head.textContent = bits.join(" · ");
@@ -1693,37 +2059,75 @@ function renderScenes(scenes) {
     const startFrame = frame.classList && frame.classList.contains("scene-img-frame")
         ? frame : frame.querySelector(".scene-img-frame");
 
-    // Inline Veo-clip player (raw clip, no voice/music — those join at
-    // assembly). Toggle so the page stays light with 25+ scenes.
+    // Scène-clip — speelt de bewegende clip van DEZE scène af, ONGEACHT hoe die
+    // gemaakt is (geïmporteerde Google Flow-clip óf Veo). Opent de ruwe mp4
+    // (zonder voice/muziek) in een apart tabblad: de inline speler werd door de
+    // 5s-poll afgekapt (gebruikerswens 2026-06-14), dus een los tabblad dat
+    // volledig doorspeelt. De bron-resolutie zit in MediaController#sceneClip
+    // (clipPath eerst, anders de schijf-conventie) — herkomst-onafhankelijk.
     if (s.hasClip) {
-      const clipBtn = document.createElement("button");
+      const clipBtn = document.createElement("a");
       clipBtn.className = "btn sm";
-      clipBtn.textContent = "▶ Veo-clip";
-      clipBtn.title = "Bekijk de ruwe Veo-clip van deze scène (zonder voice/muziek — die komen er bij montage bij).";
-      let vid = null;
-      clipBtn.addEventListener("click", () => {
-        if (vid) { vid.remove(); vid = null; clipBtn.textContent = "▶ Veo-clip"; return; }
-        vid = document.createElement("video");
-        vid.controls = true;
-        vid.autoplay = true;
-        vid.preload = "metadata";
-        vid.style.cssText = "width:100%;margin-top:6px;border-radius:8px";
-        vid.src = `/dashboard/${encodeURIComponent(id)}/scene/${seq}/clip.mp4?t=` + Date.now();
-        vid.addEventListener("play", () => {
-          document.querySelectorAll("video").forEach(v => { if (v !== vid) v.pause(); });
-        });
-        vid.addEventListener("error", () => {
-          const msg = document.createElement("div");
-          msg.className = "sub small";
-          msg.textContent = "clip niet gevonden";
-          vid.replaceWith(msg);
-          vid = null;
-          clipBtn.textContent = "▶ Veo-clip";
-        });
-        right.appendChild(vid);
-        clipBtn.textContent = "✕ clip sluiten";
-      });
+      clipBtn.textContent = "▶ Speel clip ⧉";
+      clipBtn.title = "Speelt de clip van deze scène af (zonder voice/muziek) in een apart "
+          + "tabblad — ongeacht of die in Google Flow of via Veo is gemaakt.";
+      clipBtn.href = `/dashboard/${encodeURIComponent(id)}/scene/${seq}/clip.mp4`;
+      clipBtn.target = "_blank";
+      clipBtn.rel = "noopener";
       right.appendChild(clipBtn);
+    }
+
+    // ⚠ QC-AFGEKEURDE clip — de clip-QC keurde deze Veo-clip af; hij is bewaard
+    // (clip.rejected.mp4) zodat je zelf kunt oordelen of de QC terecht afkeurde,
+    // en hem eventueel alsnog kunt gebruiken (override → hermontage). De scène
+    // gebruikt nu de Ken Burns-still.
+    if (s.hasRejectedClip) {
+      const reason = s.qcRejectReason || "QC afgekeurd";
+      const qcBox = document.createElement("div");
+      qcBox.style.cssText = "margin-top:6px;padding:6px 8px;border:1px solid #c0392b;" +
+          "border-radius:8px;background:rgba(192,57,43,.07)";
+      const badge = document.createElement("div");
+      badge.style.cssText = "color:#c0392b;font-weight:700;font-size:12px";
+      badge.textContent = "⚠ QC afgekeurd — clip vervangen door still";
+      badge.title = reason;
+      qcBox.appendChild(badge);
+      const why = document.createElement("div");
+      why.className = "sub small";
+      why.style.cssText = "margin-top:2px;white-space:pre-wrap";
+      why.textContent = "Reden: " + reason;
+      qcBox.appendChild(why);
+
+      // ▶ Bekijk afgekeurde clip — opent ALTIJD in een apart tabblad
+      // (gebruikerswens 2026-06-14): de inline speler werd door de 5s-poll
+      // afgekapt, dus geen inline player meer — gewoon een link naar de ruwe mp4.
+      const rejBtn = document.createElement("a");
+      rejBtn.className = "btn sm";
+      rejBtn.style.marginTop = "4px";
+      rejBtn.textContent = "▶ Bekijk afgekeurde clip ⧉";
+      rejBtn.title = "Opent de afgekeurde Veo-clip in een apart tabblad — speelt volledig af, geen last van de 5s-refresh.";
+      rejBtn.href = `/dashboard/${encodeURIComponent(id)}/scene/${seq}/rejected-clip.mp4`;
+      rejBtn.target = "_blank";
+      rejBtn.rel = "noopener";
+      qcBox.appendChild(rejBtn);
+
+      // ✓ Toch gebruiken (override QC) → promoveert de clip terug + hermonteert.
+      const ovBtn = document.createElement("button");
+      ovBtn.className = "btn sm approve";
+      ovBtn.style.cssText = "margin-top:4px;margin-left:6px";
+      ovBtn.textContent = "✓ Toch gebruiken (override QC)";
+      ovBtn.title = "Gebruik deze afgekeurde clip alsnog — promoveert 'm terug naar clip.mp4. Druk daarna zelf op Re-assemble.";
+      ovBtn.addEventListener("click", async () => {
+        if (!confirm(
+            "De QC keurde deze clip af wegens:\n\n" + reason + "\n\n" +
+            "Toch in de video gebruiken? De clip wordt opgeslagen; druk daarna zelf op Re-assemble (geen Veo-kosten).")) return;
+        await api.post(
+          `/api/v1/videos/${id}/scenes/${seq}/accept-rejected-clip`,
+          undefined, { key: `accept-rejected-clip-${seq}` });
+        toast("Afgekeurde clip in gebruik genomen — opgeslagen. Druk op Re-assemble om het in de video te zetten.", "info");
+        loadScenes();
+      });
+      qcBox.appendChild(ovBtn);
+      right.appendChild(qcBox);
     }
 
     const acts = document.createElement("div");
@@ -1789,17 +2193,9 @@ function renderScenes(scenes) {
         left.replaceChildren(editor);
         ta.focus();
       }));
-    acts.appendChild(sceneItem(
-      s.hasEndStill ? "↻ Eindbeeld" : "＋ Eindbeeld",
-      s.hasEndStill
-        ? "Maakt het eindbeeld (Start → Eind) van deze hero-scène opnieuw aan. Alleen een beeld, geen Veo-kosten."
-        : "Genereert een EINDBEELD zodat Veo van start → eind beweegt (geregisseerde beweging). Alleen een extra beeld, geen Veo-kosten.",
-      async () => {
-        setSceneBusy(startFrame, true, "Eindbeeld genereren…");
-        try { await P("end-still"); }
-        finally { setSceneBusy(startFrame, false); }
-        loadScenes();
-      }));
+    // Eindbeeld-knop verwijderd (2026-06-14): eindframes zijn pipeline-breed uit
+    // (zie PipelineOrchestrator.endFrameEnabled) omdat de start→eind-interpolatie
+    // karaktermorphing veroorzaakte. Veo draait overal start-only.
     acts.appendChild(sceneItem("🔊 Re-voice",
       "Pas de dialoog aan en laat ALLEEN deze scène opnieuw inspreken (ElevenLabs). Beeld blijft ongewijzigd.",
       async () => {
@@ -1832,14 +2228,15 @@ function renderScenes(scenes) {
 
       acts.appendChild(sceneItem(s.hasClip ? "🎬 Reroll clip" : "🎬 Maak clip",
         s.hasClip
-          ? "Maakt ALLEEN de clip van deze scène opnieuw (≈1 clip-kost) vanaf het HUIDIGE startbeeld, en hermonteert. Kies links het model — Veo (Lite/Fast/Premium) of Seedance 2.0 via fal.ai. Ideaal om providers per scène te A/B'en."
-          : "Deze scène heeft nog GEEN clip (Ken Burns-fallback, bijv. door de cost-cap). Genereert er alsnog één (≈1 clip-kost, ~€0,60 op Fast) vanaf het huidige startbeeld en hermonteert automatisch.",
+          ? "Maakt ALLEEN de clip van deze scène opnieuw (≈1 clip-kost) vanaf het HUIDIGE startbeeld. Hermonteert NIET automatisch — druk daarna zelf op Re-assemble (zo kun je eerst meerdere clips maken). Kies links het model — Veo (Lite/Fast/Premium) of Seedance 2.0 via fal.ai. Ideaal om providers per scène te A/B'en."
+          : "Deze scène heeft nog GEEN clip (Ken Burns-fallback, bijv. door de cost-cap). Genereert er alsnog één (≈1 clip-kost, ~€0,60 op Fast) vanaf het huidige startbeeld. Hermonteert NIET automatisch — druk daarna zelf op Re-assemble.",
         async () => {
           const m = modelSel.value;
           await api.post(
             `/api/v1/videos/${id}/scenes/${seq}/reroll-veo${m ? "?model=" + encodeURIComponent(m) : ""}`,
             undefined, { key: `reroll-veo-${seq}` });
           loadScenes();
+          toast("Clip gemaakt — de video is NIET hermonteerd. Druk op Re-assemble als je klaar bent met clips maken.", "info");
         }));
       acts.appendChild(sceneItem("🆕 Nieuw beeld + clip",
         "Genereert een NIEUW startbeeld voor deze scène ÉN maakt daarvan een nieuwe Veo-clip (≈1 Veo-kost, model via de dropdown), en hermonteert de video (alle andere scènes blijven hergebruikt). Gebruik dit als het PLAATJE zelf matig is.",
@@ -1859,6 +2256,11 @@ function renderScenes(scenes) {
 
     row.appendChild(left);
     row.appendChild(right);
+    // 🚨 Clip-QC afgekeurd → rode omranding + alert (de details staan al in de
+    // QC-box rechts; dit maakt de scène in de lijst onmiskenbaar).
+    if (s.hasRejectedClip) {
+      markSceneFailed(row, "Clip afgekeurd door de clip-QC — vervangen door een still (zie details rechts).");
+    }
     list.appendChild(row);
   }
   scenesHost.replaceChildren(list);
@@ -1893,11 +2295,56 @@ async function annotateQcFindings() {
       if (!slot) continue;
       slot.style.cssText = "color:#b8651f;margin:2px 0";
       const srcs = [...new Set(list.map(f => f.source))].join(", ");
-      slot.textContent = `🛡 QC: ${list.length} bevinding(en) [${srcs}] — ` +
+      // INFORMATIEF LOG, GEEN ACTUELE AFKEURING: /qc-findings is de historie van
+      // elke QC-vlag tijdens het verwerken — inclusief vlaggen die de auto-fix
+      // daarna heeft opgelost. Daarom NIET rood markeren (dat liet bijna elke
+      // scène als "gezakt" ogen, feedback 2026-06-13). De rode "niet door de
+      // controle"-markering blijft voorbehouden aan een echt huidig probleem:
+      // een door de clip-QC afgekeurde clip (s.hasRejectedClip, in renderScenes).
+      slot.textContent = `🛡 QC-log: ${list.length} bevinding(en) tijdens verwerken [${srcs}] — ` +
           (list[0].issue || list[0].category || "");
-      slot.title = list.map(f => `[${f.source}/${f.category}] ${f.issue}`).join("\n");
+      slot.title = "Historie van QC-vlaggen tijdens het verwerken (kan al opgelost zijn):\n"
+          + list.map(f => `[${f.source}/${f.category}] ${f.issue}`).join("\n");
     }
   } catch (e) { /* badges zijn informatief — stil falen */ }
+}
+
+// 🚨 Mark a scene that did NOT pass control: a loud red outline + an alert
+// banner pinned to the top of the scene row, so flagged scenes are impossible
+// to miss. Idempotent and additive — safe to call from both the synchronous
+// render (rejected clips) and the async QC-findings pass; a scene flagged by
+// both gets one banner with both reasons listed.
+function markSceneFailed(row, message) {
+  if (!row) return;
+  // Red outline wins over the hero/silent-beat gold frames.
+  row.style.border = "2px solid #c0392b";
+  row.style.borderRadius = "10px";
+  row.style.padding = "10px";
+  row.style.boxShadow = "0 0 12px rgba(192,57,43,.35)";
+  row.style.background = "linear-gradient(rgba(192,57,43,.06),rgba(192,57,43,.02))";
+  let alert = row.querySelector(".scene-fail-alert");
+  if (!alert) {
+    alert = document.createElement("div");
+    alert.className = "scene-fail-alert";
+    alert.setAttribute("role", "alert");
+    alert.style.cssText = "padding:6px 10px;margin-bottom:6px;border:1px solid #c0392b;" +
+        "border-radius:6px;background:rgba(192,57,43,.12);color:#c0392b;font-size:12px";
+    const head = document.createElement("div");
+    head.style.cssText = "font-weight:700;margin-bottom:2px";
+    head.textContent = "🚨 Niet door de controle";
+    alert.appendChild(head);
+    row.insertBefore(alert, row.firstChild);
+  }
+  // Skip duplicate reason lines (the same pass can re-render on the 5s poll).
+  const exists = [...alert.querySelectorAll(".scene-fail-line")]
+      .some(el => el.dataset.msg === message);
+  if (!exists) {
+    const line = document.createElement("div");
+    line.className = "scene-fail-line";
+    line.dataset.msg = message;
+    line.textContent = "• " + message;
+    alert.appendChild(line);
+  }
 }
 
 // Stap-focus: open de sectie die bij de huidige pipelinefase hoort, één keer

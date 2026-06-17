@@ -2,6 +2,7 @@ package com.youtubeauto.image.service;
 
 import com.youtubeauto.image.api.dto.GenerateImageRequest;
 import com.youtubeauto.image.api.dto.GenerateImageResponse;
+import com.youtubeauto.image.api.dto.PreviewPromptsResponse;
 import com.youtubeauto.image.bible.BibleLoader;
 import com.youtubeauto.image.config.ImageProperties;
 import com.youtubeauto.image.provider.ImageProvider;
@@ -21,11 +22,16 @@ public class ImageGenerationService {
 
     private final ImageProvider activeProvider;
     private final ImageProperties props;
+    // Same composer the providers use — reused here to PREVIEW the prompt text
+    // (no generation) for the dashboard "copy image prompts" button.
+    private final PromptComposer promptComposer;
 
     public ImageGenerationService(List<ImageProvider> providers,
                                   BibleLoader bibleLoader,
-                                  ImageProperties props) {
+                                  ImageProperties props,
+                                  PromptComposer promptComposer) {
         this.props = props;
+        this.promptComposer = promptComposer;
         Map<String, ImageProvider> byName = providers.stream()
                 .collect(Collectors.toMap(ImageProvider::name, p -> p));
         String wanted = bibleLoader.getBible().imageGen().provider();
@@ -35,6 +41,34 @@ public class ImageGenerationService {
         }
         log.info("Image provider: {} (wanted={}, available={})",
                 this.activeProvider.name(), wanted, byName.keySet());
+    }
+
+    /** Compose (but do NOT generate) the per-scene image prompt for the ACTIVE
+     *  provider — the same text {@code generate} would feed the model. Best-
+     *  effort per scene: a compose failure yields an empty prompt for that scene
+     *  rather than failing the whole request. Powers the dashboard copy button. */
+    public PreviewPromptsResponse previewPrompts(GenerateImageRequest req) {
+        String format = req.formatOrDefault();
+        String provider = activeProvider.name();
+        List<PreviewPromptsResponse.ScenePrompt> out = new ArrayList<>();
+        for (GenerateImageRequest.SceneVisual s : req.scenes()) {
+            String prompt = "";
+            try {
+                prompt = switch (provider) {
+                    case "openai"    -> PromptComposer.withCorrection(promptComposer.composeDescribe(s), s);
+                    case "replicate" -> PromptComposer.withCorrection(promptComposer.composeTrigger(s), s);
+                    // gemini (live, ref-conditioned) + any future anchor provider:
+                    // the reference-bound compose, using the scene's cast as the
+                    // ordered reference identities.
+                    default -> PromptComposer.withCorrection(
+                            promptComposer.composeReference(s, s.characters(), format), s);
+                };
+            } catch (Exception e) {
+                log.warn("preview prompt failed for scene {}: {}", s.seq(), e.getMessage());
+            }
+            out.add(new PreviewPromptsResponse.ScenePrompt(s.seq(), prompt));
+        }
+        return new PreviewPromptsResponse(req.jobId(), out);
     }
 
     public GenerateImageResponse generate(GenerateImageRequest req) {

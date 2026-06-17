@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "hasClip":  true,
+                 "running":  true,
+                 "status":  "re-compositing title + sound (no Veo)â¦"
+             },
+    "executedAt":  "2026-06-14T13:08:04.7124324+02:00"
+}

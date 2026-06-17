@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "hasClip":  true,
+                 "running":  true,
+                 "status":  "1/3 â generating start stillâ¦"
+             },
+    "executedAt":  "2026-06-14T15:27:41.7566827+02:00"
+}

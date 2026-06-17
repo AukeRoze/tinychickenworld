@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.youtubeauto.orchestrator.client.AssemblyServiceClient;
 import com.youtubeauto.orchestrator.client.ImageServiceClient;
 import com.youtubeauto.orchestrator.client.VideoGenerationServiceClient;
-import com.youtubeauto.orchestrator.client.VoiceServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,10 +43,20 @@ public class OutroRebuildService {
             + "ONCE, no duplicates and no extra chickens anywhere. They sit CLOSE TOGETHER, "
             + "LOW in the frame — all three fully inside the BOTTOM THIRD of the picture — "
             + "smiling and giggling warmly at each other. The UPPER TWO THIRDS of the frame "
-            + "are deliberately CALM and EMPTY: only soft warm evening sky and gently blurred "
-            + "farm bokeh, NOTHING and NOBODY else there (that space is reserved for on-screen "
+            + "are deliberately CALM, uncluttered and EMPTY as clean cinematic NEGATIVE SPACE — "
+            + "just a smooth, soft warm evening-sky gradient and gently blurred farm bokeh, with "
+            + "NOTHING and NOBODY else there (that space is reserved for on-screen "
             + "elements added later — absolutely no extra chickens in that empty space). No "
             + "signboard, no sign, no banner and NO text anywhere. Wholesome, cosy composition.";
+
+    /** Outro-only negatives: the shared IDENTITY_NEG plus the end-screen / UI / empty-sky
+     *  fillers a model invents for an end card. Kept SEPARATE from the shared list so the
+     *  intro keeps its 1-2 background butterflies (these flying-object negatives would
+     *  otherwise wipe them). */
+    private static final String OUTRO_NEG = IntroRebuildService.IDENTITY_NEG
+            + ", overlay buttons, video frames, graphical boxes, user interface elements, "
+            + "end screen placeholders, subscribe button, birds, flying objects in the sky, "
+            + "clutter in the upper sky";
 
     /** End-screen motion prompt. The single dubbed farewell line is embedded
      *  VERBATIM (the "voice lines match MOTION_DESC word for word" contract),
@@ -59,12 +68,13 @@ public class OutroRebuildService {
             + "the background, the bokeh or the empty sky). The three little chickens sit "
             + "CLOSE TOGETHER, LOW in the frame — all three fully inside the BOTTOM THIRD of "
             + "the picture — in warm golden-hour light. "
-            + "They giggle and laugh warmly WITH EACH OTHER first, leaning into each other "
-            + "happily, then all three turn and beam warmly at the camera. While looking at "
-            + "the camera, Pip says cheerfully: '" + outroLine + "'. "
-            + "The UPPER TWO THIRDS of the frame stay deliberately CALM and EMPTY the whole "
-            + "clip — just soft warm evening sky and gently blurred farm bokeh, with NOTHING "
-            + "appearing there (no birds, no butterflies, no objects): on-screen end-screen "
+            + "All three chicks look toward the camera with a shared, warm, giggling energy, "
+            + "leaning slightly into each other happily. While beaming warmly at the camera, "
+            + "Pip clearly opens and closes her beak to say cheerfully: '" + outroLine + "'. "
+            + "The UPPER TWO THIRDS of the frame stay deliberately CALM, uncluttered and EMPTY "
+            + "the whole clip as clean cinematic NEGATIVE SPACE — just a smooth, soft warm "
+            + "evening-sky gradient and gently blurred farm bokeh, with NOTHING appearing there "
+            + "(no birds, no butterflies, no objects): on-screen end-screen "
             + "elements will be overlaid in that space later. "
             + "NO waving, NO held-up objects, NO signboard, no sign, no banner and NO text "
             + "anywhere. Only a soft breeze low in the grass, warm DIMMED end-of-day light, "
@@ -80,6 +90,12 @@ public class OutroRebuildService {
             + "open-close, never a wide gape, never word-shaped phonemes. "
             + IntroRebuildService.IDENTITY_LOCK;
     }
+
+    // Read-only prompt accessors for the Brand-page "copy Veo prompt" QA button.
+    // These brand clips bypass VeoPromptCompiler, so this is VERBATIM what Veo gets.
+    public String veoMotionPrompt()   { return motionDesc(); }
+    public String veoStillPrompt()    { return STILL_DESC; }
+    public String veoNegativePrompt() { return OUTRO_NEG; }
 
     /** The single farewell line, spoken by Pip. Configurable without a rebuild
      *  via {@code app.brand.outro-line} (or env OUTRO_LINE); read via @Value,
@@ -99,7 +115,6 @@ public class OutroRebuildService {
     private final ImageServiceClient imageClient;
     private final VideoGenerationServiceClient videoGenClient;
     private final AssemblyServiceClient assemblyClient;
-    private final VoiceServiceClient voiceClient;
     private final SceneImageQc sceneImageQc;
     private final com.youtubeauto.orchestrator.config.OrchestratorProperties props;
 
@@ -195,7 +210,7 @@ public class OutroRebuildService {
             scene.put("sceneType", "outro");
             scene.put("startImagePath", stillPath);
             scene.put("visualDesc", motionDesc());
-            scene.put("negativePrompt", IntroRebuildService.IDENTITY_NEG);
+            scene.put("negativePrompt", OUTRO_NEG);
             // ~8s of Veo (6 → 8 with the 12s end-screen template): more giggle
             // before OutroBuilder's tpad freeze-hold covers the final ~4s.
             scene.put("durationSeconds", 8);
@@ -211,9 +226,9 @@ public class OutroRebuildService {
             String clip = c0.path("clipPath").asText();
             rememberClip(clip);   // cache for cheap re-composites (no Veo), survives restart
 
-            // Branded farewell voice (same voice as the episodes); best-effort.
-            List<String> voiceLines =
-                    IntroRebuildService.synthVoiceLines(voiceClient, job, outroLines());
+            // Voice comes from the Omni clip's own native audio now (ElevenLabs
+            // removed) — empty list = keep the clip's audio.
+            List<String> voiceLines = List.of();
 
             status = "3/3 — compositing end-screen outro…";
             log.info("Outro rebuild {}: composite {} ({} branded voices)", job, clip, voiceLines.size());
@@ -248,8 +263,7 @@ public class OutroRebuildService {
             String clip = resolveClip();
             status = "re-compositing end-screen overlays + sound (no Veo)…";
             log.info("Outro re-composite from cached clip {}", clip);
-            List<String> voiceLines =
-                    IntroRebuildService.synthVoiceLines(voiceClient, job, outroLines());
+            List<String> voiceLines = List.of();   // Omni clip carries its own audio
             assemblyClient.buildOutro(clip, voiceLines);
             status = "done — outro.mp4 re-composited at " + LocalTime.now().withNano(0);
         } catch (Exception e) {

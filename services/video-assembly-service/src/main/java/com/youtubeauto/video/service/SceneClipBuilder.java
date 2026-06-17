@@ -104,39 +104,42 @@ public class SceneClipBuilder {
         return null;
     }
 
-    /** Effective scene length: never SHORTER than the voice-over (+a small tail)
-     *  so a spoken line is never cut off mid-sentence. Bounded to scripted+3s so a
-     *  runaway line can't blow up the timeline; falls back to the scripted
-     *  duration if the voice can't be probed. */
+    /** Effective scene length = the scripted duration. With native Omni clip audio
+     *  (no separate ElevenLabs voice track any more) the clip itself carries the
+     *  speech and is rendered at the fixed clip length, so there is nothing to
+     *  probe and stretch to. */
     private int effectiveDur(SceneInput scene, Path workdir) {
-        int scripted = scene.durationSeconds();
-        String audio = scene.audioPath();
-        if (audio == null || audio.isBlank()) return scripted;
-        try {
-            String out = runner.runFfprobe(List.of(
-                    "-v", "error", "-show_entries", "format=duration",
-                    "-of", "default=noprint_wrappers=1:nokey=1", audio), workdir);
-            for (String line : out.split("\\R")) {
-                try {
-                    double voice = Double.parseDouble(line.trim());
-                    if (voice > 0.1) {
-                        int need = (int) Math.ceil(voice + 0.4);     // small tail after the line
-                        return Math.min(Math.max(scripted, need), scripted + 3);  // bounded +3s
-                    }
-                } catch (NumberFormatException ignore) { /* try next line */ }
-            }
-        } catch (Exception e) {
-            log.debug("scene seq={} voice probe failed ({}) — using scripted dur", scene.seq(), e.toString());
-        }
-        return scripted;
+        return scene.durationSeconds();
+    }
+
+    /**
+     * Lead-in silence (seconds) prepended to a scene's VOICE so the first spoken
+     * word lands a beat after the picture. Only the orchestrator's FIRST scene
+     * uses it (> 0): the intro→episode DISSOLVE in
+     * {@link Concatenator#concatHeterogeneous} overlaps the episode's opening,
+     * and a voice that started at t=0 spoke while the chick was still
+     * half-transparent in the blend (feedback 2026-06-13: "stemgeluid begint
+     * voordat de eerste kip echt in beeld is"). Shifting only scene-1's voice
+     * keeps every clip duration — and therefore the caption timing and the whole
+     * A/V lock-step — unchanged; the voice simply starts later inside its own
+     * (already voice-stretched) clip. 0 = no shift = exactly the old behaviour.
+     */
+    public Path build(SceneInput scene, MotionPreset motion,
+                      int w, int h,
+                      Path workdir, Path output) {
+        return build(scene, motion, w, h, workdir, output, 0.0);
     }
 
     public Path build(SceneInput scene, MotionPreset motion,
                       int w, int h,
-                      Path workdir, Path output) {
+                      Path workdir, Path output, double voiceLeadInSeconds) {
         int fps = props.output().fps();
         int dur = effectiveDur(scene, workdir);
         int frames = dur * fps;
+        // No separate voice track any more — the Ken-Burns (still-image) path has
+        // no native audio, so it gets a silent track. In practice every scene is
+        // an Omni clip (buildFromClip), so this path is a rare fallback.
+        String audioLead = "";
 
         String motionChain = motion.filterChain(frames, w, h, fps);
         String fx = resolveAmbientFx(scene);
@@ -149,7 +152,9 @@ public class SceneClipBuilder {
         String filter;
         List<String> args = new java.util.ArrayList<>(List.of("-y",
                 "-loop", "1", "-t", String.valueOf(dur), "-i", scene.imagePath(),
-                "-i", scene.audioPath()));
+                // silent stereo bed (input 1) in place of the old voice WAV
+                "-f", "lavfi", "-t", String.valueOf(dur),
+                "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"));
 
         // Blurred-fill base: the SHARP image is scaled to FIT (decrease — nothing
         // cropped, full subject always visible) and centered over a blurred,
@@ -170,15 +175,15 @@ public class SceneClipBuilder {
                     "[based]%s[base];" +
                     "[2:v]scale=%d:%d,format=rgba,colorchannelmixer=aa=%.2f[fx];" +
                     "[base][fx]overlay=eof_action=repeat:format=auto[v];" +
-                    "[1:a]apad,atrim=duration=%d[a]",
-                    motionChain, w, h, AMBIENT_FX_OPACITY, dur
+                    "[1:a]%sapad,atrim=duration=%d[a]",
+                    motionChain, w, h, AMBIENT_FX_OPACITY, audioLead, dur
             );
             args.add("-stream_loop"); args.add("-1"); args.add("-i"); args.add(fx);
         } else {
             filter = blurredBase + String.format(
                     "[based]%s[v];" +
-                    "[1:a]apad,atrim=duration=%d[a]",
-                    motionChain, dur
+                    "[1:a]%sapad,atrim=duration=%d[a]",
+                    motionChain, audioLead, dur
             );
         }
 
@@ -208,35 +213,76 @@ public class SceneClipBuilder {
         return output;
     }
 
+    /** {@code adelay=…|…,} prefix for a positive lead-in, else "". Both channels
+     *  delayed (stereo-safe); {@code all=1} would only cover the declared ones. */
+    private static String voiceDelayFilter(double leadInSeconds) {
+        if (leadInSeconds <= 0) return "";
+        long ms = Math.round(leadInSeconds * 1000);
+        if (ms <= 0) return "";
+        return "adelay=" + ms + "|" + ms + ",";
+    }
+
     /**
-     * Build a scene clip from a pre-rendered video (e.g. Veo image-to-video).
-     * Bypasses the Ken Burns filter graph entirely — the source clip already
-     * has motion. We re-encode to the project canvas + standard codecs and
-     * replace the audio track with the voice narration WAV/MP3.
+     * Build a scene clip from a pre-rendered video (e.g. a Google Flow / Omni
+     * clip). Bypasses the Ken Burns filter graph entirely — the source clip
+     * already has motion AND its own native audio (spoken dialogue + ambient,
+     * generated by Omni with accurate beak lip-sync). We re-encode to the project
+     * canvas + standard codecs and KEEP the clip's own audio (no separate
+     * ElevenLabs voice track any more).
      */
     public Path buildFromClip(SceneInput scene, int w, int h,
                               Path workdir, Path output) {
+        return buildFromClip(scene, w, h, workdir, output, 0.0);
+    }
+
+    /** @param voiceLeadInSeconds see {@link #build(SceneInput, MotionPreset, int,
+     *  int, Path, Path, double)} — only the first scene shifts its voice so the
+     *  intro dissolve finishes before the chick speaks. */
+    public Path buildFromClip(SceneInput scene, int w, int h,
+                              Path workdir, Path output, double voiceLeadInSeconds) {
         int fps = props.output().fps();
         int dur = effectiveDur(scene, workdir);
+        // voiceLeadInSeconds is obsolete (it shifted the separate voice track) —
+        // the clip carries its own synced audio, so there is nothing to delay.
 
-        // tpad holds the LAST frame after the clip ends so a Veo clip shorter than
-        // the scene's scripted duration (e.g. the 8s Veo cap on a longer beat)
-        // fills out to full length instead of cutting early. The voice track
-        // (atrim=dur) + -shortest cap the output at `dur`, so the hold only ever
-        // appears when the clip is genuinely shorter than the scene.
+        // BOOMERANG-FILL (gebruikerswens 2026-06-14: "geen stilstaand beeld of
+        // dichte ogen aan het scène-eind"). Een Veo-clip die korter is dan de
+        // gesproken scèneduur (bijv. de ~8s Veo-cap op een langere beat) werd
+        // eerder opgevuld met tpad=clone — het LAATSTE frame bevroor, en dat
+        // landde geregeld op een knipper (bevroren dichte ogen). Nu houden we de
+        // beweging dóórlopend: speel de clip vooruit en hang het OMGEKEERDE
+        // staartje eraan (zelfde techniek als IntroBuilder). Een knipper wordt zo
+        // een korte flikkering mid-beweging i.p.v. een seconden lange dichte blik;
+        // de overgang naar de volgende scène voelt vloeiend omdat het beeld nooit
+        // stilstaat. De naad is naadloos: reverse begint op het laatste forward-
+        // frame.
+        //
+        // Werking per geval (voice-track atrim=dur + -shortest cappen op `dur`):
+        //  - clip >= dur            → alleen vooruit (reverse wordt nooit bereikt);
+        //  - dur in (clipDur, 2*clipDur] → vooruit + omgekeerd staartje vult de gap;
+        //  - dur > 2*clipDur (zeldzaam) → na de boomerang bevriest de tpad-clone op
+        //    het EERSTE clipframe (= het on-model startbeeld, ogen open) i.p.v. het
+        //    laatste — dus zelfs de fallback-freeze is een goede pose.
+        // Geen ffprobe nodig: de split/reverse/concat regelt zich vanzelf en de
+        // -shortest-cap bepaalt wat zichtbaar wordt.
         String filter = String.format(
                 "[0:v]scale=%d:%d:force_original_aspect_ratio=increase," +
-                "crop=%d:%d,setsar=1,fps=%d,tpad=stop_mode=clone:stop_duration=30[v];" +
-                "[1:a]apad,atrim=duration=%d[a]",
+                "crop=%d:%d,setsar=1,fps=%d,split[fwd0][rv0];" +
+                "[fwd0]setpts=PTS-STARTPTS[fwd];" +
+                "[rv0]reverse,setpts=PTS-STARTPTS[rvr];" +
+                "[fwd][rvr]concat=n=2:v=1:a=0,tpad=stop_mode=clone:stop_duration=30[v];" +
+                // KEEP the clip's OWN audio (Omni native voice + ambient), resampled
+                // to the lossless intermediate rate and padded/trimmed to the scene
+                // length so a slightly-short clip never cuts the master's A/V drift.
+                "[0:a]aresample=48000,apad,atrim=duration=%d[a]",
                 w, h, w, h, fps, dur
         );
 
-        log.debug("scene seq={} (from clip) canvas={}x{}", scene.seq(), w, h);
+        log.debug("scene seq={} (from clip, native audio) canvas={}x{}", scene.seq(), w, h);
 
         List<String> args = List.of(
                 "-y",
                 "-t", String.valueOf(dur), "-i", scene.clipPath(),
-                "-i", scene.audioPath(),
                 "-filter_complex", filter,
                 "-map", "[v]", "-map", "[a]",
                 // crf 16 (was 20): first re-encode of the Veo clip — see above.

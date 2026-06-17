@@ -70,13 +70,15 @@ public class OutroBuilder {
     @Value("${app.ffprobe-bin:ffprobe}")
     private String ffprobe;
 
-    // 12.0s fixed end-screen template (YouTube end screens may cover the last
-    // 5-20s; 12 gives the elements ~10s of real screen time after the 2s
-    // settle). DUR 9.0 → 12.0 (2026-06-12, end-screen redesign); FADE stays
-    // 2.6 — the slow uitgeleide from the earlier kijkersfeedback keeps the
-    // bedtime ritme. The Veo clip is ~8s, so tpad clones the last frame for
-    // the final ~4s; the freeze sits under the fade and reads as a hold.
-    private static final double DUR = 12.0;    // outro length (s)
+    // Fixed end-screen template. YouTube end screens dekken de laatste 5-20s, en
+    // Auke plaatst zelf de subscribe/playlist/video-elementen via YouTube Studio
+    // op het eind — die hebben veel tijd nodig. DUR 12.0 → 20.0 (gebruikerswens
+    // 2026-06-14: "veel meer tijd aan het eind; mag ook 1 beeld dat wat langer
+    // doorloopt") geeft de elementen ~17s echte schermtijd. De Veo-clip is ~8s,
+    // dus tpad cloont het laatste frame als een rustige, langere held end-card tot
+    // DUR; de fade zit pas in de laatste 2.6s. (Als de held op een knipper landt,
+    // kunnen we later de blink-backoff/boomerang uit IntroBuilder porten.)
+    private static final double DUR = 20.0;    // outro length (s)
     private static final double FADE = 2.6;    // tail fade (video + audio)
     // One shared brand beat: logo fade-in, sparkle and the bottom text line
     // all land here — after the giggle has registered, well before the fade.

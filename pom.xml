@@ -31,7 +31,6 @@
     <modules>
         <module>services/orchestrator</module>
         <module>services/script-service</module>
-        <module>services/voice-service</module>
         <module>services/image-service</module>
         <module>services/thumbnail-service</module>
         <module>services/video-assembly-service</module>

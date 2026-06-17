@@ -28,7 +28,24 @@ public record SceneSummary(
          *  UI highlights it gold. Computed BEFORE the narration display-fallback
          *  (which fills narration with visualDesc and used to hide this flag —
          *  the reason the golden frame never showed). */
-        boolean silentBeat
+        boolean silentBeat,
+        /** True wanneer deze scène een door de clip-QC AFGEKEURDE Veo-clip
+         *  bewaard heeft (clip.rejected.mp4). De UI toont dan een review-knop +
+         *  override-knop. Stream via /dashboard/{id}/scene/{seq}/rejected-clip.mp4. */
+        boolean hasRejectedClip,
+        /** De reden waarom de clip-QC de clip afkeurde (gecapt). Leeg/null als er
+         *  geen afgekeurde clip is. */
+        String qcRejectReason,
+        /** De volledige, gecompileerde Veo-prompt voor deze scène (camera,
+         *  camera-move, setting, performance + identity/headcount/scale-locks),
+         *  zoals VeoPromptCompiler 'm bouwt. Voor de "kopieer alle prompts"-knop
+         *  op de jobpagina. Leeg/null als compilatie niet lukt. */
+        String veoPrompt,
+        /** De gecomponeerde IMAGE/still-prompt voor deze scène (zoals de actieve
+         *  image-provider 'm aan z'n model voert), opgehaald via de image-service
+         *  preview-endpoint. Voor de "kopieer image-prompts"-knop op de jobpagina.
+         *  Leeg/null als de preview niet lukt. */
+        String imagePrompt
 ) {
     /** One spoken line in a scene. */
     public record Line(String speaker, String text) {}

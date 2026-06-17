@@ -1,0 +1,11 @@
+﻿{
+    "status":  400,
+    "body":  {
+                 "type":  "about:blank",
+                 "title":  "Bad Request",
+                 "status":  400,
+                 "detail":  "Unknown job 39466e5b-e9f5-4660-9d1c-7df05de56ec5",
+                 "instance":  "/api/v1/videos/39466e5b-e9f5-4660-9d1c-7df05de56ec5/retry"
+             },
+    "executedAt":  "2026-06-16T18:03:43.9758617+02:00"
+}

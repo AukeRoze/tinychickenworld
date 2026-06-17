@@ -31,8 +31,11 @@
         </select>
         <button class="btn" id="rebuild-intro">🎬 Rebuild intro</button>
         <button class="btn" id="recomposite-intro" title="Re-apply the title/SFX to the existing clip — no Veo cost">♻ Re-composite (no Veo)</button>
+        <button class="btn sm" id="copy-intro-prompt" title="Toon + kopieer de exacte Veo-prompt van de intro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Veo-prompt</button>
         <span id="intro-status" class="small" style="color:var(--muted)"></span>
       </div>
+      <textarea id="intro-prompt-text" class="small" readonly hidden rows="8"
+                style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;white-space:pre-wrap"></textarea>
     </div>
     <div class="card">
       <h3 class="card-title">Outro</h3>
@@ -48,8 +51,11 @@
         </select>
         <button class="btn" id="rebuild-outro">👋 Rebuild outro</button>
         <button class="btn" id="recomposite-outro" title="Re-apply the CTA/credits/SFX to the existing clip — no Veo cost">♻ Re-composite (no Veo)</button>
+        <button class="btn sm" id="copy-outro-prompt" title="Toon + kopieer de exacte Veo-prompt van de outro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Veo-prompt</button>
         <span id="outro-status" class="small" style="color:var(--muted)"></span>
       </div>
+      <textarea id="outro-prompt-text" class="small" readonly hidden rows="8"
+                style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;white-space:pre-wrap"></textarea>
     </div>
   </div>
 
@@ -87,6 +93,18 @@
       Wijzigingen landen via hot-reload binnen ±1 minuut — geen rebuild, gewoon
       re-assemblen om het te zien.</p>
       <div id="transitions-host" class="sub small">loading…</div>
+    </div>
+  </div>
+
+  <div class="brand-grid" style="margin-top:14px">
+    <div class="card" style="grid-column:1 / -1">
+      <h3 class="card-title">🚫 Negative constraints</h3>
+      <p class="sub small">Eén regel per punt. Deze punten komen in de
+      <em>Negative Constraints</em>-sectie van elke AI Video Prompt. De cast-regel
+      ("geen extra kippen / geen N-de kip") wordt automatisch toegevoegd — die hoef
+      je hier niet te zetten. Opslaan herlaadt de bible direct; geldt op de
+      eerstvolgende prompt (geen rebuild).</p>
+      <div id="negative-constraints-host" class="sub small">loading…</div>
     </div>
   </div>
 

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -87,15 +88,36 @@ public class ReviewController {
                 "imagePath", newPath, "result", "EDITED"));
     }
 
-    /** Edit a scene's dialogue and re-voice ONLY that scene. Body:
-     *  {"dialogue": "pip: Hi!\nmo: Look..."}. Updates narration + subtitles too. */
-    @PostMapping("/scenes/{seq}/edit-dialogue")
-    public ResponseEntity<Map<String, Object>> editDialogue(@PathVariable UUID id, @PathVariable int seq,
-                                                            @RequestBody Map<String, String> body) {
-        String audio = orchestrator.editSceneDialogueAndRegenerate(id, seq,
-                body == null ? null : body.get("dialogue"));
+    // edit-dialogue endpoint REMOVED: it re-voiced a scene via ElevenLabs. With
+    // Omni native audio the spoken words live in the clip; change them by
+    // re-making/re-importing the Flow clip, not by editing dialogue text here.
+
+    /** Set (or clear) a per-scene Veo camera override. Body:
+     *  {"veoCameraOverride": "low-angle, 35mm, slow drift"}; empty/absent clears
+     *  it. Replaces the phase-default Camera line for this scene only; takes
+     *  effect on the NEXT clip re-roll (the still is unchanged). */
+    @PostMapping("/scenes/{seq}/camera-override")
+    public ResponseEntity<Map<String, Object>> setCameraOverride(@PathVariable UUID id, @PathVariable int seq,
+                                                                 @RequestBody(required = false) Map<String, String> body) {
+        String value = body == null ? null : body.get("veoCameraOverride");
+        orchestrator.setCameraOverride(id, seq, value);
         return ResponseEntity.ok(Map.of("id", id.toString(), "seq", seq,
-                "audioPath", audio == null ? "" : audio, "result", "DIALOGUE_EDITED"));
+                "veoCameraOverride", value == null ? "" : value, "result", "CAMERA_OVERRIDE_SET"));
+    }
+
+    /** Set the cast for this scene (single source of truth). Body:
+     *  {"characters": ["pip","bo"]}. The cast drives the still ("exactly N
+     *  chicks"), the Veo cast-lock AND the vision-QC, so correcting it here keeps
+     *  all three consistent. Takes effect on the next still-regen / clip re-roll;
+     *  unlocks the scene. Use when the stored cast includes someone who is not in
+     *  the shot (Veo would otherwise try to cram them in). */
+    @PostMapping("/scenes/{seq}/characters")
+    public ResponseEntity<Map<String, Object>> setSceneCharacters(@PathVariable UUID id, @PathVariable int seq,
+                                                                  @RequestBody Map<String, List<String>> body) {
+        List<String> chars = body == null ? null : body.get("characters");
+        orchestrator.setSceneCharacters(id, seq, chars);
+        return ResponseEntity.ok(Map.of("id", id.toString(), "seq", seq,
+                "characters", chars == null ? List.of() : chars, "result", "CHARACTERS_SET"));
     }
 
     /** Generate (or refresh) the directed END-still for this scene on demand, so
@@ -109,24 +131,39 @@ public class ReviewController {
                 "imagePath", newPath, "result", "END_STILL_GENERATED"));
     }
 
-    /** Re-roll ONLY this scene's VEO clip (1 clip = 1 VEO cost) and re-assemble,
-     *  reusing every other clip/image. Optional ?model= overrides the Veo model
-     *  for this re-roll only (e.g. "veo3_1" premium 1080p). */
+    /** Re-roll ONLY this scene's VEO clip (1 clip = 1 VEO cost), reusing every
+     *  other clip/image. Optional ?model= overrides the Veo model for this
+     *  re-roll only (e.g. "veo3_1" premium 1080p). By default this does NOT
+     *  hermonteren — the clip is saved and the user presses Re-assemble once
+     *  after rolling all the scenes they want. Pass ?assemble=true to keep the
+     *  old behaviour (re-assemble immediately after the last in-flight reroll). */
     @PostMapping("/scenes/{seq}/reroll-veo")
     public ResponseEntity<Map<String, Object>> rerollVeo(@PathVariable UUID id, @PathVariable int seq,
-                                                         @RequestParam(required = false) String model) {
-        return ResponseEntity.ok(orchestrator.rerollVeoScene(id, seq, model));
+                                                         @RequestParam(required = false) String model,
+                                                         @RequestParam(required = false, defaultValue = "false") boolean assemble) {
+        return ResponseEntity.ok(orchestrator.rerollVeoScene(id, seq, model, assemble));
     }
 
     /** Generate a NEW still for this scene, then (for Veo jobs) re-roll its clip
-     *  from that still and re-assemble. The fix for ONE weak image in a finished
-     *  video. Body (optional): {"visualDesc": "...", "model": "veo3_1"}. */
+     *  from that still. Does NOT auto-assemble (gebruikerswens 2026-06-14): the
+     *  new still + clip are saved and the user presses Re-assemble once after all
+     *  edits. The fix for ONE weak image. Body (optional): {"visualDesc": "...",
+     *  "model": "veo3_1"}. */
     @PostMapping("/scenes/{seq}/regen-clip")
     public ResponseEntity<Map<String, Object>> regenClip(@PathVariable UUID id, @PathVariable int seq,
                                                          @RequestBody(required = false) Map<String, String> body) {
         return ResponseEntity.ok(orchestrator.regenAndRerollScene(id, seq,
                 body == null ? null : body.get("visualDesc"),
                 body == null ? null : body.get("model")));
+    }
+
+    /** QC-override: gebruik alsnog de door de clip-QC AFGEKEURDE Veo-clip van
+     *  deze scène (clip.rejected.mp4) — promoveert 'm terug naar clip.mp4, zet
+     *  clipPath weer op de scène, wist de QC-reden en hermonteert. Voor wanneer
+     *  de reviewer oordeelt dat de QC ten onrechte afkeurde. Geen Veo-kosten. */
+    @PostMapping("/scenes/{seq}/accept-rejected-clip")
+    public ResponseEntity<Map<String, Object>> acceptRejectedClip(@PathVariable UUID id, @PathVariable int seq) {
+        return ResponseEntity.ok(orchestrator.acceptRejectedClip(id, seq));
     }
 
     /** Regenerate the thumbnail (3 fresh variants) steered by a free-text
@@ -138,6 +175,14 @@ public class ReviewController {
                                                                    @RequestBody(required = false) Map<String, String> body) {
         return ResponseEntity.ok(orchestrator.regenerateThumbnail(id,
                 body == null ? null : body.get("hint")));
+    }
+
+    /** Preview-only: the assembled thumbnail prompt(s) per variant (no image
+     *  generation). Drives the dashboard "thumbnail-prompt" copy view, the same
+     *  way the scene image-/Veo-prompts are exposed. */
+    @GetMapping("/thumbnail-prompt")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> thumbnailPrompt(@PathVariable UUID id) {
+        return ResponseEntity.ok(orchestrator.thumbnailPromptPreview(id));
     }
 
     @PostMapping("/scenes/{seq}/lock")

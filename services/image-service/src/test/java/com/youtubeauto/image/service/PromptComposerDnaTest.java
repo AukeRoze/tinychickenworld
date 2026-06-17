@@ -52,7 +52,8 @@ class PromptComposerDnaTest {
                 "small plump body",       // build
                 "feather-light, bouncy",  // weight (Veo-only — not on the still)
                 "big black shiny eyes",   // eyeColor
-                "glasses or a scarf");    // antiAccessory (never-wear lock)
+                "glasses or a scarf",     // antiAccessory (never-wear lock)
+                "straw hat");             // signatureAccessoryShort (guard rewrite target)
         return new Character("pip", "Pip", "the curious chick", "PIPTOKEN", "baby chick", dna);
     }
 

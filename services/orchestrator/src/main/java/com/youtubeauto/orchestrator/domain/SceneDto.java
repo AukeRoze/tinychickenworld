@@ -65,12 +65,32 @@ public class SceneDto {
     private String endPose;
     private String motionDesc;
     private String cameraFraming;
+    /** Optionele camera-move id uit camera-moves.json (bv. "slow-dolly-in").
+     *  Leeg/afwezig → de Veo-compiler gebruikt de phase-default beweging uit de
+     *  cameraBible; gezet → die move vervangt de default beweging in de prompt. */
+    private String cameraMove;
+    /** Optionele per-scène Veo camera-override (vrije tekst, bv. "low-angle,
+     *  35mm, slow drift"). Leeg/afwezig → de compiler gebruikt het phase-preset
+     *  uit de cameraBible; gezet → die string VERVANGT de hele Camera-regel
+     *  (hoek, lens, beweging, focus, diepte) in de Veo-prompt. Bedoeld voor
+     *  scènes waar het shot-type in visualDesc botst met het phase-preset. */
+    private String veoCameraOverride;
     /** Per-character dialogue lines: {speaker, text[, emotion]}. */
     private List<Map<String, Object>> lines;
     /** Per-line voice timing: {startMs, durMs, ...} (numbers). */
     private List<Map<String, Object>> lineTimings;
     @JsonProperty("locked")
     private Boolean locked;
+    /** Bewaarpad van een door de Veo clip-QC AFGEKEURDE clip (clip.rejected.mp4
+     *  naast de scène). Alleen gezet door {@code clipQcGate} op het Veo-pad bij
+     *  definitieve afkeuring; afwezig op alle andere scènes (NON_NULL → geen
+     *  key). Maakt de afgekeurde clip zichtbaar voor review zonder dat hij in de
+     *  eindvideo komt ({@link #clipPath} blijft gedropt → montage gebruikt de
+     *  Ken Burns-still). */
+    private String qcRejectedClipPath;
+    /** Reden waarom de clip-QC deze clip afkeurde (de {@code r.issues()}-tekst,
+     *  gecapt). Begeleidt {@link #qcRejectedClipPath} voor de review-UI. */
+    private String qcRejectReason;
 
     /** Round-trip bucket for every key this class doesn't model. */
     private final Map<String, Object> extras = new LinkedHashMap<>();
@@ -200,6 +220,12 @@ public class SceneDto {
     public String getCameraFraming() { return cameraFraming; }
     public void setCameraFraming(String cameraFraming) { this.cameraFraming = cameraFraming; }
 
+    public String getCameraMove() { return cameraMove; }
+    public void setCameraMove(String cameraMove) { this.cameraMove = cameraMove; }
+
+    public String getVeoCameraOverride() { return veoCameraOverride; }
+    public void setVeoCameraOverride(String veoCameraOverride) { this.veoCameraOverride = veoCameraOverride; }
+
     public List<Map<String, Object>> getLines() { return lines; }
     public void setLines(List<Map<String, Object>> lines) { this.lines = lines; }
 
@@ -208,4 +234,10 @@ public class SceneDto {
 
     public Boolean getLocked() { return locked; }
     public void setLocked(Boolean locked) { this.locked = locked; }
+
+    public String getQcRejectedClipPath() { return qcRejectedClipPath; }
+    public void setQcRejectedClipPath(String qcRejectedClipPath) { this.qcRejectedClipPath = qcRejectedClipPath; }
+
+    public String getQcRejectReason() { return qcRejectReason; }
+    public void setQcRejectReason(String qcRejectReason) { this.qcRejectReason = qcRejectReason; }
 }

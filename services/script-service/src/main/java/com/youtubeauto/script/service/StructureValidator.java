@@ -132,26 +132,38 @@ public class StructureValidator {
             }
         }
 
-        // 5) Location variety — anti "every scene is the same barn".
-        long distinctLoc = scenes.stream()
+        // 5) Location rule. SINGLE-LOCATION mode (bible rules.singleLocation) wants
+        //    the WHOLE episode in ONE setting — switching places confuses young
+        //    viewers. Legacy mode (flag off) keeps the old "variety" rule. The two
+        //    are mutually exclusive, so we branch on the flag.
+        List<String> locs = scenes.stream()
                 .map(GeneratedScript.Scene::locationId)
                 .filter(x -> x != null && !x.isBlank())
-                .distinct().count();
-        if (scenes.size() >= 6 && distinctLoc < 2) {
-            v.add("All scenes share a single location — use at least 2-3 distinct locations for visual variety.");
-        }
-        int run = 1;
-        for (int i = 1; i < scenes.size(); i++) {
-            String a = nz(scenes.get(i).locationId());
-            String b = nz(scenes.get(i - 1).locationId());
-            if (!a.isBlank() && a.equals(b)) {
-                if (++run > MAX_SAME_LOCATION_RUN) {
-                    v.add("More than " + MAX_SAME_LOCATION_RUN + " consecutive scenes in location '"
-                            + a + "' — rotate the setting or time-of-day.");
-                    break;
+                .distinct().toList();
+        boolean singleLocation = es != null && es.singleLocation();
+        if (singleLocation) {
+            if (locs.size() > 1) {
+                v.add("Single-location episode: every scene must use the SAME locationId, "
+                        + "but found " + locs.size() + " distinct (" + locs + ") — pick ONE "
+                        + "location that fits the topic and set it on every scene.");
+            }
+        } else {
+            if (scenes.size() >= 6 && locs.size() < 2) {
+                v.add("All scenes share a single location — use at least 2-3 distinct locations for visual variety.");
+            }
+            int run = 1;
+            for (int i = 1; i < scenes.size(); i++) {
+                String a = nz(scenes.get(i).locationId());
+                String b = nz(scenes.get(i - 1).locationId());
+                if (!a.isBlank() && a.equals(b)) {
+                    if (++run > MAX_SAME_LOCATION_RUN) {
+                        v.add("More than " + MAX_SAME_LOCATION_RUN + " consecutive scenes in location '"
+                                + a + "' — rotate the setting or time-of-day.");
+                        break;
+                    }
+                } else {
+                    run = 1;
                 }
-            } else {
-                run = 1;
             }
         }
 

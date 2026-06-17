@@ -58,6 +58,14 @@ public class ScriptGenerator {
     }
 
     private void validate(GeneratedScript s, GenerateScriptRequest req) {
+        // Null/empty guard (2026-06-14): a model hiccup kan een tool-resultaat
+        // zonder scenes-array teruggeven; scenes().stream() gaf dan een kale NPE
+        // ("Cannot invoke List.stream()"). Faal nu netjes zodat de orchestrator de
+        // job als FAILED markeert met een duidelijke, herhaalbare reden.
+        if (s == null || s.scenes() == null || s.scenes().isEmpty()) {
+            throw new IllegalStateException(
+                    "model returned no scenes (empty/malformed script JSON) — retry the job");
+        }
         int total = s.scenes().stream().mapToInt(GeneratedScript.Scene::durationSeconds).sum();
         double drift = Math.abs(total - req.targetSeconds()) / (double) req.targetSeconds();
         if (drift > 0.25) {

@@ -1,0 +1,9 @@
+﻿{
+    "status":  200,
+    "body":  {
+                 "hasClip":  true,
+                 "running":  false,
+                 "status":  "idle"
+             },
+    "executedAt":  "2026-06-14T15:26:59.3947973+02:00"
+}

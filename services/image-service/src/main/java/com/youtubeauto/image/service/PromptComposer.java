@@ -3,9 +3,11 @@ package com.youtubeauto.image.service;
 import com.youtubeauto.image.api.dto.GenerateImageRequest.SceneVisual;
 import com.youtubeauto.image.bible.BibleLoader;
 import com.youtubeauto.image.bible.ChannelBible;
+import com.youtubeauto.image.bible.Character;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +37,61 @@ public class PromptComposer {
         return prompt + " IMPORTANT CORRECTION — the previous render of this scene was "
                 + "wrong; fix specifically: " + scene.correctionHint().trim()
                 + ". Keep everything else as described.";
+    }
+
+    /** Neutralise anatomically-impossible HUMAN-HAND gestures that sometimes leak
+     *  into the script's visualDesc (e.g. "a thumbs-up wing", "claps her hands",
+     *  "high-five"). A chick has feathered WING-TIPS — no thumbs, fingers or
+     *  hands — so these contradict the prompt's own anatomy rule (the TAIL) and
+     *  push the model into a malformed hand-wing hybrid. Rewrite each into the
+     *  wing equivalent BEFORE it reaches the prompt, so the whole prompt is
+     *  internally consistent. Case-insensitive, word-bounded, ordered most-
+     *  specific first; text without such a gesture is returned unchanged. */
+    static String wingSafe(String desc) {
+        if (desc == null || desc.isBlank()) return desc;
+        String d = desc;
+        // thumbs-up family first (incl. the literal "thumbs-up wing")
+        d = d.replaceAll("(?i)\\b(?:a |an |two |both )?thumbs?[-\\s]?up(?:\\s+wing)?(?:\\s+gesture)?\\b",
+                         "a cheerful raised wingtip");
+        d = d.replaceAll("(?i)\\bhigh[-\\s]?fives?\\b", "a wing-bump");
+        d = d.replaceAll("(?i)\\bclapping\\s+(?:her|his|their|its)?\\s*hands\\b", "clapping its wings");
+        d = d.replaceAll("(?i)\\bclaps?\\s+(?:her|his|their|its)?\\s*hands\\b", "claps its wings");
+        // leftover bare anatomy words
+        d = d.replaceAll("(?i)\\bfingertips?\\b", "wingtips");
+        d = d.replaceAll("(?i)\\bfingers?\\b", "wingtips");
+        d = d.replaceAll("(?i)\\bthumbs\\b", "wingtips");
+        d = d.replaceAll("(?i)\\bthumb\\b", "wingtip");
+        d = d.replaceAll("(?i)\\bhands\\b", "wings");
+        d = d.replaceAll("(?i)\\bhand\\b", "wing");
+        return d;
+    }
+
+    /** Corrects an accessory-vs-action contradiction in the scene action BEFORE
+     *  it is inserted into SCENE/SUBJECT — so an action that hands a uniquely-owned
+     *  accessory to the wrong chick (Mo "adjusting his glasses" → his own "thick
+     *  red knitted scarf") stops fighting the CHARACTER DNA never-wear lock in the
+     *  same prompt (EP3 review, scene 5). Bible-driven; a clean action is returned
+     *  unchanged. */
+    private String accessorySafe(SceneVisual scene) {
+        String desc = scene == null ? null : scene.visualDesc();
+        if (desc == null || desc.isBlank()) return desc;
+        ChannelBible bible = bibleLoader.getBible();
+        if (bible == null || bible.characters() == null) return desc;
+        List<AccessoryGuard.CharModel> models = new java.util.ArrayList<>();
+        for (Character ch : bible.characters()) {
+            var dna = ch.dna();
+            String owned = dna == null ? "" : dna.accessory();
+            String forbidden = dna == null ? "" : dna.antiAccessory();
+            String shortAcc = dna == null ? "" : dna.signatureAccessoryShort();
+            String gender = AccessoryGuard.inferGender(
+                    dna == null ? "" : dna.tic(),
+                    dna == null ? "" : dna.signatureSound(),
+                    ch.description());
+            models.add(new AccessoryGuard.CharModel(ch.id(), ch.name(), shortAcc,
+                    AccessoryGuard.categoriesIn(owned),
+                    AccessoryGuard.categoriesIn(forbidden), gender));
+        }
+        return AccessoryGuard.sanitize(desc, scene.characters(), models);
     }
 
     private static final String TAIL =
@@ -139,7 +196,7 @@ public class PromptComposer {
             }
         }
 
-        sb.append("SCENE — ").append(scene.visualDesc().trim()).append(TAIL);
+        sb.append("SCENE — ").append(wingSafe(accessorySafe(scene)).trim()).append(TAIL);
         return sb.toString();
     }
 
@@ -238,7 +295,7 @@ public class PromptComposer {
             }
         }
 
-        sb.append(scene.visualDesc().trim()).append(TAIL);
+        sb.append(wingSafe(accessorySafe(scene)).trim()).append(TAIL);
         return sb.toString();
     }
 
@@ -279,9 +336,13 @@ public class PromptComposer {
             // identity. Forces the small, high-frequency details the model drops
             // (Pip's hat, Bo's glasses) AND the recognisable silhouette into
             // every frame. Single source of truth: edit the bible, not code.
+            // Max ÉÉN mannerism/tic per scène (gebruikersfeedback 2026-06-14): alleen
+            // het EERSTE (focale) personage toont zijn tic; identiteitsvelden blijven
+            // voor élk personage.
+            java.util.List<String> absentNames = absentCastNames(orderedIds);
             StringBuilder dnaBlock = new StringBuilder();
-            for (String id : orderedIds) {
-                String line = dnaLine(id);
+            for (int i = 0; i < orderedIds.size(); i++) {
+                String line = dnaLine(orderedIds.get(i), i == 0, absentNames);
                 if (!line.isBlank()) dnaBlock.append(line).append(' ');
             }
             if (dnaBlock.length() > 0) {
@@ -289,15 +350,7 @@ public class PromptComposer {
                         + "right character): ").append(dnaBlock);
             }
 
-            int n = orderedIds.size();
-            if (n == 1) {
-                sb.append("Exactly ONE chick in the whole image — no second chick, no twin, "
-                        + "no clone, no reflection. ");
-            } else {
-                sb.append(String.format("Exactly %d chicks total, one per referenced "
-                        + "character, each clearly DIFFERENT and recognisable, never "
-                        + "duplicated. ", n));
-            }
+            sb.append(rosterCountSentence(orderedIds));
         }
 
         // 2) Style + world context.
@@ -323,7 +376,7 @@ public class PromptComposer {
         }
 
         // 3) Scene action + aspect + style tail.
-        sb.append("SCENE — ").append(scene.visualDesc().trim()).append(' ');
+        sb.append("SCENE — ").append(wingSafe(accessorySafe(scene)).trim()).append(' ');
         boolean vertical = "vertical".equalsIgnoreCase(format);
         sb.append(vertical
                 ? "Vertical 9:16 full-bleed composition. "
@@ -362,9 +415,12 @@ public class PromptComposer {
                     + "have, never remove one it does have, and never swap accessories "
                     + "between characters. ");
 
+            // Max ÉÉN tic per scène (zie composeReference) — alleen het eerste
+            // personage toont zijn mannerism; identiteit blijft voor iedereen.
+            java.util.List<String> absentNames = absentCastNames(orderedIds);
             StringBuilder dnaBlock = new StringBuilder();
-            for (String id : orderedIds) {
-                String line = dnaLine(id);
+            for (int i = 0; i < orderedIds.size(); i++) {
+                String line = dnaLine(orderedIds.get(i), i == 0, absentNames);
                 if (!line.isBlank()) dnaBlock.append(line).append(' ');
             }
             if (dnaBlock.length() > 0) {
@@ -372,19 +428,11 @@ public class PromptComposer {
                         + "right character): ").append(dnaBlock);
             }
 
-            int n = orderedIds.size();
-            if (n == 1) {
-                sb.append("Exactly ONE chick in the whole image — no second chick, no twin, "
-                        + "no clone, no reflection. ");
-            } else {
-                sb.append(String.format("Exactly %d chicks total, one per referenced "
-                        + "character, each clearly DIFFERENT and recognisable, never "
-                        + "duplicated. ", n));
-            }
+            sb.append(rosterCountSentence(orderedIds));
         }
 
         if (!bible.visualStyle().isBlank()) sb.append(bible.visualStyle()).append(' ');
-        sb.append("SUBJECT — ").append(scene.visualDesc().trim()).append(' ');
+        sb.append("SUBJECT — ").append(wingSafe(scene.visualDesc()).trim()).append(' ');
         boolean vertical = "vertical".equalsIgnoreCase(format);
         sb.append(vertical
                 ? "Vertical 9:16 full-bleed composition. "
@@ -404,7 +452,7 @@ public class PromptComposer {
      * animation never disagree. When a DNA field is added to the bible, inject it
      * in BOTH places. ({@code weight} is a motion cue → Veo-only, omitted here.)
      */
-    private String dnaLine(String id) {
+    private String dnaLine(String id, boolean includeTic, java.util.Collection<String> absentNames) {
         var chOpt = bibleLoader.getBible().character(id);
         if (chOpt.isEmpty()) return "";
         var ch = chOpt.get();
@@ -419,7 +467,8 @@ public class PromptComposer {
              .append(" — clearly visible, never dropped or swapped. ");
         }
         if (dna.hasSilhouette()) {
-            b.append("Silhouette: ").append(dna.silhouette()).append(". ");
+            String s = scopeDnaText(dna.silhouette(), absentNames);
+            if (!s.isBlank()) b.append("Silhouette: ").append(s).append(". ");
         }
         // Extended identity details — feather texture, body build and eye colour
         // keep the character on-model across DIFFERENT shots without an identical
@@ -429,7 +478,8 @@ public class PromptComposer {
             b.append("Feathers: ").append(dna.feathers()).append(". ");
         }
         if (dna.hasBuild()) {
-            b.append("Build: ").append(dna.build()).append(". ");
+            String s = scopeDnaText(dna.build(), absentNames);
+            if (!s.isBlank()) b.append("Build: ").append(s).append(". ");
         }
         if (dna.hasEyeColor()) {
             b.append("Eyes: ").append(dna.eyeColor()).append(". ");
@@ -437,7 +487,7 @@ public class PromptComposer {
         // Signature mannerism (the DNA tic) as a POSE hint so the character's
         // quirk reads even in a still — Bo mid glasses-push, Pip tipping her hat,
         // Mo a slow thoughtful look. Only when it fits the scene's action.
-        if (dna.hasTic()) {
+        if (dna.hasTic() && includeTic) {
             b.append(ch.name()).append("'s signature mannerism — when it fits the "
                     + "scene, show ").append(ch.name()).append(" mid-gesture: ")
              .append(dna.tic()).append(". ");
@@ -448,5 +498,116 @@ public class PromptComposer {
             b.append(ch.name()).append(" must NEVER wear ").append(dna.antiAccessory()).append(". ");
         }
         return b.toString().trim();
+    }
+
+    // ---- species-aware roster count + absent-cast scoping ----------------------
+
+    /**
+     * Species-aware roster count so a mixed cast is counted correctly: e.g.
+     * "Exactly 2 chickens and 1 duckling total (3 characters maximum in frame),
+     * each matching its own referenced species and design perfectly, never
+     * duplicated." The old "Exactly 3 chicks total" lumped the duckling in with
+     * the chickens, so Midjourney/Nano-Banana turned the duckling into a third
+     * chicken (the EP3 scene-24/25 paradox). Counts use each character's bible
+     * {@code rosterNoun}/{@code species} (default "chicken").
+     */
+    private String rosterCountSentence(java.util.List<String> orderedIds) {
+        ChannelBible bible = bibleLoader.getBible();
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (String id : orderedIds) {
+            String noun = bible.character(id).map(Character::displayNoun).orElse("chicken");
+            counts.merge(noun, 1, Integer::sum);
+        }
+        int total = orderedIds.size();
+        if (total == 1) {
+            String noun = counts.keySet().iterator().next();
+            return "Exactly ONE " + noun + " in the whole image — no second " + noun
+                    + ", no twin, no clone, no reflection. ";
+        }
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        for (var e : counts.entrySet()) {
+            parts.add(e.getValue() + " " + (e.getValue() == 1 ? e.getKey() : e.getKey() + "s"));
+        }
+        return String.format("Exactly %s total (%d characters maximum in frame), each "
+                + "matching its own referenced species and design perfectly, never "
+                + "duplicated. ", joinAnd(parts), total);
+    }
+
+    private static String joinAnd(java.util.List<String> parts) {
+        if (parts.isEmpty()) return "";
+        if (parts.size() == 1) return parts.get(0);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) b.append(i == parts.size() - 1 ? " and " : ", ");
+            b.append(parts.get(i));
+        }
+        return b.toString();
+    }
+
+    /** Display names of every bible character NOT present in {@code orderedIds} —
+     *  the cast members whose comparative mentions must be scrubbed from the DNA so
+     *  an absent character (e.g. Bo in a Pip+Mo+duckling scene) is never named. */
+    private java.util.List<String> absentCastNames(java.util.List<String> orderedIds) {
+        java.util.Set<String> present = new java.util.HashSet<>();
+        for (String id : orderedIds) if (id != null) present.add(id.toLowerCase());
+        java.util.List<String> absent = new java.util.ArrayList<>();
+        for (Character c : bibleLoader.getBible().characters()) {
+            if (c.id() != null && !present.contains(c.id().toLowerCase())
+                    && c.name() != null && !c.name().isBlank()) {
+                absent.add(c.name());
+            }
+        }
+        return absent;
+    }
+
+    /**
+     * Strips comparative fragments that NAME an absent cast member from a DNA
+     * string, so a per-character DNA note never drags an off-screen character into
+     * the frame (EP3 scene-24/25: the duckling's "about two-thirds of Bo's height"
+     * and Pip's "(… and Bo is a vertical line)" made the model render Bo). Two
+     * passes: (1) drop any parenthetical that mentions an absent name; (2) drop any
+     * comma/semicolon/dash-delimited clause that mentions an absent name. A
+     * character's OWN self-reference and any present cast member are left intact.
+     */
+    static String scopeDnaText(String text, java.util.Collection<String> absentNames) {
+        if (text == null || text.isBlank() || absentNames == null || absentNames.isEmpty()) return text;
+        // Only touch fields that actually name an absent character — every other
+        // DNA string is returned byte-for-byte unchanged (no cosmetic churn).
+        boolean mentionsAny = false;
+        for (String name : absentNames) {
+            if (name != null && !name.isBlank()
+                    && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(name) + "\\b")
+                            .matcher(text).find()) { mentionsAny = true; break; }
+        }
+        if (!mentionsAny) return text;
+        String out = text;
+        for (String name : absentNames) {
+            if (name == null || name.isBlank()) continue;
+            String nb = "\\b" + java.util.regex.Pattern.quote(name) + "\\b";
+            // (1) parentheticals mentioning the absent name → removed wholesale.
+            out = out.replaceAll("\\s*\\([^()]*" + nb + "[^()]*\\)", "");
+        }
+        // (2) clause-level drop for remaining mentions.
+        String[] clauses = out.split("\\s*(?:,|;|—|–|\\s-\\s)\\s*");
+        java.util.List<String> kept = new java.util.ArrayList<>();
+        for (String cl : clauses) {
+            String c = cl.trim();
+            if (c.isEmpty()) continue;
+            boolean mentionsAbsent = false;
+            for (String name : absentNames) {
+                if (name == null || name.isBlank()) continue;
+                if (java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(name) + "\\b")
+                        .matcher(c).find()) { mentionsAbsent = true; break; }
+            }
+            if (!mentionsAbsent) kept.add(c);
+        }
+        String joined = String.join(", ", kept);
+        // Tidy any punctuation/space artefacts left by the removals.
+        return joined.replaceAll("\\s{2,}", " ")
+                     .replaceAll("\\s+([,.;])", "$1")
+                     .replaceAll("(?:,\\s*){2,}", ", ")
+                     .replaceAll("^[,;\\s]+", "")
+                     .replaceAll("[,;\\s]+$", "")
+                     .trim();
     }
 }

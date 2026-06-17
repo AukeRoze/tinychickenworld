@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "description": "Mapping van scene-intentie naar aanbevolen camerabewegingen uit camera-moves.json. 'primary' = veilige eerste keuze (meestal low/medium motion, frame-chaining-vriendelijk). 'alternatives' = extra opties. 'bold' = high-impact moves die mooi zijn maar kunnen botsen met frame-chaining/morphing; alleen los inzetten (zie veo-endframe-en-refs).",
+  "usage": "Bepaal per scene de intentie, pak de bijbehorende 'primary' move-id, haal de 'camera'-directive op uit camera-moves.json en prepend/append die aan de scene-prompt.",
+  "intents": [
+    {
+      "intent": "establishing",
+      "description": "Plaats en wereld neerzetten aan het begin van een sequentie.",
+      "primary": "drone-flyover",
+      "alternatives": ["top-down-gods-eye", "optical-zoom-out", "crane-down"],
+      "bold": ["hyper-zoom", "large-scale-drone-orbit"]
+    },
+    {
+      "intent": "character-intro",
+      "description": "Een personage voor het eerst introduceren.",
+      "primary": "tilt-up",
+      "alternatives": ["focus-pull-reveal", "crane-down", "optical-zoom-in"],
+      "bold": ["fast-360-orbit"]
+    },
+    {
+      "intent": "emotional-beat",
+      "description": "Innerlijke verschuiving, stilte, kwetsbaarheid.",
+      "primary": "slow-dolly-in",
+      "alternatives": ["optical-zoom-in", "pedestal-up", "slow-cinematic-arc"],
+      "bold": []
+    },
+    {
+      "intent": "reveal",
+      "description": "Iets onthullen dat eerst verborgen was.",
+      "primary": "lateral-wipe-reveal",
+      "alternatives": ["focus-pull-reveal", "rack-focus", "optical-zoom-out", "tilt-down"],
+      "bold": ["fly-through-aperture", "epic-drone-reveal", "crane-up"]
+    },
+    {
+      "intent": "tension-suspense",
+      "description": "Spanning opbouwen, dreiging, onbehagen.",
+      "primary": "dutch-angle",
+      "alternatives": ["slow-dolly-in", "rack-focus", "fisheye-peephole"],
+      "bold": ["dolly-zoom-vertigo"]
+    },
+    {
+      "intent": "action-energy",
+      "description": "Snelle, dynamische, energieke momenten.",
+      "primary": "side-tracking",
+      "alternatives": ["handheld-documentary", "whip-pan"],
+      "bold": ["fast-360-orbit", "fpv-drone-dive", "fast-dolly-in"]
+    },
+    {
+      "intent": "dialogue-confrontation",
+      "description": "Gesprek of directe confrontatie tussen personages.",
+      "primary": "over-the-shoulder",
+      "alternatives": ["rack-focus", "slow-dolly-in"],
+      "bold": []
+    },
+    {
+      "intent": "contemplation",
+      "description": "Rustig, reflectief, beschouwend moment.",
+      "primary": "slow-cinematic-arc",
+      "alternatives": ["pedestal-down", "optical-zoom-in", "slow-dolly-in"],
+      "bold": []
+    },
+    {
+      "intent": "transition",
+      "description": "Overgang tussen scenes of ruimtes.",
+      "primary": "whip-pan",
+      "alternatives": ["lateral-wipe-reveal", "macro-zoom"],
+      "bold": ["fly-through-aperture", "hyper-zoom"]
+    },
+    {
+      "intent": "ending-resolution",
+      "description": "Afsluiting, uitzoomen uit het verhaal.",
+      "primary": "slow-dolly-out",
+      "alternatives": ["optical-zoom-out", "pedestal-up"],
+      "bold": ["crane-up", "drone-flyover"]
+    },
+    {
+      "intent": "detail-object-focus",
+      "description": "Nadruk op een klein object of detail.",
+      "primary": "rack-focus",
+      "alternatives": ["macro-zoom", "tilt-down", "optical-zoom-in"],
+      "bold": []
+    },
+    {
+      "intent": "scale-grandeur",
+      "description": "Schaal en grootsheid van een omgeving tonen.",
+      "primary": "slow-dolly-out",
+      "alternatives": ["top-down-gods-eye", "drone-flyover"],
+      "bold": ["large-scale-drone-orbit", "epic-drone-reveal", "crane-up", "hyper-zoom"]
+    },
+    {
+      "intent": "psychological-unease",
+      "description": "Verwarring, ontwrichting, mentale onbalans.",
+      "primary": "dutch-angle",
+      "alternatives": ["fisheye-peephole", "rack-focus"],
+      "bold": ["dolly-zoom-vertigo", "snap-zoom"]
+    },
+    {
+      "intent": "realization-impact",
+      "description": "Plotseling besef of schokmoment.",
+      "primary": "slow-dolly-in",
+      "alternatives": ["rack-focus"],
+      "bold": ["snap-zoom", "fast-dolly-in"]
+    },
+    {
+      "intent": "journey-movement",
+      "description": "Personage dat zich verplaatst, op weg is.",
+      "primary": "following-shot",
+      "alternatives": ["leading-shot", "side-tracking", "truck-left", "truck-right"],
+      "bold": []
+    },
+    {
+      "intent": "immersion-pov",
+      "description": "Kijker in de huid van het personage plaatsen.",
+      "primary": "pov-walk",
+      "alternatives": ["handheld-documentary", "following-shot"],
+      "bold": []
+    }
+  ]
+}

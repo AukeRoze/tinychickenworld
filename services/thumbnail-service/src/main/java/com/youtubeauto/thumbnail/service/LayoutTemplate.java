@@ -38,7 +38,19 @@ public enum LayoutTemplate {
                         "no busy text-like patterns; subject not blocking the center."),
 
     /** Coloured ribbon across the top with the title; subject below. */
-    TEXT_TOP_BANNER("Leave the TOP 20% of the image as plain sky or simple background.");
+    TEXT_TOP_BANNER("Leave the TOP 20% of the image as plain sky or simple background."),
+
+    // ---- big "rainbow" hook headline (gebruikerswens 2026-06-14) ----
+    // Grote, dikke, ALL-CAPS hook-vraag met per-letter felle kleuren + dikke
+    // zwarte rand, in de stijl van het door Auke aangeleverde voorbeeld
+    // ("WHAT'S INSIDE?"). Sterke kids-CTR-formule; gerenderd als schone overlay
+    // (geen AI-letters). Top- en bottom-variant voor Test & Compare-A/B.
+
+    /** Big multi-colour hook headline across the TOP. */
+    HOOK_RAINBOW_TOP("Leave the TOP ~28% as simple sky/background; characters in the lower 70%."),
+
+    /** Same rainbow hook headline along the BOTTOM (A/B placement variant). */
+    HOOK_RAINBOW_BOTTOM("Leave the BOTTOM ~28% a touch simpler; characters fill the upper frame.");
 
     public final String promptHint;
     LayoutTemplate(String hint) { this.promptHint = hint; }

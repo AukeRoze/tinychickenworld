@@ -108,6 +108,10 @@ imageGen:
 #                             characters move, ~€3-5 per video. Opt-in.
 # Override per request via the orchestrator's `motionMode` field.
 videoGen:
+  # €0-standaard: bewegende stills (Ken Burns) — draait op de laptop, geen Veo-
+  # kosten (gebruikerswens 2026-06-14, kostenbeheersing tot er een lokale GPU is).
+  # Per job override mogelijk: motionMode=veo voor een betaalde Veo-aflevering,
+  # of motionMode=hybrid voor Ken Burns-bulk + Veo op hero/intro/outro.
   defaultMode: ${VIDEO_MOTION_MODE:ken_burns}
   veo:
     # Model aliases (resolved in ModelRouter.normaliseModelId):
@@ -120,7 +124,7 @@ videoGen:
     # bump over 3.0-fast at the same price. For 1080p hero shots, switch
     # heroModel + the intro/outro/hero routing to veo3_1 (≈4× the per-second cost).
     defaultModel: veo3_1_fast
-    heroModel: veo3_1_fast      # premium 1080p hero: veo3_1
+    heroModel: veo3_1           # premium 1080p hero (gebruikerswens 2026-06-14)
     heroQuality: high           # basic | high | ultra
     # Fallback when defaultModel hits quota or fails twice.
     fallbackModel: veo3_1_fast
@@ -145,15 +149,15 @@ videoGen:
     # set intro/outro/hero model to veo3_1 (≈4× per-second cost) + raise the cap.
     routing:
       - sceneType: intro
-        model: veo3_1_fast      # 1080p premium: veo3_1
+        model: veo3_1           # premium native 1080p (gebruikerswens 2026-06-14)
         quality: high
         maxSeconds: 8           # full Veo max — room for 3 paced introductions
       - sceneType: outro
-        model: veo3_1_fast      # 1080p premium: veo3_1
+        model: veo3_1           # premium native 1080p (gebruikerswens 2026-06-14)
         quality: high
         maxSeconds: 6
       - sceneType: hero
-        model: veo3_1_fast      # 1080p premium: veo3_1
+        model: veo3_1           # premium native 1080p (gebruikerswens 2026-06-14)
         quality: high
         maxSeconds: 8
       - sceneType: standard
@@ -177,7 +181,7 @@ review:
   reviewImages:  ${REVIEW_IMAGES:true}            # per-scene image review + regenerate
   afterAssets:   ${REVIEW_AFTER_ASSETS:false}     # gate after voice + image (whole batch)
   beforeVeo:     ${REVIEW_BEFORE_VEO:false}       # only fires if motionMode=veo
-  beforeUpload:  ${REVIEW_BEFORE_UPLOAD:true}     # gate after assembly + metadata
+  beforeUpload:  ${REVIEW_BEFORE_UPLOAD:false}    # planning/upload-poort: standaard AUTO-doorgaan (Auke 17 jun) — direct als Private uploaden; zet REVIEW_BEFORE_UPLOAD=true terug voor de handmatige poort
   notify:
     to:   ${REVIEW_EMAIL_TO:}                     # blank = no mail, gate still pauses
     from: ${REVIEW_EMAIL_FROM:noreply@yt-pipeline.local}
@@ -199,11 +203,12 @@ visualStyle:
     turning gently behind, a charming weathered red tractor, white picket
     fences, abundant wildflowers and daisies scattered everywhere, a small
     babbling creek with smooth pebbles, and a great old gnarled oak tree.
-    Signature lighting: warm
-    golden-hour with peachy-pink sky above and soft amber sun rays,
-    long warm shadows reaching east. Rich saturated colors — barn red,
-    warm golden orange, lush vivid green, soft cream, sky blue, peachy
-    sunset. Strong rim light defining each character's silhouette.
+    Signature lighting: soft, warm, naturalistic storybook light with a
+    gentle glow and strong rim light defining each character's silhouette —
+    the EXACT time of day (dawn / morning / midday / golden hour / dusk /
+    night) is set PER SCENE by the scene's own lighting line, so follow that
+    and do NOT force golden hour. Rich saturated brand colors — barn red,
+    warm golden orange, lush vivid green, soft cream, sky blue.
     SOFT, SIMPLIFIED STORYBOOK DETAIL — smooth rounded surfaces, gentle
     clean shapes, an uncluttered background so the characters always read
     first. Gently stylized, NOT photorealistic: avoid fine micro-texture,
@@ -229,11 +234,13 @@ visualStyle:
 # built-in "Soft 3D Pixar look" string.
 renderStyle:
   veoLook: >-
-    Soft 3D Pixar/Illumination cartoon look: fluffy down feathers with gentle
-    subsurface shading, a small matte beak, extra-large glossy eyes with bright
-    catch-lights, a warm rim-light defining each character's silhouette, smooth
-    rounded storybook surfaces and shallow soft depth of field. Warm rich
-    colours; never photorealistic, never flat 2D, no micro-texture.
+    Smooth, clean stylized 3D cartoon look: smooth matte bodies without
+    individual feather textures, thick chunky shapes with soft clay-like volume
+    and bold solid colours, a small matte beak and extra-large glossy eyes with
+    bright catch-lights, smooth rounded storybook surfaces and shallow soft depth
+    of field. Minimalist approach to textures, zero realism: never photorealistic,
+    no fluffy down feathers, no subsurface skin/feather shading, no micro-texture,
+    never flat 2D.
 
 # Colour-script (Story D) — an EMOTIONAL colour progression per phase, the way
 # Pixar colour-scripts a film so the palette supports each beat's feeling. The
@@ -255,6 +262,31 @@ colorScript:
 #
 # Each phase has a sceneType so the orchestrator can route hook/climax
 # scenes to higher-quality Veo (veo3_1) and the bulk to lite.
+# ── Lean Veo-prompts (prompt-kwaliteit) ───────────────────────────────────
+# Wanneer true gebruikt de VeoPromptCompiler de "lean" promptregels:
+#   • compacte character-identity uit dna.veoKey (i.p.v. 300+ woorden per
+#     scène per character) — de rest staat al in het startframe;
+#   • een soepele CAST-lock (exact aantal + niemand nieuw/geen swap) zonder de
+#     tegenstrijdige eis "fully visible from first to last frame";
+#   • één relatieve schaalregel (veoScaleRule) i.p.v. overlappende anchors.
+# False/afwezig = exact het oude gedrag (veilig tijdens een lopende episode;
+# de wijziging pakt pas bij de eerstvolgende bible-reload).
+veoLeanPrompts: true
+# Eén korte relatieve-grootteregel voor de hele flock (lean-modus).
+veoScaleRule: "Pip is the smallest, Mo is slightly larger, Bo is slightly taller and slimmer. Their proportions never change between or within shots."
+
+# Flow / Veo 3.1 NATIVE audio. True = de Veo-prompt regisseert het geluid ZELF:
+#   • wordeloze kuikengeluiden per personage (dna.signatureSound + emotie),
+#     gesynct met de snavel — géén taal (Pingu/Shaun-stijl blijft);
+#   • een locatie-gedreven ambient soundscape;
+#   • muziek passend bij de episode-mood (energetic/thoughtful/calm).
+# De oude "snavel dicht / geen lip-sync / aparte ElevenLabs-track"-regel vervalt
+# dan. Bedoeld voor het werken in Google Flow (de gekopieerde prompt bevat nu de
+# audio-regie). False/afwezig = exact het oude gedrag (geluid via de losse
+# voice-/muziekmix). LET OP: als je de geautomatiseerde pipeline draait, zet dan
+# ook de aparte stem/muziek-mix uit om dubbel geluid te voorkomen.
+veoNativeAudio: true
+
 # Camera Bible — canonical camera language per phase. The Veo prompt compiler
 # injects this into every shot so the "direction" is consistent instead of
 # guessed (a 50mm slow push-in feels very different from a 24mm top-down).
@@ -265,9 +297,17 @@ cameraBible:
   # establishing shot — dichtbij en intiem, de kijker zit óp de emotie.
   # Het establishing-shot hoort bij de eerste SETUP-scène (auto-regel in
   # de orchestrator), niet bij de hook.
-  hook:        { angle: "eye-level, framed as an EXTREME close-up on the face", lens: "85mm portrait", movement: "slow gentle push-in toward the face", focus: "lock focus on the main character's eyes", depthOfField: "very shallow, soft creamy background bokeh" }
+  # focus/angle bewust SUBJECT-agnostisch: de hook is meestal een gezichtsreactie,
+  # maar kan ook een prop-close-up zijn (scène 1: het wiebelende ei). "the face/eyes"
+  # hardcoderen liet de camera op het gezicht locken terwijl de actie het ei centraal
+  # wilde — een visuele spagaat. "the subject at the heart of the shot" werkt voor beide.
+  hook:        { angle: "eye-level, framed as an extreme close-up on the subject at the heart of the shot", lens: "85mm portrait", movement: "slow gentle push-in toward that subject", focus: "lock focus on the subject — the character's eyes, or the object the shot is about", depthOfField: "very shallow, soft creamy background bokeh" }
   setup:       { angle: "eye-level", lens: "35mm", movement: "slow drift", focus: "main character sharp, the world readable behind", depthOfField: "medium depth" }
-  development: { angle: "eye-level", lens: "50mm", movement: "subtle slow move", focus: "lock focus on whoever is speaking", depthOfField: "medium depth, soft background" }
+  # focus bewust LEEG: "lock focus on whoever is speaking" was conditioneel en
+  # brak bij scènes zonder spreker / met meerdere sprekers / met het ei centraal
+  # (Veo ging dan onbedoeld reframen). Leeg = de start-frame compositie stuurt de
+  # framing (lean mode zegt al "match the start frame EXACTLY").
+  development: { angle: "eye-level", lens: "50mm", movement: "subtle slow move", focus: "", depthOfField: "medium depth, soft background" }
   # Board #20 + board-audit climax-preset: de lage hoek blijft (alles ís
   # groot als je zo klein bent), maar de piek wordt intiemer en dramatischer
   # gefilmd — langere lens, langzame push-in en ondiepe scherptediepte zodat
@@ -305,25 +345,51 @@ episodeStructure:
         - "Mini-question or mini-decision that drives the next phase."
         - "Pace stays brisk — never linger more than 4 seconds per scene."
 
-    - id: development
-      label: "DEVELOPMENT"
-      seconds: 80
-      minScenes: 14
-      maxScenes: 20
+    # KEY BEAT — every episode has exactly ONE dedicated humor moment.
+    - id: humor
+      label: "HUMOR"
+      seconds: 10
+      minScenes: 1
+      maxScenes: 1
       sceneType: standard
       requirements:
-        - "Follow the BEATS of the chosen story arc."
-        - "Multiple short scenes, each with a fresh emotion or visual change."
-        - "Re-hook every 10-15 seconds — a joke, sound effect, or unexpected visual."
-        - "Build toward the climax with rising stakes or curiosity."
+        - "Exactly ONE scene of ~10 seconds: the episode's dedicated comedic beat — a single clear funny moment (a pratfall, a silly misunderstanding, Bo's goofy gag)."
+        - "Visual, child-friendly humor; the joke can be carried by the spoken line and the action."
+        - "Do NOT spread jokes across the episode — concentrate the comedy HERE; other scenes may gently support it but this is THE laugh."
 
+    - id: development
+      label: "DEVELOPMENT (supporting)"
+      seconds: 60
+      minScenes: 9
+      maxScenes: 14
+      sceneType: standard
+      requirements:
+        - "Supporting scenes that build toward the key moment — follow the BEATS of the chosen story arc."
+        - "Multiple short scenes, each with a fresh emotion or visual change, reinforcing the humor and emotion beats."
+        - "Re-hook every 10-15 seconds — a joke, sound effect, or unexpected visual."
+        - "Build toward the key moment with rising stakes or curiosity."
+
+    # KEY BEAT — every episode has exactly ONE dedicated emotional moment.
+    - id: emotion
+      label: "EMOTION"
+      seconds: 10
+      minScenes: 1
+      maxScenes: 1
+      sceneType: standard
+      requirements:
+        - "Exactly ONE scene of ~10 seconds: the episode's dedicated tender/emotional beat — a single heartfelt moment (care, worry, warmth, a lump-in-the-throat pause)."
+        - "Slow the pacing right down; let the feeling land before the key moment hits."
+        - "Carried by expression, the spoken line and a held look."
+
+    # KEY BEAT — the payoff the whole episode builds to (for the egg: the hatching).
     - id: climax
-      label: "CLIMAX"
-      seconds: 32
-      minScenes: 4
+      label: "KEY MOMENT (the reveal / payoff)"
+      seconds: 34
+      minScenes: 3
       maxScenes: 6
       sceneType: hero
       requirements:
+        - "THE KEY MOMENT — the reveal / payoff the whole video builds to (e.g. the egg hatching; for any topic, its big discovery)."
         - "The discovery / aha / joy moment — the emotional peak of the video."
         - "Visual reveal: wide shot showing the full setting in its best light."
         - "All characters together if they're in the brief."
@@ -353,8 +419,12 @@ episodeStructure:
 
   rules:
     rehookEverySeconds: 12
-    minScenesTotal: 27
-    maxScenesTotal: 39
+    minScenesTotal: 23
+    maxScenesTotal: 35
+    # Every episode plays in ONE single location (chosen per topic). Supporting
+    # scenes vary framing/time-of-day, never the place. Enforced by the prompt
+    # guidance + StructureValidator (single-location check).
+    singleLocation: true
 
 # Story arcs — explicit narrative structures, one rotated per script.
 # Claude must follow the beats in order. Gives every video a real arc instead
@@ -462,8 +532,8 @@ characters:
     description: >
       A TINY, dainty, perfectly ROUND fluffy young chick — the smallest of the
       trio, a petite little circle body under an extra-large round head, every
-      contour a soft curve — with soft CREAM-WHITE down feathers all over the
-      body, a bright red pointy chicken comb on top of the head, EXTRA-LARGE round
+      contour a soft curve — with soft PURE-WHITE down feathers all over the
+      body (clean white, NEVER yellow or cream-yellow), a bright red pointy chicken comb on top of the head, EXTRA-LARGE round
       shiny brown eyes with multiple bright reflective highlights and clearly visible
       iris detail, thick dark eyelashes, wears a tiny STRAW FARMER'S HAT on the head
       (the straw hat is the signature accessory and must always be clearly visible)
@@ -485,7 +555,16 @@ characters:
     # (image, Veo motion, thumbnail). Keep each line SHORT and unmistakable so a
     # child recognises the character by silhouette + tic, not just colour.
     dna:
-      coreColor: "cream-white"
+      coreColor: "pure white (never yellow)"
+      # Compacte Veo-identiteit (lean-modus): alleen de consistentie-kritische
+      # kenmerken. De rest leunt op het startframe als referentie.
+      veoKey: "PURE WHITE down (clean white, NEVER yellow or cream-yellow — she is not the yellow duckling), perfectly ROUND ball-of-fluff body, straw farmer hat + red neck bandana, HUGE sparkling brown eyes, the smallest chick of the trio"
+      # Compacte relatieve-grootte (lean-modus): de compiler bouwt de "Relative
+      # size:"-zin alleen uit de personages die ECHT in de scène staan. Eén losse
+      # zinsnede per personage, zonder afsluitende punt — de compiler voegt samen
+      # en interpunctueert. Zo komt "Mo is slightly larger" nooit meer in een
+      # scène waar Mo niet voorkomt.
+      veoSizeRank: "Pip is the smallest"
       # Silhouet-redesign (board-audit EP3 #25, uitgevoerd 2026-06-12): elk
       # personage moet als ZWART VLAK herkenbaar zijn, hoed of geen hoed.
       # Vorm-taal: Pip = CIRKEL, Mo = AAMBEELD/basis, Bo = VERTICALE STREEP.
@@ -494,6 +573,11 @@ characters:
       # Mo = grootste/breedste, Bo = dunste (middelhoog), Pip = kleinste.
       silhouette: "a TINY, petite, perfectly ROUND ball-of-fluff chick — the smallest of the trio, a dainty little circle body under an extra-large round head, every line a soft curve — topped by the tall pointed straw hat: a small circle-plus-triangle shape you read instantly as a black silhouette"
       accessory: "straw farmer hat and a red neck bandana"
+      # Korte zelfstandig-naamwoordvorm van het EIGEN signatuur-accessoire. Single
+      # source of truth voor de accessory-guard: als een actie Pip per ongeluk een
+      # bril/sjaal van een ander laat verstellen, herschrijft de guard dat naar dit
+      # eigen accessoire (de bril blijft van Bo, de sjaal van Mo).
+      signatureAccessoryShort: "straw farmer hat"
       # Herformuleerd (feedback ep 3): "tips her straw hat back" liet Veo de
       # hoed AFNEMEN en op de grond leggen — volgende scène had ze hem weer op.
       # De tic raakt nu alleen de rand aan en verbiedt het afnemen expliciet.
@@ -501,7 +585,7 @@ characters:
       signatureSound: "a bright rising curious chirp"
       # Extended cross-shot identity fields — keep the look stable across
       # different stills/shots WITHOUT needing an identical reference frame.
-      feathers: "dense ultra-soft cream-white down with a faint warm-yellow tint, fluffy and a little wispy at the cheeks"
+      feathers: "dense ultra-soft PURE-WHITE down (clean white, NO yellow or cream-yellow tint), fluffy and a little wispy at the cheeks"
       build: "the SMALLEST and roundest of the trio — a petite, dainty little circle of a body, noticeably smaller and finer than Mo (never chubby: small and delicate, not plump), with an extra-oversized round head and HUGE sparkling eyes — baby proportions that read as instantly adorable (where Mo is base and weight, and Bo is a vertical line)"
       weight: "light and bouncy, as if a gentle breeze could lift her"
       eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
@@ -522,8 +606,10 @@ characters:
       "Bzzz!"). She would rather DO than be told. Her catchphrase is "Oh! Oh oh oh!"
       used when something surprises her. Dialogue must feel like a real 4-year-old's
       natural curiosity, never adult exposition disguised as a child voice. She
-      frequently gives a playful wink with her right eye whenever she feels excited,
+      frequently gives a playful DOUBLE wink — two quick winks in a row with the
+      SAME right eye (never the left, never one wink) — whenever she feels excited,
       curious, proud, or has just discovered something new.
+      Pip is a girl — always "she/her" in scripts and visual descriptions.
     catchphrases:
       opener:
         - "Hi friends!"
@@ -561,10 +647,14 @@ characters:
     triggerWord: "mo_chicken"
     dna:
       coreColor: "blue-grey"
+      veoKey: "blue-grey, broad bottom-heavy ANVIL-shaped body, tall bright-red comb, red knitted neck scarf, steady warm-brown eyes, slightly the largest of the trio"
+      veoSizeRank: "Mo is slightly larger"
       # Vorm-taal: Mo = AAMBEELD — breed en zwaar van onderen, recht van schouders.
       silhouette: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, planted wide stance, with the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette, unmistakably different from Pip's circle"
       accessory: "a red knitted neck scarf"
-      tic: "tilts his head slowly and gives one calm, slow blink while thinking"
+      # Single source voor de accessory-guard (zie Pip). Mo's eigen accessoire.
+      signatureAccessoryShort: "thick red knitted scarf"
+      tic: "gives his red knitted scarf a quick tug with one wingtip to snug it up at the neck (the scarf always stays on — never removed)"
       signatureSound: "a soft low thoughtful hum"
       feathers: "smooth even blue-grey down with a soft dusty sheen, neat and tidy, no stray tufts"
       build: "very slightly the largest of the three — a bottom-heavy, solid little body with a broad base and squared, settled posture (NOT round: where Pip is all curves, Mo is weight and foundation), only a TOUCH taller and sturdier than the others, oversized head; still clearly the same kind of small chick"
@@ -615,9 +705,13 @@ characters:
     triggerWord: "bo_chicken"
     dna:
       coreColor: "tan and sandy-brown"
+      veoKey: "tan/sandy-brown, slim UPRIGHT body with a spiky cowlick tuft on top, round thin-framed eyeglasses + green neck scarf, bright amber eyes, the thinnest chick and middle in height"
+      veoSizeRank: "Bo is slightly taller and slimmer"
       # Vorm-taal: Bo = VERTICALE STREEP — smal, gestrekt, tuft als spits.
       silhouette: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up as the dot's echo, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette, the opposite of Pip's circle and Mo's anvil"
       accessory: "round thin-framed eyeglasses and a green neck scarf"
+      # Single source voor de accessory-guard (zie Pip). Bo's eigen accessoire.
+      signatureAccessoryShort: "round thin-framed eyeglasses"
       tic: "pushes her glasses up the beak with a wingtip before a joke"
       signatureSound: "a goofy hiccup-giggle"
       feathers: "warm tan and sandy-brown down, slightly ruffled, with a comic cowlick tuft sticking up on top"
@@ -654,6 +748,10 @@ characters:
   - id: duckling
     name: "Duckling"
     species: duck
+    # Word used in the AI Video Prompt CHARACTER ROSTER count. Without this the
+    # roster would read "EXACTLY 4 CHICKENS" (species=duck pluralises to "ducks"),
+    # but in-show he is a duckling — the count must say "3 CHICKENS AND 1 DUCKLING".
+    rosterNoun: "duckling"
     role: "baby"
     description: >
       A TINY baby DUCKLING, noticeably smaller than the three chicks, with soft
@@ -677,6 +775,7 @@ characters:
       weight: "feather-light and wobbly — tips over when he flaps too enthusiastically"
       eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
       scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
+      veoSizeRank: "the duckling is the tiny baby, clearly smaller than any of the chicks"
       antiAccessory: "any hat, any scarf or bandana, any glasses, any pointed chicken beak, any red comb on the head"
     personality: >
       The baby of the group. Speaks in single words and sounds ("Kwak!", "Pip!",
@@ -687,6 +786,7 @@ characters:
       explain things simply, and become gentler versions of themselves. Comedy
       comes from his species mismatch (he KWAKs where chicks peep, he loves
       water the chicks avoid) — always affectionate, never mocking.
+      The duckling is a boy — always "he/him" in scripts and visual descriptions.
     catchphrases:
       opener:
         - "Kwak!"
@@ -746,12 +846,24 @@ timeOfDay:
       Warm honey-yellow morning light, long soft shadows reaching west,
       crisp cool air, dew sparkling on flowers, early birds barely visible
       in the warm sky.
+  - id: lateMorning
+    label: "Late Morning"
+    description: >
+      Soft warm late-morning sunlight, gentle medium-length shadows, the
+      fresh dew gone but the air still bright and clear — between the cool
+      morning and the high midday sun.
   - id: midday
     label: "Midday"
     description: >
       Bright clear daylight, short shadows directly under objects, vivid
       colors fully saturated, a few rounded white clouds drifting in a
       pale blue sky.
+  - id: afternoon
+    label: "Afternoon"
+    description: >
+      Soft warm afternoon light, long gentle golden shadows, a cosy
+      filtered glow as the day eases down — the bridge between midday and
+      the golden hour, so the day's light progresses smoothly toward dusk.
   - id: goldenHour
     label: "Golden Hour"
     description: >
@@ -819,13 +931,10 @@ locations:
     kind: outdoor
     connectedTo: [coop, garden, hills, pebblePath]
     description: >
-      A classic deep-red wooden barn with white-trimmed windows and
-      a gabled roof, a wooden windmill turning gently in the warm
-      breeze behind the barn, an old weathered red tractor parked
-      to one side, a white picket fence with a wooden gate, scattered
-      hay bales, wildflower patches and tall grasses. THE SIGNATURE
-      ESTABLISHING LOCATION —
-      use this for HOOK wide shots to instantly say "Tiny Chicken World".
+      A deep-red wooden barn with white-trimmed windows and a gabled
+      roof, a wooden windmill turning gently behind it, an old weathered
+      red tractor to one side, a white picket fence with a wooden gate,
+      scattered hay bales, wildflower patches and tall grasses
 
   # ─── Coop complex (the chicks' home) ───────────────────────────────
   - id: coop
@@ -858,12 +967,10 @@ locations:
     kind: transition
     connectedTo: [coop, kitchen, garden, pebblePath]
     description: >
-      Small wooden porch in front of the coop, a single carved bench, a
-      welcome mat woven from straw, terracotta flowerpots overflowing
-      with red geraniums and trailing nasturtiums, hanging garlic braids,
-      a tin watering can, scattered straw, hanging wind-chime made of
-      seashells. View opens onto the garden path. THE TRANSITION ZONE —
-      use whenever characters move from inside to outside.
+      A small wooden porch in front of the coop, a single carved bench, a
+      woven straw welcome mat, terracotta pots of red geraniums and
+      trailing nasturtiums, hanging garlic braids, a tin watering can,
+      scattered straw, a seashell wind-chime, opening onto the garden path
 
   # ─── Garden & outdoor everyday ─────────────────────────────────────
   - id: garden
@@ -871,12 +978,12 @@ locations:
     kind: outdoor
     connectedTo: [porch, berryPatch, pebblePath]
     description: >
-      A sun-dappled garden bursting with tall yellow sunflowers, white
-      picket fence draped with pink climbing roses, blue butterflies and
-      orange ladybugs, winding stone path lined with daisies and blue
-      forget-me-nots, a wheelbarrow with vegetables, gardening tools
-      leaning against the fence, an old broken pot turned into a snail
-      home, distant rolling hills, dragonflies skimming the air.
+      A sunny vegetable garden with neat rows of carrots and leafy
+      lettuce in dark soil, a worn dirt path of the same dark earth with
+      a few smooth pebbles running along the edge of the rows, tall
+      yellow sunflowers standing behind, a white picket fence draped with
+      pink climbing roses, a wheelbarrow of vegetables and gardening
+      tools, blue butterflies and orange ladybugs, distant rolling hills
 
   - id: berryPatch
     name: "The Berry Patch"
@@ -918,13 +1025,11 @@ locations:
     kind: landmark
     connectedTo: [hills, garden, pebblePath]
     description: >
-      An enormous ancient oak tree on a low hill, its huge gnarled trunk
-      wider than three chicks tall, sweeping branches forming a leafy
-      green canopy, a wooden swing hanging from a low branch with a
-      braided rope, a knot-hole partway up that looks like a kind face,
-      acorns scattered around its roots, a small carved wooden sign
-      tacked to the trunk reading "MEET HERE!". THE WORLD'S CENTERPIECE
-      LANDMARK — featured in roughly half of all videos.
+      An enormous ancient oak on a low hill, its huge gnarled trunk wider
+      than three chicks tall, sweeping branches forming a leafy green
+      canopy, a braided-rope wooden swing on a low branch, a knot-hole
+      that looks like a kind face, acorns scattered around its roots, a
+      small carved sign on the trunk reading "MEET HERE!"
 
   - id: hills
     name: "The Rolling Hills"
@@ -932,10 +1037,8 @@ locations:
     connectedTo: [garden, bigOak, oldCart, starMeadow]
     description: >
       Soft rolling green hills receding into the distance, scattered
-      dandelions and clover, occasional wildflowers, a sky filled with
-      rounded cumulus clouds, the Big Oak visible on a far hilltop. USE
-      FOR WIDE ESTABLISHING SHOTS — instantly tells the audience "we're
-      in the Tiny Chicken World".
+      dandelions and clover, occasional wildflowers, a sky of rounded
+      cumulus clouds, the Big Oak visible on a far hilltop
 
   - id: oldCart
     name: "The Old Wooden Cart"
@@ -953,10 +1056,9 @@ locations:
     connectedTo: [hills, bigOak]
     description: >
       A wide grassy meadow at night, fireflies floating like tiny stars,
-      the sky packed with twinkling stars and a soft crescent moon, a
-      stone circle in the center perfect for sitting, the silhouette of
-      the Big Oak in the distance. USE FOR ANY NIGHT OR BEDTIME-THEMED
-      EPISODE.
+      a sky packed with twinkling stars and a soft crescent moon, a stone
+      circle in the center for sitting, the silhouette of the Big Oak in
+      the distance
 
   # ─── Connectors ─────────────────────────────────────────────────────
   - id: pebblePath
@@ -964,9 +1066,11 @@ locations:
     kind: transition
     connectedTo: [porch, garden, pond, bigOak, berryPatch]
     description: >
-      A winding earth path scattered with smooth grey pebbles, edged by
-      tufts of moss, occasional small mushrooms, the path curves gently
-      out of sight. THE MAIN ARTERY connecting every outdoor location.
+      A winding path of the same dark garden earth, scattered with smooth
+      pebbles and edged with tufts of moss and small mushrooms, running
+      right alongside the vegetable-garden rows and curving gently out of
+      sight — the ground reads as the garden's own soil, just worn into a
+      path, never a separate grey surface
 
 # ───────────────────────────────────────────────────────────────────────
 # SURFACE / GROUND PHYSICS PER LOCATION — how the ground reacts to contact
@@ -978,7 +1082,7 @@ locationSurfaces:
   coop: "worn wooden floorboards strewn with soft hay"
   kitchen: "a wooden plank floor with a woven rug"
   porch: "wooden porch boards with scattered straw"
-  garden: "soft tilled garden soil — easy to dig, with a winding stone path"
+  garden: "soft tilled garden soil — easy to dig, with a worn dirt path of the same dark earth edged with a few smooth pebbles"
   berryPatch: "soft moss-covered earth, springy and a little damp"
   pond: "shallow water over wet smooth pebbles at a soft muddy edge"
   willowGrove: "a soft mossy carpet over earth, springy underfoot"
@@ -986,7 +1090,7 @@ locationSurfaces:
   hills: "soft springy grass over rolling earth"
   oldCart: "dry grass and weathered, slightly creaky wood"
   starMeadow: "cool soft meadow grass, lightly dewy at night"
-  pebblePath: "loose smooth pebbles over packed earth that shift and click underfoot"
+  pebblePath: "packed dark garden earth scattered with loose smooth pebbles that shift and click underfoot"
 
 # ───────────────────────────────────────────────────────────────────────
 # AMBIENT SOUND PER LOCATION — sonic identity for each place
@@ -1273,12 +1377,16 @@ voice:
 # ──────────────────────────────────────────────────────────────────────
 assembly:
   transitions:
-    hook:        { type: fade,        seconds: 0.10 }  # bijna-cut — tempo vasthouden
-    setup:       { type: fade,        seconds: 0.15 }
-    development: { type: fade,        seconds: 0.15 }
-    climax:      { type: fadewhite,   seconds: 0.35 }  # witflits het wonder in (audit-tip: leest als magie)
-    # Einde ruimer aangezet (feedback 2026-06-11: "op het laatste nog wat
-    # hakkerig") — het rustige slot verdraagt en verdient langere overgangen.
-    resolution:  { type: dissolve,    seconds: 0.60 }  # zacht landen
-    closer:      { type: circleclose, seconds: 0.80 }  # iris-uit — het klassieke kindertv-einde
-    default:     { type: fade,        seconds: 0.20 }
+    # Feedback 2026-06-14 ("langere, langzamere overgangen — het zijn baby-video's,
+    # geen snelle scènes; voelt nu soms te snel en chaotisch"): alle overgangen
+    # fors verzacht en verlengd naar een rustig, dromerig babytempo. Bijna alles
+    # op een zachte dissolve i.p.v. een (harde) fade; cap blijft = halve kortste
+    # clip, dus deze waarden zijn veilig op normale scènelengtes.
+    hook:        { type: dissolve,    seconds: 0.45 }  # was fade/0.20 — zacht binnenkomen, geen snap
+    setup:       { type: dissolve,    seconds: 0.55 }  # was fade/0.25
+    development: { type: dissolve,    seconds: 0.55 }  # was 0.28 — rustige, vloeiende cuts
+    climax:      { type: fadewhite,   seconds: 0.55 }  # was 0.40 — witflits, maar trager en zachter
+    # Einde ruim en kalm — het rustige slot verdraagt de langste overgangen.
+    resolution:  { type: dissolve,    seconds: 0.80 }  # was 0.65 — zacht landen
+    closer:      { type: circleclose, seconds: 0.90 }  # iris-uit — klassiek, traag kindertv-einde
+    default:     { type: dissolve,    seconds: 0.55 }  # was fade/0.28 — alles standaard zacht

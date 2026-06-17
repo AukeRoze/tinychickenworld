@@ -42,6 +42,29 @@ public class BrandController {
     private final BibleEditor bibleEditor;
     private final BibleReloadService bibleReloadService;
     private final ImageServiceClient imageClient;
+    private final com.youtubeauto.orchestrator.service.IntroRebuildService introRebuild;
+    private final com.youtubeauto.orchestrator.service.OutroRebuildService outroRebuild;
+
+    /**
+     * Exact intro/outro brand-clip Veo prompts (motion + start-still + shared
+     * negative) so the Brand page can show and COPY them for QA. These clips
+     * bypass VeoPromptCompiler, so this is verbatim what Veo receives.
+     */
+    @GetMapping(value = "/clip-prompts", produces = "application/json")
+    public Map<String, Object> clipPrompts() {
+        Map<String, Object> intro = new LinkedHashMap<>();
+        intro.put("motion", introRebuild.veoMotionPrompt());
+        intro.put("still", introRebuild.veoStillPrompt());
+        intro.put("negative", introRebuild.veoNegativePrompt());
+        Map<String, Object> outro = new LinkedHashMap<>();
+        outro.put("motion", outroRebuild.veoMotionPrompt());
+        outro.put("still", outroRebuild.veoStillPrompt());
+        outro.put("negative", outroRebuild.veoNegativePrompt());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("intro", intro);
+        out.put("outro", outro);
+        return out;
+    }
 
     /**
      * Hot-reload van de bible over de hele stack (orchestrator-caches +
@@ -150,6 +173,81 @@ public class BrandController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    // ── Negative constraints (negative-constraints.txt, sibling of bible) ──
+    // The user-managed list of negative-constraint points the AI Video Prompt
+    // carries in its "Negative Constraints" section. One point per line; the
+    // cast-size anti-duplication rule stays programmatic in VeoPromptCompiler.
+
+    private static final List<String> DEFAULT_NEGATIVE_CONSTRAINTS = List.of(
+            "No morphing, no flicker, no accessory swaps, no gaping mouths",
+            "No Dutch or non-English speech",
+            "No on-screen text, signs, banners or watermarks",
+            "Keep every character's identity, colours, proportions and signature accessories "
+                    + "(straw hat, bandana, scarf, eyeglasses) perfectly stable across all frames",
+            "Pip's straw hat must never come off");
+
+    private Path negativeConstraintsFile() {
+        Path dir = bibleDir();
+        return (dir == null ? Paths.get("negative-constraints.txt")
+                            : dir.resolve("negative-constraints.txt"));
+    }
+
+    /** Current negative-constraint points (one per line, comments/blank lines
+     *  stripped). Falls back to the built-in defaults when the file is absent. */
+    @GetMapping(value = "/negative-constraints", produces = "application/json")
+    public Map<String, Object> negativeConstraints() {
+        List<String> items = new ArrayList<>();
+        try {
+            Path f = negativeConstraintsFile();
+            if (Files.exists(f)) {
+                for (String line : Files.readAllLines(f)) {
+                    String t = line.trim();
+                    if (!t.isEmpty() && !t.startsWith("#")) items.add(t);
+                }
+            }
+        } catch (Exception ignore) { /* fall through to defaults */ }
+        if (items.isEmpty()) items = new ArrayList<>(DEFAULT_NEGATIVE_CONSTRAINTS);
+        return Map.of("items", items);
+    }
+
+    /** Replace the negative-constraint list. Body: {items:[...]} or {text:"line\nline"}.
+     *  Writes the sidecar file (backup first) and hot-reloads the bible so the
+     *  next compiled prompt picks it up — no rebuild. */
+    @PostMapping("/negative-constraints")
+    public ResponseEntity<?> setNegativeConstraints(@RequestBody Map<String, Object> body) {
+        List<String> items = new ArrayList<>();
+        Object raw = body.get("items");
+        if (raw instanceof List<?> list) {
+            for (Object o : list) {
+                String t = String.valueOf(o).trim();
+                if (!t.isEmpty()) items.add(t);
+            }
+        } else if (body.get("text") != null) {
+            for (String line : String.valueOf(body.get("text")).split("\\r?\\n")) {
+                String t = line.trim();
+                if (!t.isEmpty() && !t.startsWith("#")) items.add(t);
+            }
+        }
+        try {
+            Path f = negativeConstraintsFile();
+            if (Files.exists(f)) {
+                Files.copy(f, f.resolveSibling("negative-constraints.txt.bak"),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            List<String> out = new ArrayList<>();
+            out.add("# Negative constraints — one rule per line. Lines starting with # are ignored.");
+            out.add("# Appended to every AI Video Prompt's \"Negative Constraints\" section.");
+            out.add("# The cast-size anti-duplication rule is added automatically (not listed here).");
+            out.addAll(items);
+            Files.write(f, out);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+        bibleReloadService.reloadAll();
+        return ResponseEntity.ok(Map.of("result", "SAVED", "count", items.size(),
+                "note", "actief op de eerstvolgende prompt — bible al herladen"));
     }
 
     // ── Character reference stills (the Veo/QC pixel anchor) ───────────────

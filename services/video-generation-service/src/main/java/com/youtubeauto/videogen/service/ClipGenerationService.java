@@ -49,6 +49,7 @@ public class ClipGenerationService {
     private final CostCalculator costCalc;
     private final VertexVeoClient veo;
     private final com.youtubeauto.videogen.fal.FalSeedanceClient fal;
+    private final com.youtubeauto.videogen.local.LocalVideoClient local;
     private final GcsClient gcs;
     private final BibleLoader bible;
     private final VeoProperties veoProps;
@@ -223,6 +224,29 @@ public class ClipGenerationService {
                         s.seq(), route.modelId(), route.durationSec(), wallFal, estimate);
                 return ClipResult.ok(s.seq(), clipOut.toString(), route.modelId(),
                         route.resolution(), route.durationSec(), wallFal, round2(estimate));
+            }
+
+            // ── Third provider: LOCAL ComfyUI (LTX-2 / Wan op een eigen GPU) ──
+            // Zelfde in/out-contract als Veo/Seedance. Dormant tot je een lokale
+            // ComfyUI draait en de routing een "local*"-model gebruikt; faalt het
+            // (niet geconfigureerd) dan vangt de catch hieronder het op → Ken Burns.
+            if (route.modelId().startsWith("local")) {
+                Path endImgLocal = (s.endImagePath() != null && !s.endImagePath().isBlank())
+                        ? Paths.get(s.endImagePath()) : null;
+                log.info("Scene {} calling LOCAL ComfyUI (model={})", s.seq(), route.modelId());
+                local.generateAndDownload(route.modelId(), s.visualDesc(), startImg, endImgLocal,
+                        route.resolution(), route.durationSec(), aspect, clipOut);
+                if (!isValidMp4(clipOut)) {
+                    log.warn("Scene {} CORRUPT_OUTPUT (local)", s.seq());
+                    return ClipResult.fallback(s.seq(), route.modelId(), "CORRUPT_OUTPUT");
+                }
+                frames.extractQcFrames(clipOut, workScene);
+                budget.add(estimate);   // €0 zodra de local-rates op 0 staan
+                long wallLocal = System.currentTimeMillis() - start;
+                log.info("Scene {} OK: model={} dur={}s wall={}ms cost≈€{}",
+                        s.seq(), route.modelId(), route.durationSec(), wallLocal, estimate);
+                return ClipResult.ok(s.seq(), clipOut.toString(), route.modelId(),
+                        route.resolution(), route.durationSec(), wallLocal, round2(estimate));
             }
 
             log.info("Scene {} uploading start image to GCS", s.seq());
