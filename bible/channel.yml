@@ -558,13 +558,18 @@ characters:
       coreColor: "pure white (never yellow)"
       # Compacte Veo-identiteit (lean-modus): alleen de consistentie-kritische
       # kenmerken. De rest leunt op het startframe als referentie.
-      veoKey: "PURE WHITE down (clean white, NEVER yellow or cream-yellow — she is not the yellow duckling), perfectly ROUND ball-of-fluff body, straw farmer hat + red neck bandana, HUGE sparkling brown eyes, the smallest chick of the trio"
+      veoKey: "PURE WHITE down (clean white, NEVER yellow or cream-yellow — she is not the yellow duckling), perfectly ROUND ball-of-fluff body, straw farmer hat + red neck bandana, HUGE sparkling brown eyes"
       # Compacte relatieve-grootte (lean-modus): de compiler bouwt de "Relative
       # size:"-zin alleen uit de personages die ECHT in de scène staan. Eén losse
       # zinsnede per personage, zonder afsluitende punt — de compiler voegt samen
       # en interpunctueert. Zo komt "Mo is slightly larger" nooit meer in een
       # scène waar Mo niet voorkomt.
       veoSizeRank: "Pip is the smallest"
+      # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): noemt
+      # GEEN ander personage en GEEN flock-telling ("trio"/"three"). Compilers
+      # verkiezen deze boven silhouette/build; die blijven als fallback.
+      silhouetteShape: "a TINY, petite, perfectly ROUND ball-of-fluff chick — a dainty little circle body under an extra-large round head, every line a soft curve — topped by the tall pointed straw hat: a small circle-plus-triangle shape you read instantly as a black silhouette"
+      bodyBuild: "a petite, dainty little circle of a body — small and delicate, never chubby — with an extra-oversized round head and HUGE sparkling eyes; baby proportions that read as instantly adorable, all soft curves"
       # Silhouet-redesign (board-audit EP3 #25, uitgevoerd 2026-06-12): elk
       # personage moet als ZWART VLAK herkenbaar zijn, hoed of geen hoed.
       # Vorm-taal: Pip = CIRKEL, Mo = AAMBEELD/basis, Bo = VERTICALE STREEP.
@@ -712,8 +717,13 @@ characters:
     triggerWord: "bo_chicken"
     dna:
       coreColor: "tan and sandy-brown"
-      veoKey: "tan/sandy-brown, slim UPRIGHT body with a spiky cowlick tuft on top, round thin-framed eyeglasses + green neck scarf, bright amber eyes, the thinnest chick and middle in height"
+      veoKey: "tan/sandy-brown, slim UPRIGHT body with a spiky cowlick tuft on top, round thin-framed eyeglasses + green neck scarf, bright amber eyes"
       veoSizeRank: "Bo is slightly taller and slimmer"
+      # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): geen
+      # ander personage, geen flock-telling. Compilers verkiezen deze; oude
+      # silhouette/build blijven fallback.
+      silhouetteShape: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette"
+      bodyBuild: "a slim, VERTICAL, springy little body stretched upward — a line rather than a ball — light and twitchy, with an oversized head; a tall, thin small chick"
       # Vorm-taal: Bo = VERTICALE STREEP — smal, gestrekt, tuft als spits.
       silhouette: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up as the dot's echo, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette, the opposite of Pip's circle and Mo's anvil"
       accessory: "round thin-framed eyeglasses and a green neck scarf"
@@ -783,6 +793,12 @@ characters:
       eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
       scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
       veoSizeRank: "the duckling is the tiny baby, clearly smaller than any of the chicks"
+      # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): geen
+      # andere naam, geen flock-telling ("of the four"/"two-thirds of Bo's height");
+      # de grootte zit in veoSizeRank. Compilers verkiezen deze; silhouette/build
+      # blijven fallback.
+      silhouetteShape: "a round lemon-yellow puffball with a FLAT WIDE BILL and one upright head-tuft; reads as 'baby duck' at a glance"
+      bodyBuild: "round baby proportions — a small round tummy, an oversized head and tiny orange webbed feet; a tiny, wobbly, newly-hatched duckling"
       antiAccessory: "any hat, any scarf or bandana, any glasses, any pointed chicken beak, any red comb on the head"
     personality: >
       The baby of the group. Speaks in single words and sounds ("Kwak!", "Pip!",
