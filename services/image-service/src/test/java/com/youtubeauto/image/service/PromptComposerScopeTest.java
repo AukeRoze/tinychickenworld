@@ -42,6 +42,21 @@ class PromptComposerScopeTest {
         assertFalse(out.contains("Bo"), "the absent character Bo must be gone: " + out);
         assertTrue(out.contains("than Mo"), "a PRESENT character (Mo) comparison stays: " + out);
         assertTrue(out.contains("never chubby"), "a Bo-free parenthetical is preserved: " + out);
+        // Reduced cast → the count word "trio" is neutralised to "flock".
+        assertFalse(out.toLowerCase().contains("trio"), "count word 'trio' must be neutralised: " + out);
+        assertTrue(out.contains("of the flock"), "trio → flock expected: " + out);
+    }
+
+    @Test
+    void scopeNeutralisesCountWordsWhenCastReduced() {
+        // No absent NAME in the text, but the cast is reduced (Bo absent) → the
+        // count words still mislead, so "trio"/"the three"/"the four" → "the flock".
+        assertEquals("the smallest of the flock",
+                PromptComposer.scopeDnaText("the smallest of the trio", List.of("Bo")));
+        assertEquals("very slightly the largest of the flock",
+                PromptComposer.scopeDnaText("very slightly the largest of the three", List.of("Bo")));
+        assertEquals("the tiniest of the flock",
+                PromptComposer.scopeDnaText("the tiniest of the four", List.of("Bo")));
     }
 
     @Test
@@ -56,10 +71,9 @@ class PromptComposerScopeTest {
     }
 
     @Test
-    void scopeLeavesTextWithoutAbsentNameUntouched() {
-        String s = "the tiniest of the four — a round yellow puffball with a FLAT WIDE BILL; "
-                + "reads as 'baby duck' at a glance";
-        // No absent name appears → returned byte-for-byte unchanged (no cosmetic churn).
+    void scopeLeavesTextWithoutAbsentNameOrCountWordUntouched() {
+        String s = "a round yellow puffball with a FLAT WIDE BILL; reads as 'baby duck' at a glance";
+        // No absent name AND no count word → returned byte-for-byte unchanged (no churn).
         assertEquals(s, PromptComposer.scopeDnaText(s, List.of("Bo")));
     }
 
@@ -107,6 +121,50 @@ class PromptComposerScopeTest {
                 "absent Bo must not be named anywhere in the prompt: " + out);
         assertTrue(out.contains("tiny webbed feet"),
                 "the duckling's own build detail survives the scrub: " + out);
+    }
+
+    // ---- proza → gestructureerde DNA-velden (migratie, pilot Mo) ---------------
+
+    @Test
+    void prefersStructuredShapeFieldsOverLegacyProza() {
+        // Migrated character: cast-neutral silhouetteShape/bodyBuild present → used;
+        // the legacy free-text silhouette/build is ignored (no scrub needed).
+        Character.Dna migrated = new Character.Dna(
+                "blue-grey", "LEGACY silhouette proza", "a red scarf", "", "", "",
+                "LEGACY build proza", "", "", "", "",
+                "an ANVIL-shaped chick, broad and bottom-heavy",
+                "a solid little body with a broad base, oversized head");
+        Character mo = new Character("mo", "Mo", "steady", "MO", "baby chick", "chicken", "", migrated);
+        PromptComposer composer = composerWith(mo);
+        SceneVisual scene = new SceneVisual(1, "Mo stands by the egg", List.of("mo"), "coop");
+        String out = composer.composeReference(scene, List.of("mo"), "landscape");
+        assertTrue(out.contains("an ANVIL-shaped chick, broad and bottom-heavy"),
+                "structured silhouetteShape must be used: " + out);
+        assertTrue(out.contains("a solid little body with a broad base"),
+                "structured bodyBuild must be used: " + out);
+        assertFalse(out.contains("LEGACY silhouette proza"),
+                "legacy silhouette must be ignored when silhouetteShape is set: " + out);
+        assertFalse(out.contains("LEGACY build proza"),
+                "legacy build must be ignored when bodyBuild is set: " + out);
+    }
+
+    @Test
+    void fallsBackToLegacyProzaWhenStructuredFieldsAbsent() {
+        // Non-migrated character (11-arg DNA, no shape/build fields) → legacy proza.
+        Character.Dna legacy = dna("tan", "a slim vertical chick", "round glasses", "thin and upright");
+        Character bo = new Character("bo", "Bo", "witty", "BO", "baby chick", "chicken", "", legacy);
+        PromptComposer composer = composerWith(bo);
+        SceneVisual scene = new SceneVisual(1, "Bo stands by the egg", List.of("bo"), "coop");
+        String out = composer.composeReference(scene, List.of("bo"), "landscape");
+        assertTrue(out.contains("a slim vertical chick"), "legacy silhouette still used: " + out);
+        assertTrue(out.contains("thin and upright"), "legacy build still used: " + out);
+    }
+
+    private PromptComposer composerWith(Character character) {
+        ChannelBible bible = new ChannelBible("storybook style", List.of(character), List.of(), null);
+        BibleLoader loader = mock(BibleLoader.class);
+        when(loader.getBible()).thenReturn(bible);
+        return new PromptComposer(loader);
     }
 
     private static Character.Dna dna(String color, String silhouette, String accessory, String build) {

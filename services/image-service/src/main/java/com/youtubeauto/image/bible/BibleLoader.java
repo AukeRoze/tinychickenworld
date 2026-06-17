@@ -103,7 +103,9 @@ public class BibleLoader {
                 n.path("weight").asText("").trim(),
                 n.path("eyeColor").asText("").trim(),
                 n.path("antiAccessory").asText("").trim(),
-                n.path("signatureAccessoryShort").asText("").trim()
+                n.path("signatureAccessoryShort").asText("").trim(),
+                n.path("silhouetteShape").asText("").trim(),
+                n.path("bodyBuild").asText("").trim()
         );
     }
 

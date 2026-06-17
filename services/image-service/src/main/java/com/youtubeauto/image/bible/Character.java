@@ -52,13 +52,33 @@ public record Character(
             String weight,           // felt weight + how it moves (Veo motion hint)
             String eyeColor,         // iris colour + highlight description
             String antiAccessory,    // accessories this character must NEVER wear (anti-swap)
-            String signatureAccessoryShort // short noun for THIS character's own accessory
-                                           // (the accessory-guard rewrite target)
+            String signatureAccessoryShort, // short noun for THIS character's own accessory
+                                            // (the accessory-guard rewrite target)
+            // ---- structured, CAST-NEUTRAL identity (proza→velden migratie) ----
+            // When set, these replace the free-text silhouette/build in the prompt.
+            // They must NEVER name another character or a flock count ("trio"/
+            // "three") — comparisons are derived at compile time from the present
+            // cast (veoSizeRank). So the regex guards (scopeDnaText/count-words)
+            // have nothing left to scrub: identity-as-data, not proza-to-clean.
+            String silhouetteShape,  // cast-neutral shape, e.g. "a broad, bottom-heavy anvil"
+            String bodyBuild         // cast-neutral build, e.g. "sturdy and solid, oversized head"
     ) {
-        public static Dna empty() { return new Dna("", "", "", "", "", "", "", "", "", "", ""); }
+        public static Dna empty() {
+            return new Dna("", "", "", "", "", "", "", "", "", "", "", "", "");
+        }
+
+        /** Back-compat 11-arg form (pre proza→velden migratie) → new fields "". */
+        public Dna(String coreColor, String silhouette, String accessory, String tic,
+                   String signatureSound, String feathers, String build, String weight,
+                   String eyeColor, String antiAccessory, String signatureAccessoryShort) {
+            this(coreColor, silhouette, accessory, tic, signatureSound, feathers, build, weight,
+                 eyeColor, antiAccessory, signatureAccessoryShort, "", "");
+        }
 
         public boolean hasAccessory() { return notBlank(accessory); }
         public boolean hasSilhouette() { return notBlank(silhouette); }
+        public boolean hasSilhouetteShape() { return notBlank(silhouetteShape); }
+        public boolean hasBodyBuild() { return notBlank(bodyBuild); }
         public boolean hasTic() { return notBlank(tic); }
         public boolean hasCoreColor() { return notBlank(coreColor); }
         public boolean hasFeathers() { return notBlank(feathers); }

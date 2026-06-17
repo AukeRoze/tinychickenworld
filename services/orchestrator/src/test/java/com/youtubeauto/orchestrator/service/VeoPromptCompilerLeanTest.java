@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -398,6 +399,18 @@ class VeoPromptCompilerLeanTest {
         assertTrue(out.contains("EXACTLY 1 CHICKEN"), "solo roster expected: " + out);
         assertTrue(VeoPromptLinter.isHealthy(out, 1),
                 "solo prompt must pass the linter: " + VeoPromptLinter.lint(out, 1));
+    }
+
+    @Test
+    void neutralisesFlockCountWordsForReducedCast() {
+        // The per-character identity line must not imply a fixed flock size in a
+        // reduced-cast scene (the "of the trio" weight-bleed).
+        assertEquals("the smallest chick of the flock",
+                VeoPromptCompiler.neutraliseCountWords("the smallest chick of the trio"));
+        assertEquals("slightly the largest of the flock",
+                VeoPromptCompiler.neutraliseCountWords("slightly the largest of the three"));
+        assertEquals("the tiniest of the flock",
+                VeoPromptCompiler.neutraliseCountWords("the tiniest of the four"));
     }
 
     @Test

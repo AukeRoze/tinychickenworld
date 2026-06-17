@@ -110,6 +110,12 @@ Refactor-schuld:
 - [ ] **Veo-kostenmetering** tegen GCP-billing + metrics.
 - [ ] **Embedding-gebaseerde drift-detectie** (naast vision-QC).
 - [ ] **Event-driven queue tussen stages** — bij volumeproductie.
+
+**Structureel (uit systeem-assessment 2026-06-17):**
+- [ ] **Prompt-data structureren (proza → velden) — hoogste structurele ROI van de prompt-laag.** De consistency-guards scrubben nu vrije bible-proza met regex (cast-scope, absent-naam, count-woorden, accessoire-vs-actie). Werkt, maar inherent broos: één herformulering in `channel.yml` en een scrub mist. Richting: per-personage gestructureerde DNA-velden (zoals `dna.veoSizeRank` al doet) zodat prompts uit data worden geassembleerd i.p.v. proza achteraf geschoond. Migreer de vergelijkende stukken uit `build`/`silhouette` naar cast-neutrale velden; de guards worden dan datafilters i.p.v. taalkundige scrubbers. **Maak dit af vóór er nóg meer regex-guards bijkomen.**
+- [ ] **Guard-deduplicatie / gedeelde prompt-hygiene.** `AccessoryGuard`, `neutraliseCountWords`, `scopeDnaText` bestaan nu dubbel (image-service ↔ orchestrator/VEO), in sync gehouden door parity-tests. Elke wijziging = twee plekken, drift-risico. Opties: (a) gedeelde lib-module, (b) één service produceert de geschoonde DNA en de ander consumeert 'm, (c) parity-fixtureset uitbreiden. Afweging: botst met de bewuste keuze van losse Maven-modules (geen shared lib).
+- [ ] **In-flight job-herstel bij restart.** Geen queue → een service-restart verliest lopende jobs (staat al als risk-tabel-TODO). Minimale fix: bij startup `PENDING`/mid-stage jobs uit de DB her-triggeren, idempotent per stage.
+- [ ] **Documentatie-/kennisschuld bijhouden.** `architecture.md` liep fors achter (voice eruit, Flow i.p.v. Veo-MCP, Gemini live) — nu bijgewerkt met een §0 "Actuele staat"-banner. Veel waarheid leeft nog in de memory-bestanden + één grote `channel.yml` → lage bus-factor. Maak een doc-update onderdeel van elke structurele wijziging (korte "deltas sinds vorige build"-changelog volstaat).
 - [x] **Per-serie asset-caching (serie-anchors) — GEBOUWD (2026-06-12, slot).** Story B over afleveringen heen: bij een geslaagde upload promoveert de orchestrator de episode-anchors naar `bible/refs/series/{seriesId}/{charId}.png` (nieuwste goedgekeurde aflevering wint, README met lifecycle erbij); de volgende aflevering seedt z'n éérste generatie-batch daarmee (`source:"series"`-anchors + SERIES CANON-clausule in Gemini). Prioriteit: eigen episode-canon > serie-canon > bible-refs (overgang automatisch zodra de eigen canon post-QC gekozen is). `SERIES_ANCHORS_ENABLED` (default aan), path-traversal-safe ids, pure unit-tests. Personage zonder vorige aflevering (duckling) = stil overslaan; bewuste look-wijziging = serie-map legen.
 - [ ] **Re-encode-consolidatie / lossless intermediates** — geparkeerd: winst is rendertijd, niet beeld (CRF-16-tussenstappen dempen al); pas bij schaal.
 - [ ] **2.5D parallax**; **echte match-cuts/eyeline-cuts** (pose-detectie); **beat-synced cuts** (na muziek) — world-class, later.
@@ -188,3 +194,20 @@ Refactor-schuld:
 - [x] **End-screen-outro-template — GEBOUWD (2026-06-12, op gebruikersontwerp).** Vaste 12s-outro rond YouTube's end-screen-band: middenband (~y 280-800) hard vrijgehouden (links=subscribe, midden=playlist, rechts=video; ASCII-schema in de javadoc), eigen rode SUBSCRIBE-box + bel **verwijderd** (YouTube's element vervangt ze), logo klein top-left, één dunne tekstregel onderin ("What adventures will we discover tomorrow?"), Veo-prompt herschreven: drie kuikens lachend in het onderste derde, bovenste twee derde leeg, één farewell-regel (Pip, `OUTRO_LINE` configureerbaar, default "See you in the next adventure!"), rustig muziekbed dormant-tot-asset (`bible/sfx/outro/calm.mp3`, -16dB), tpad-hold + 2.6s fade. **Acties: (1) outro éénmalig VOLLEDIG rebuilden (🎬, Veo-kosten — re-composite hergebruikt de oude framing!), (2) optioneel calm.mp3 droppen, (3) in Studio de end-screen-elementen links/midden/rechts plaatsen met duur ~12s.**
 
 > Alles van vandaag is **ongecompileerd** tot de eerstvolgende `build.bat`.
+
+---
+
+## Sessie 2026-06-17 (consistency-guards + frontend — ONGECOMPILEERD tot build)
+
+Redeploy: **orchestrator + image-service + thumbnail-service**. `mvn` lokaal draaien (sandbox kon niet bouwen; logica geverifieerd via Python-ports + nieuwe unit-tests).
+
+- [x] **AccessoryGuard — non-possessieve worn-branch** (image + orchestrator, identiek + parity-test). Vangt nu ook "with glasses askew"/"glasses sliding" (zonder his/her/its) bovenop het bestaande possessieve geval; scène-7 als regressiecase. Twee strakke takken (prep-anchored / displacement-anchored) zodat de subject niet opgeslokt wordt.
+- [x] **VeoPromptCompiler — niet-sprekende kuikens benoemd + werkwoordcongruentie** (scène-18): "the non-speaking chicks" → "Mo keeps its beak closed" (roster-accuraat), "Mo keep calm" → "keeps". Regressietest.
+- [x] **Count-woord-neutralisatie** (image `PromptComposer` + VEO): bij gereduceerde cast "the trio/three/four" → "the flock" in de per-personage DNA. Tests beide kanten.
+- [x] **Scène 24/25 image-fix**: soort-bewuste roster-telling ("Exactly 2 chickens and 1 duckling total (3 characters maximum in frame)…") via nieuwe `Character.species`/`rosterNoun` + `displayNoun()`; absent-cast DNA-scrub (`scopeDnaText` verwijdert vergelijkingen die een afwezig personage noemen). `PromptComposerScopeTest`.
+- [x] **Thumbnail-prompt kopieerbaar in de frontend**: thumbnail-service `describe()` + DTO `ThumbnailPromptPreview` + `POST /thumbnails/preview-prompt`; orchestrator `ThumbnailServiceClient.previewPrompt` + `GET /videos/{id}/thumbnail-prompt`; job-page knop "🖼️ Thumbnail-prompt" met toggles (volledige prompt / live Gemini / alles). Prompt-bouwers geëxtraheerd zodat preview == generatie (geen drift).
+- [x] **Pip pure-white gelijkgetrokken**: intro/outro `IntroRebuildService.IDENTITY_LOCK` (CREAM-WHITE → PURE-WHITE) + `QualityReviewer`/`ClipQc`/`SceneImageQc` QC-referenties + `ReplicateImageProvider` (comment + cream/yellow-negatives). Conform bible "Pip altijd wit".
+- [x] **Frontend "📖 Verhaal"-knop**: lopend verhaal (VO + dialoog per scène) uit de scène-data, kopieerbaar. Geen backend-wijziging.
+- [x] **`architecture.md` bijgewerkt** naar de actuele staat (§0-banner).
+
+> Verificatielijst na build: `mvn -pl services/orchestrator,services/image-service,services/thumbnail-service test` (let op de nieuwe tests: `AccessoryGuardParityTest`, `VeoPromptCompilerLeanTest`, `PromptComposerScopeTest`). Daarna een reroll van scène 7/18/24/25 + een intro/outro ♻ re-composite om de tekst-fixes te bevestigen.

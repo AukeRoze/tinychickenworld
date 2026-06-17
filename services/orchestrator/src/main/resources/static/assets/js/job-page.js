@@ -1933,11 +1933,99 @@ function openThumbnailPromptModal(data) {
   document.addEventListener("keydown", onKey);
 }
 
+/** Bouwt het lopende VERHAAL van de aflevering uit de scènes: per scène de
+ *  narration (voice-over) + de gesproken dialoog, in volgorde. Visuele
+ *  regie-omschrijvingen blijven eruit — dit is wat de kijker HOORT, zodat je het
+ *  verhaal zelf kunt nalezen. */
+function buildStoryText(scenes) {
+  const out = [];
+  (scenes || []).forEach(s => {
+    const block = [`— Scène ${s.seq}${s.phase ? " · " + s.phase : ""} —`];
+    // narration is echt een voice-over alleen als die afwijkt van de visualDesc
+    // (de backend vult lege narration met de visualDesc voor weergave).
+    const vo = (s.narration || "").trim();
+    if (vo && vo !== (s.visualDesc || "").trim()) block.push("VO: " + vo);
+    (s.lines || []).forEach(l => {
+      if (l && l.text && l.text.trim()) {
+        block.push((l.speaker ? l.speaker + ": " : "") + l.text.trim());
+      }
+    });
+    if (block.length === 1) block.push("(stille beat — geen tekst)");
+    out.push(block.join("\n"));
+  });
+  return out.join("\n\n");
+}
+
+/** Modal met het lopende verhaal (narration + dialoog), kopieerbaar in één keer. */
+function openStoryModal(scenes) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;" +
+      "display:flex;align-items:center;justify-content:center;padding:24px";
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  const box = document.createElement("div");
+  box.style.cssText =
+      "background:var(--bg,#fff);color:inherit;border-radius:12px;max-width:760px;" +
+      "width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;" +
+      "box-shadow:0 12px 48px rgba(0,0,0,.4)";
+
+  const head = document.createElement("div");
+  head.style.cssText =
+      "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 16px;" +
+      "border-bottom:1px solid var(--border,#e5e5e5)";
+  const title = document.createElement("strong");
+  title.textContent = `Verhaal (${(scenes || []).length} scènes)`;
+  title.style.marginRight = "auto";
+  head.appendChild(title);
+
+  const ta = document.createElement("textarea");
+  ta.readOnly = true;
+  ta.value = buildStoryText(scenes);
+  ta.style.cssText =
+      "flex:1;width:100%;border:0;resize:none;padding:14px 16px;font:13px/1.6 " +
+      "ui-sans-serif,system-ui,sans-serif;background:transparent;color:inherit;outline:none";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "btn sm approve";
+  copyBtn.textContent = "📋 Kopieer verhaal";
+  copyBtn.title = "Kopieert het volledige verhaal (alle scènes) naar het klembord.";
+  copyBtn.addEventListener("click", () =>
+      copyText(ta.value, "Verhaal gekopieerd ✓"));
+  head.appendChild(copyBtn);
+
+  const x = document.createElement("button");
+  x.className = "btn sm";
+  x.textContent = "✕";
+  x.title = "Sluiten";
+  x.addEventListener("click", close);
+  head.appendChild(x);
+
+  box.appendChild(head);
+  box.appendChild(ta);
+
+  const foot = document.createElement("div");
+  foot.className = "sub small";
+  foot.style.cssText = "padding:8px 16px;border-top:1px solid var(--border,#e5e5e5)";
+  foot.textContent = "Het lopende verhaal: voice-over (VO) + gesproken dialoog per scène, in volgorde.";
+  box.appendChild(foot);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const onKey = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+}
+
 /** Toolbar bovenaan de scènelijst met de "alle prompts"-knoppen. */
 function scenePromptsBar(scenes) {
   const bar = document.createElement("div");
   bar.className = "scene-acts";
   bar.style.cssText = "margin:4px 0 8px";
+  bar.appendChild(sceneItem("📖 Verhaal",
+      "Toont het lopende verhaal van de aflevering (voice-over + dialoog per scène) " +
+      "in één venster, met een knop om alles te kopiëren — om het verhaal zelf na te lezen.",
+      () => openStoryModal(scenes)));
   bar.appendChild(sceneItem("📋 Alle prompts",
       "Toont alle scène-prompts (omschrijving + volledige Veo-prompt) in één venster, " +
       "met een knop om ze in één keer te kopiëren.",

@@ -2,7 +2,20 @@
 
 Documenteert de feitelijke staat van de codebase + de geplande uitbreiding met Veo image-to-video. Volg-document voor `README.md` (dat de operationele kant beschrijft).
 
-Lokale infra (Docker Compose) + cloud AI-API's (Claude, OpenAI, ElevenLabs, optioneel Replicate Flux, geplande Veo). Phase 2 routekaart voor eventueel fully-lokale AI.
+Lokale infra (Docker Compose) + cloud AI-API's (Claude, OpenAI, optioneel Replicate Flux, video via Google Flow/Veo). Phase 2 routekaart voor eventueel fully-lokale AI.
+
+---
+
+## 0. Actuele staat (bijgewerkt 2026-06-17)
+
+Sinds de oorspronkelijke opzet is het systeem op een paar punten doorontwikkeld. Deze sectie heeft voorrang op de rest van het document waar ze afwijken:
+
+- **voice-service (ElevenLabs) is verwijderd.** De stem komt nu uit de clip-audio zelf (zie video-generation). Assembly + orchestrator + infra zijn hierop omgebouwd. Het schema toont nog 7 services, maar dat is nu: orchestrator, script, image, video-generation, video-assembly, thumbnail, youtube-upload — géén losse voice.
+- **Video = Google Flow (niet directe Veo-MCP).** `VEO_ENABLED=false`; de clips worden via Flow gemaakt (Ingredients-to-Video met character-refs) en daar verlengd. **Audio is native uit de clip** (stem + ambient + muziek via de bible-flag `veoNativeAudio`), niet meer een aparte TTS-laag.
+- **Beeld = Gemini reference-conditioned (live).** De cast-referenties sturen de consistentie; de Replicate/LoRA-route ligt slapend (één env-var om te wisselen).
+- **Consistency-enforcement laag** (zie §6b, fors uitgebreid): deterministische, bible-gedreven guards in de prompt-compilers — accessoire-vs-actie, onomatopee→SFX, headcount, cast-scoped relative-size (`veoSizeRank`), soort-bewuste roster-telling (chickens vs duckling), absent-cast + count-word scrub, en het benoemen van niet-sprekende kuikens. Allemaal puur + unit-getest.
+- **File-bridge besturing.** De pijplijn wordt aangestuurd via `bridge/commands → bridge/results` (een PowerShell-watcher voert JSON-commando's uit). Edits/rerolls/validatie lopen hierlangs.
+- **Review-dashboard.** De orchestrator serveert een job-pagina (`static/assets/js/job-page.js`) waar je per job de scène-prompts, de thumbnail-prompt en het lopende verhaal kunt bekijken en kopiëren, plus per-stap story-/QC-scores.
 
 ---
 
@@ -67,14 +80,14 @@ Wat er ontbreekt en in deze fase wordt toegevoegd: **echte beweging in scènes**
 
 | Service | Port | DB | Externe API | Status |
 |---|---|---|---|---|
-| `orchestrator` | 8080 | `orchestrator` | Anthropic (metadata) | ✅ |
+| `orchestrator` | 8080 | `orchestrator` | Anthropic (metadata, QC, prompt-compiler) | ✅ |
 | `script-service` | 8081 | `scripts` | Anthropic (tool_use) | ✅ |
 | `video-assembly-service` | 8082 | — | — (FFmpeg) | ✅ |
-| `voice-service` | 8083 | — | ElevenLabs | ✅ |
-| `image-service` | 8084 | — | OpenAI of Replicate | ✅ |
+| ~~`voice-service`~~ | ~~8083~~ | — | ~~ElevenLabs~~ | ❌ verwijderd — stem komt nu uit de clip-audio |
+| `image-service` | 8084 | — | Gemini (live, ref-conditioned); Replicate/LoRA slapend | ✅ |
 | `youtube-upload-service` | 8085 | — | YouTube Data API v3 | ✅ |
-| `thumbnail-service` | 8086 | — | OpenAI + lokale AWT | ✅ |
-| **`video-generation-service`** | **8087** | — | **Veo MCP (Google)** | 🆕 |
+| `thumbnail-service` | 8086 | — | Gemini-anchors + OpenAI fallback + lokale AWT | ✅ |
+| `video-generation-service` | 8087 | — | **Google Flow** (Veo, `VEO_ENABLED=false`), native clip-audio | ✅ |
 
 > **Poorten (cleanup 2026-06-12):** de poorten in deze tabel zijn *interne*
 > Docker-netwerkpoorten. Op de host zijn alleen **8080** (orchestrator) en
@@ -119,9 +132,8 @@ Assets leven uitsluitend op het gedeelde `workdir` volume, niet in de DB. Per-jo
 ```
 workdir/jobs/<jobId>/
   scenes/<seq>/
-    image.png                # van image-service
-    clip.mp4                 # NIEUW — van video-generation-service (als motionMode=veo)
-    voice.mp3                # van voice-service
+    image.png                # startframe van image-service (Gemini)
+    clip.mp4                 # van video-generation-service (Flow) — bevat de native audio (stem+ambient+muziek)
   final.mp4                  # van video-assembly-service
   thumbnail.png              # van thumbnail-service
 ```
@@ -133,9 +145,9 @@ workdir/jobs/<jobId>/
 Orchestrator state machine, ongewijzigd qua statussen:
 
 1. `PENDING` → submit job → **script-service** roept Claude met `tool_use`, valideert tegen bible (alleen cast-ids, alleen location-ids). VariationProfile geforceerd. SimHash check. Retry tot 2× bij near-dup. → `SCRIPT_GENERATING` → script klaar.
-2. → `ASSETS_GENERATING` (parallel via `CompletableFuture.allOf`):
-   - **voice-service**: per scène per line → ElevenLabs met character `voiceId` uit bible → concat lines tot één scene-MP3 (FFmpeg).
-   - **image-service**: per scène prompt = `visualStyle.description` + alle characters-in-scene descriptions + location description + scene `visualDesc`. Provider via `IMAGE_PROVIDER`.
+2. → `ASSETS_GENERATING`:
+   - **image-service**: per scène prompt = `visualStyle.description` + alle characters-in-scene descriptions + location description + scene `visualDesc`, geschoond door de consistency-guards (§6b). Live provider = Gemini (ref-conditioned op de cast-anchors).
+   - **Geen aparte voice-stap meer.** De stem hoort bij de clip-audio (Flow/Veo native), dus er is geen ElevenLabs-fan-out + MP3-concat meer.
 3. → **NIEUW: video-generation-service** (alleen als `motionMode=veo`):
    - Per scène: roept Veo MCP `generate_video` met `start_image=<workdir>/scenes/<seq>/image.png`, model uit bible-config (default `veo3_1_lite`, hero → `veo3_1` high), duur = `min(sceneDur, 8)`.
    - Output naar `workdir/jobs/<jobId>/scenes/<seq>/clip.mp4`.

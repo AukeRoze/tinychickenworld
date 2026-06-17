@@ -110,7 +110,7 @@ public class SceneImageQc {
 
     /**
      * @param image         path to the scene PNG
-     * @param expectedChars lines like "Pip: cream-white chick wearing a straw
+     * @param expectedChars lines like "Pip: pure-white chick wearing a straw
      *                      farmer hat and a red neck bandana"
      */
     /** Back-compat: QC without reference images. */

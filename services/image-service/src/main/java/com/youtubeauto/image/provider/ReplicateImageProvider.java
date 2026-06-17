@@ -91,11 +91,13 @@ public class ReplicateImageProvider implements ImageProvider {
                 + "cloned chicken, repeated chicken, mirrored chicken, "
                 + "same chicken appearing twice, copy of same chicken, "
                 + "extra chickens, crowd of chickens, flock, group of identical birds, "
-                // Accessory swaps (banner-matched cast — Pip cream-white + straw
+                // Accessory swaps (banner-matched cast — Pip pure-white + straw
                 // hat + red bandana, Mo blue-grey + red scarf, Bo tan + round
                 // glasses + green scarf):
                 + "pip_chicken without straw hat, pip_chicken without hat, "
                 + "pip_chicken wearing glasses, pip_chicken with blue-grey feathers, "
+                + "pip_chicken with cream feathers, pip_chicken with cream-white feathers, "
+                + "pip_chicken with yellow feathers, "
                 + "mo_chicken without scarf, mo_chicken wearing a hat, "
                 + "mo_chicken wearing glasses, mo_chicken with cream feathers, "
                 + "bo_chicken without glasses, bo_chicken without green scarf, "

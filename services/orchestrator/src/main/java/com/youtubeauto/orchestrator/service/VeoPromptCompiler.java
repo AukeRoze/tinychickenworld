@@ -537,9 +537,15 @@ public class VeoPromptCompiler {
                 String acc = d.path("accessory").asText("").trim();
                 if (!acc.isBlank()) b.append(", ALWAYS wearing ").append(acc)
                         .append(" (clearly visible, never dropped or swapped)");
-                appendDnaDetail(b, "silhouette", d.path("silhouette").asText("").trim());
+                // Prefer the cast-neutral structured fields (proza→velden migratie);
+                // fall back to the legacy free-text silhouette/build.
+                String sil = d.path("silhouetteShape").asText("").trim();
+                if (sil.isBlank()) sil = d.path("silhouette").asText("").trim();
+                appendDnaDetail(b, "silhouette", sil);
                 appendDnaDetail(b, "feathers", d.path("feathers").asText("").trim());
-                appendDnaDetail(b, "build", d.path("build").asText("").trim());
+                String bld = d.path("bodyBuild").asText("").trim();
+                if (bld.isBlank()) bld = d.path("build").asText("").trim();
+                appendDnaDetail(b, "build", bld);
                 appendDnaDetail(b, "weight", d.path("weight").asText("").trim());
                 appendDnaDetail(b, "eyes", d.path("eyeColor").asText("").trim());
                 b.append('.');
@@ -1395,6 +1401,17 @@ public class VeoPromptCompiler {
                 : joinNames(non) + " keep their beaks closed";
     }
 
+    /** Replaces flock-size count words ("the trio"/"the three"/"the four") with the
+     *  count-free "the flock" in a reduced-cast scene, so a present character's
+     *  identity line never implies an absent one is also in frame. Mirrors the
+     *  image-service PromptComposer helper of the same name. */
+    static String neutraliseCountWords(String text) {
+        if (text == null || text.isBlank()) return text;
+        return text.replaceAll("(?i)\\btrio\\b", "flock")
+                   .replaceAll("(?i)\\bthe three\\b", "the flock")
+                   .replaceAll("(?i)\\bthe four\\b", "the flock");
+    }
+
     /** The full Veo 3.1 native-audio direction block (Google's Dialogue / Ambient
      *  / SFX labelling). When the scene has spoken lines the characters SPEAK them
      *  aloud in clear ENGLISH with lip-sync; with no lines they fall back to
@@ -1529,10 +1546,16 @@ public class VeoPromptCompiler {
          .append(" fully visible from the first to the last frame. No character duplication, ")
          .append(antiExtraClause(ids)).append("; nobody is replaced or swapped.\n");
         Map<String, String> roster = veoLeanPrompts() ? characterVeoKeyClauses() : characterDnaClauses();
+        // Reduced cast → neutralise flock-size count words ("of the trio"/"the
+        // three"/"the four") in the per-character identity line, so a present chick's
+        // DNA never implies an absent one is also in frame (weight-bleed). Full cast
+        // present → left as-is (the count is then accurate).
+        boolean reducedCast = ids.size() < characterNames().size();
         int idx = 1;
         for (String id : ids) {
             String line = roster.get(id.toLowerCase());
             line = (line == null || line.isBlank()) ? id : line.trim();
+            if (reducedCast) line = neutraliseCountWords(line);
             p.append(idx++).append(". ").append(line);
             if (!line.endsWith(".")) p.append('.');
             p.append('\n');

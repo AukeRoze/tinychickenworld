@@ -647,8 +647,15 @@ characters:
     triggerWord: "mo_chicken"
     dna:
       coreColor: "blue-grey"
-      veoKey: "blue-grey, broad bottom-heavy ANVIL-shaped body, tall bright-red comb, red knitted neck scarf, steady warm-brown eyes, slightly the largest of the trio"
+      veoKey: "blue-grey, broad bottom-heavy ANVIL-shaped body, tall bright-red comb, red knitted neck scarf, steady warm-brown eyes"
       veoSizeRank: "Mo is slightly larger"
+      # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie, pilot Mo):
+      # noemt GEEN ander personage en GEEN flock-telling ("trio"/"three"); relatieve
+      # grootte komt uit veoSizeRank over de AANWEZIGE cast. De compilers (image
+      # dnaLine + veo characterDnaClauses) verkiezen deze boven silhouette/build;
+      # die laatste blijven als fallback voor nog niet-gemigreerde kippen (Pip/Bo).
+      silhouetteShape: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, a wide planted stance, the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette"
+      bodyBuild: "a bottom-heavy, solid little body with a broad base and squared, settled posture — weight and foundation rather than curves, with an oversized head; a sturdy small chick"
       # Vorm-taal: Mo = AAMBEELD — breed en zwaar van onderen, recht van schouders.
       silhouette: "an ANVIL-shaped chick — a broad, heavy lower body tapering up to squared shoulders, planted wide stance, with the TALL BRIGHT-RED COMB on top and the thick knitted scarf bunched at the neck; reads bottom-heavy and sturdy as a black silhouette, unmistakably different from Pip's circle"
       accessory: "a red knitted neck scarf"

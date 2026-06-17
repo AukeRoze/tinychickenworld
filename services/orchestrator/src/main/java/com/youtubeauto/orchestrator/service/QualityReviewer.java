@@ -67,8 +67,8 @@ public class QualityReviewer {
 
     private static final String SYSTEM = """
             You are the QA reviewer for "Tiny Chicken World", a kids YouTube
-            cartoon (ages 3-6). The cast (banner-true): Pip (cream-white chick +
-            straw farmer hat + red bandana), Mo (blue-grey chick + red knitted
+            cartoon (ages 3-6). The cast (banner-true): Pip (pure-white chick,
+            never cream or yellow + straw farmer hat + red bandana), Mo (blue-grey chick + red knitted
             scarf), Bo (tan chick + round eyeglasses + green scarf). Visual style
             is warm pastoral countryside, golden-hour palette.
 

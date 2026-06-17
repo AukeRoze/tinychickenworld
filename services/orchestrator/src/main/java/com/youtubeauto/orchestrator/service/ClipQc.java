@@ -100,7 +100,7 @@ public class ClipQc {
     /**
      * @param clip          path to the scene's clip.mp4 (QC frames are read from
      *                      its parent directory)
-     * @param expectedChars DNA lines like "Pip: cream-white chick wearing a straw
+     * @param expectedChars DNA lines like "Pip: pure-white chick wearing a straw
      *                      farmer hat and a red neck bandana"
      */
     /** Back-compat: QC without reference images. */

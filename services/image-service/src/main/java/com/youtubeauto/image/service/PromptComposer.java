@@ -466,8 +466,12 @@ public class PromptComposer {
             b.append("ALWAYS wears ").append(dna.accessory())
              .append(" — clearly visible, never dropped or swapped. ");
         }
-        if (dna.hasSilhouette()) {
-            String s = scopeDnaText(dna.silhouette(), absentNames);
+        // Prefer the cast-neutral structured field; fall back to the legacy proza.
+        // scopeDnaText stays as a safety net — on a migrated (clean) field it finds
+        // nothing to scrub, which is exactly the point of the migration.
+        String silhouetteText = dna.hasSilhouetteShape() ? dna.silhouetteShape() : dna.silhouette();
+        if (silhouetteText != null && !silhouetteText.isBlank()) {
+            String s = scopeDnaText(silhouetteText, absentNames);
             if (!s.isBlank()) b.append("Silhouette: ").append(s).append(". ");
         }
         // Extended identity details — feather texture, body build and eye colour
@@ -477,8 +481,9 @@ public class PromptComposer {
         if (dna.hasFeathers()) {
             b.append("Feathers: ").append(dna.feathers()).append(". ");
         }
-        if (dna.hasBuild()) {
-            String s = scopeDnaText(dna.build(), absentNames);
+        String buildText = dna.hasBodyBuild() ? dna.bodyBuild() : dna.build();
+        if (buildText != null && !buildText.isBlank()) {
+            String s = scopeDnaText(buildText, absentNames);
             if (!s.isBlank()) b.append("Build: ").append(s).append(". ");
         }
         if (dna.hasEyeColor()) {
@@ -571,16 +576,21 @@ public class PromptComposer {
      */
     static String scopeDnaText(String text, java.util.Collection<String> absentNames) {
         if (text == null || text.isBlank() || absentNames == null || absentNames.isEmpty()) return text;
-        // Only touch fields that actually name an absent character — every other
-        // DNA string is returned byte-for-byte unchanged (no cosmetic churn).
+        // The cast is reduced (some bible character is absent), so a count word like
+        // "the trio"/"the three"/"the four" mis-states how many are in frame and
+        // weight-bleeds an extra body in. Neutralise it to the count-free "the
+        // flock". (When the full cast IS present, absentNames is empty and we never
+        // get here, so an accurate "trio" is left alone.)
+        String out = neutraliseCountWords(text);
+        // Only do the heavier clause surgery on fields that actually NAME an absent
+        // character; everything else keeps its original punctuation (no churn).
         boolean mentionsAny = false;
         for (String name : absentNames) {
             if (name != null && !name.isBlank()
                     && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(name) + "\\b")
-                            .matcher(text).find()) { mentionsAny = true; break; }
+                            .matcher(out).find()) { mentionsAny = true; break; }
         }
-        if (!mentionsAny) return text;
-        String out = text;
+        if (!mentionsAny) return out;
         for (String name : absentNames) {
             if (name == null || name.isBlank()) continue;
             String nb = "\\b" + java.util.regex.Pattern.quote(name) + "\\b";
@@ -609,5 +619,16 @@ public class PromptComposer {
                      .replaceAll("^[,;\\s]+", "")
                      .replaceAll("[,;\\s]+$", "")
                      .trim();
+    }
+
+    /** Replaces flock-size count words ("the trio"/"the three"/"the four") with the
+     *  count-free "the flock", so a reduced-cast scene's DNA never implies more
+     *  characters are present than the roster allows (weight-bleeding an extra
+     *  body into the frame). Only invoked when the cast is reduced. */
+    private static String neutraliseCountWords(String text) {
+        if (text == null || text.isBlank()) return text;
+        return text.replaceAll("(?i)\\btrio\\b", "flock")
+                   .replaceAll("(?i)\\bthe three\\b", "the flock")
+                   .replaceAll("(?i)\\bthe four\\b", "the flock");
     }
 }
