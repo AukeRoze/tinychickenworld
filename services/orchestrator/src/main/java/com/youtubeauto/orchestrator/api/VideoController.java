@@ -391,6 +391,28 @@ public class VideoController {
         }
     }
 
+    /** Set the episode number (aflevering) for a job — used by the jobs-grid
+     *  dropdown when it isn't filled in yet. Body: {"episodeNumber": 4}.
+     *  Organisational metadata, so allowed at any stage (also after upload). */
+    @PostMapping("/{id}/episode")
+    public ResponseEntity<?> setEpisode(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        if (jobRepo.findById(id).isEmpty()) return ResponseEntity.notFound().build();
+        Object raw = body == null ? null : body.get("episodeNumber");
+        Integer n;
+        try {
+            n = (raw == null || String.valueOf(raw).isBlank())
+                    ? null : Integer.valueOf(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "episodeNumber must be a whole number"));
+        }
+        if (n != null && n < 1) {
+            return ResponseEntity.badRequest().body(Map.of("error", "episodeNumber must be >= 1"));
+        }
+        orchestrator.updatePlanning(id, null, null, n, false, null);
+        return ResponseEntity.ok(Map.of("id", id.toString(),
+                "episodeNumber", String.valueOf(n == null ? "" : n)));
+    }
+
     @PostMapping
     public ResponseEntity<VideoJobResponse> create(@Valid @RequestBody CreateVideoRequest req) {
         VideoJobResponse r = orchestrator.submit(req);

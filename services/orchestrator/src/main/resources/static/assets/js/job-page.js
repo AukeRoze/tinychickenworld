@@ -9,7 +9,7 @@
  * grid / QA board / cost cards are a later chunk that needs a fuller JSON DTO;
  * until then the "classic view" link opens the old server-rendered detail.
  */
-import api, { toast } from "/assets/js/api.js";
+import api, { toast, esc } from "/assets/js/api.js";
 
 const id = new URLSearchParams(location.search).get("id");
 const jobHost = document.getElementById("job-host");
@@ -375,8 +375,9 @@ function renderGate(job) {
       if (s.emotionalImpact != null) parts.push("Emotie " + s.emotionalImpact + "/10");
       if (s.childPsychology != null) parts.push("Kind-veilig " + s.childPsychology + "/10");
       if (!parts.length) { sc.textContent = "📖 Verhaal-score nog niet berekend."; return; }
-      sc.innerHTML = "📖 <strong>Verhaal-score</strong> — " + parts.join(" · ") +
-        (s.storyArc ? "  ·  arc: " + s.storyArc : "");
+      // parts are numeric scores (safe); storyArc is LLM/server text → escape it.
+      sc.innerHTML = "📖 <strong>Verhaal-score</strong> — " + esc(parts.join(" · ")) +
+        (s.storyArc ? "  ·  arc: " + esc(s.storyArc) : "");
     }).catch(() => sc.remove());
   }
 
@@ -1121,15 +1122,48 @@ function renderReview(ctx) {
     wrap.appendChild(card);
   }
 
-  // ── Planning (read-only) ──
-  const pl = data.planning;
-  if (pl && (pl.seriesId || pl.episodeNumber != null || pl.plannedPublishAt || pl.youtubeUrl)) {
+  // ── Planning — Episode is een dropdown (snel zetten/wijzigen, mirror van de
+  // jobs-grid); de rest read-only. Altijd zichtbaar zodat je de aflevering ook
+  // kunt zetten als die nog leeg is. ──
+  const pl = data.planning || {};
+  {
     any = true;
     const card = reviewCard("Planning");
     const dl = document.createElement("dl");
     dl.className = "kv";
     field(dl, "Series", pl.seriesId);
-    field(dl, "Episode", pl.episodeNumber != null ? String(pl.episodeNumber) : "");
+
+    const epDt = document.createElement("dt");
+    epDt.textContent = "Episode";
+    const epDd = document.createElement("dd");
+    const epSel = document.createElement("select");
+    epSel.className = "btn sm";
+    epSel.title = "Stel het afleveringnummer in";
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "Afl. —";
+    epSel.appendChild(ph);
+    for (let n = 1; n <= 20; n++) {
+      const o = document.createElement("option");
+      o.value = String(n);
+      o.textContent = "Afl. " + n;
+      if (pl.episodeNumber === n) o.selected = true;
+      epSel.appendChild(o);
+    }
+    epSel.addEventListener("change", async () => {
+      if (!epSel.value) return;
+      epSel.disabled = true;
+      try {
+        await api.post(`/api/v1/videos/${id}/episode`,
+            { episodeNumber: Number(epSel.value) }, { key: "ep-detail" });
+        toast("Aflevering " + epSel.value + " ingesteld ✓", "info");
+        loadReview();
+      } catch (e) { epSel.disabled = false; }
+    });
+    epDd.appendChild(epSel);
+    dl.appendChild(epDt);
+    dl.appendChild(epDd);
+
     field(dl, "Planned publish", pl.plannedPublishAt);
     field(dl, "YouTube", pl.youtubeUrl, { link: true });
     card.appendChild(dl);

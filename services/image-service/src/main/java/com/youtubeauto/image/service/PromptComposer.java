@@ -624,8 +624,16 @@ public class PromptComposer {
     /** Replaces flock-size count words ("the trio"/"the three"/"the four") with the
      *  count-free "the flock", so a reduced-cast scene's DNA never implies more
      *  characters are present than the roster allows (weight-bleeding an extra
-     *  body into the frame). Only invoked when the cast is reduced. */
-    private static String neutraliseCountWords(String text) {
+     *  body into the frame). Only invoked when the cast is reduced.
+     *
+     *  <p>GUARD-PARITY: the orchestrator's {@code VeoPromptCompiler.neutraliseCountWords}
+     *  is a hand copy of this. The canonical cases are pinned IDENTICALLY in
+     *  {@code PromptComposerScopeTest.neutralisesFlockCountWordsForReducedCast} and
+     *  {@code VeoPromptCompilerLeanTest.neutralisesFlockCountWordsForReducedCast};
+     *  if the two copies drift, one module's parity test fails the build. (Same
+     *  convention as AccessoryGuard — no shared lib, separate Maven modules.)
+     *  Package-private for the parity test. */
+    static String neutraliseCountWords(String text) {
         if (text == null || text.isBlank()) return text;
         return text.replaceAll("(?i)\\btrio\\b", "flock")
                    .replaceAll("(?i)\\bthe three\\b", "the flock")

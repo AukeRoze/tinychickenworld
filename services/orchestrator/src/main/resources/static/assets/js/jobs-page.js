@@ -92,7 +92,7 @@ function buildTable(jobs) {
   });
   thSel.appendChild(selAll);
   htr.appendChild(thSel);
-  ["", "Topic", "Status", "Created", ""].forEach((label) => {
+  ["", "Topic", "Status", "Afl.", "Created", ""].forEach((label) => {
     const th = document.createElement("th");
     th.textContent = label;
     htr.appendChild(th);
@@ -154,6 +154,42 @@ function buildTable(jobs) {
     pill.textContent = prettyStatus(j.status);
     status.appendChild(pill);
     tr.appendChild(status);
+
+    // Aflevering — toon het nummer, of een dropdown om het snel te zetten als het
+    // nog leeg is. Klikken in deze cel mag de rij-navigatie niet triggeren.
+    const epCell = document.createElement("td");
+    epCell.className = "small";
+    epCell.addEventListener("click", (e) => e.stopPropagation());
+    if (j.episodeNumber != null) {
+      epCell.textContent = "Afl. " + j.episodeNumber;
+    } else {
+      const epSel = document.createElement("select");
+      epSel.className = "btn sm";
+      epSel.title = "Stel het afleveringnummer in";
+      const ph = document.createElement("option");
+      ph.value = "";
+      ph.textContent = "Afl. —";
+      epSel.appendChild(ph);
+      for (let n = 1; n <= 20; n++) {
+        const o = document.createElement("option");
+        o.value = String(n);
+        o.textContent = "Afl. " + n;
+        epSel.appendChild(o);
+      }
+      epSel.addEventListener("change", async (e) => {
+        e.stopPropagation();
+        if (!epSel.value) return;
+        epSel.disabled = true;
+        try {
+          await api.post(`/api/v1/videos/${j.id}/episode`,
+              { episodeNumber: Number(epSel.value) }, { key: "ep-" + j.id });
+          toast("Aflevering " + epSel.value + " ingesteld ✓", "info");
+          refresh();
+        } catch (err) { epSel.disabled = false; }
+      });
+      epCell.appendChild(epSel);
+    }
+    tr.appendChild(epCell);
 
     const created = document.createElement("td");
     created.className = "small mono";

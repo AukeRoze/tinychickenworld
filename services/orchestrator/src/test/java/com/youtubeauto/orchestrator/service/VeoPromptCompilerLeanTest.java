@@ -402,6 +402,34 @@ class VeoPromptCompilerLeanTest {
     }
 
     @Test
+    void golden_reducedCastNeverLeaksAbsentCharacters(@TempDir Path tmp) throws Exception {
+        // Eval golden-invariant: a reduced-cast prompt must never name or describe a
+        // character that isn't in the shot, and the species roster must be exact.
+        // This is the cheap, render-free regression net for the whole guard stack.
+        VeoPromptCompiler c = castCompilerFor(tmp);
+
+        String solo = c.compile("Pip looks at the egg", "setup", List.of("pip"),
+                "garden", "midday", "clear", "goal", "joy", "natural", null, null, "natural");
+        for (String veoKey : new String[]{"MO_VEOKEY", "BO_VEOKEY", "DUCK_VEOKEY"}) {
+            assertFalse(solo.contains(veoKey), "solo Pip must not pull in " + veoKey + ": " + solo);
+        }
+        for (String name : new String[]{"Mo", "Bo", "Duckling"}) {
+            assertFalse(java.util.regex.Pattern.compile("\\b" + name + "\\b").matcher(solo).find(),
+                    "solo Pip must not name " + name + ": " + solo);
+        }
+        assertTrue(solo.contains("EXACTLY 1 CHICKEN"), "solo roster expected: " + solo);
+
+        String trio = c.compile("Pip and Mo show off the duckling", "development",
+                List.of("pip", "mo", "duckling"), "garden", "midday", "clear",
+                "goal", "joy", "natural", null, null, "energetic");
+        assertFalse(trio.contains("BO_VEOKEY"), "Bo's identity must not leak into a Bo-less scene: " + trio);
+        assertFalse(java.util.regex.Pattern.compile("\\bBo\\b").matcher(trio).find(),
+                "Bo must not be named in a Bo-less scene: " + trio);
+        assertTrue(trio.contains("EXACTLY 2 CHICKENS AND 1 DUCKLING"),
+                "species-aware roster expected for Pip+Mo+duckling: " + trio);
+    }
+
+    @Test
     void neutralisesFlockCountWordsForReducedCast() {
         // The per-character identity line must not imply a fixed flock size in a
         // reduced-cast scene (the "of the trio" weight-bleed).

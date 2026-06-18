@@ -598,7 +598,7 @@ characters:
       # has its own silhouette: Mo is the tallest + sturdiest, Pip is the medium
       # round one, Bo is the smallest + slimmest. Keep this Mo > Pip > Bo size
       # order identical in every shot; only the world dwarfs them all.
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x her height, roughly half a sunflower tall); the SMALLEST of the trio — clearly daintier and more petite than Mo, a touch smaller than Bo. All three stay the same kind of small chick (no extreme gaps) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
+      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x her height, roughly half a sunflower tall; tiny and petite, dwarfed by the world."
       # Accessories this character must NEVER wear (anti-swap lock). Pip is the
       # only one with a straw hat; she must never get Bo's glasses or Mo's scarf.
       antiAccessory: "any eyeglasses or glasses, any knitted scarf, any green scarf"
@@ -672,7 +672,7 @@ characters:
       # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "solid and settled — plants both feet when he stops to think"
       eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
-      scaleAnchor: "a small chick against the world (the Big Oak towers ~50x); the largest of the trio — a touch taller and clearly broader-based than the others, with Pip the smallest and Bo thin in between. Keep the gaps modest (never one much bigger than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
+      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x; a small, sturdy chick dwarfed by the world."
       # Mo wears ONLY a chunky red KNITTED scarf — never a thin bandana/kerchief
       # (that's Pip's), never glasses (Bo's), never a hat (Pip's).
       antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any wattles or red flaps under the beak, any eyelashes or feminine eye makeup"
@@ -735,7 +735,7 @@ characters:
       # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "light and twitchy, looks caught half-way through a hop"
       eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
-      scaleAnchor: "a small chick against the world; the THINNEST of the trio, middle in height — slimmer than both, slightly taller than petite Pip, clearly lighter than Mo. Keep the gaps modest (never one much smaller than the rest) — distinct SHAPES carry the difference: Pip a tiny circle, Mo a broad anvil, Bo a thin vertical line."
+      scaleAnchor: "a small chick against the world — a small, slim chick dwarfed by the world."
       # Bo's glasses are ALWAYS thin round wire frames (never thick/black). Never a
       # hat (Pip's), never a bandana or red scarf (Pip/Mo's) — Bo's scarf is green.
       antiAccessory: "any hat, any bandana, any red scarf or red kerchief, thick or black-framed glasses"
@@ -791,7 +791,7 @@ characters:
       # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "feather-light and wobbly — tips over when he flaps too enthusiastically"
       eyeColor: "very dark warm brown, huge and glossy, with oversized baby catch-lights"
-      scaleAnchor: "the baby of the four — noticeably but not absurdly smaller than Bo; the size gap between duckling and chicks is BIGGER than any gap among the chicks themselves."
+      scaleAnchor: "a tiny newly-hatched baby against the world — a small, wobbly duckling dwarfed by the world."
       veoSizeRank: "the duckling is the tiny baby, clearly smaller than any of the chicks"
       # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): geen
       # andere naam, geen flock-telling ("of the four"/"two-thirds of Bo's height");

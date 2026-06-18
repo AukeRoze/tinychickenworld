@@ -2264,6 +2264,11 @@ public class PipelineOrchestrator {
      *  premium 1080p) into the Veo request maps. No-op when blank. */
     private void applyModelOverride(List<Map<String, Object>> veoScenes, String modelOverride) {
         if (modelOverride == null || modelOverride.isBlank()) return;
+        // "googleflow_omni" is the dashboard default and means "clips are made by
+        // hand in Google Flow (Omni) and imported", NOT an auto-render model. So it
+        // must NEVER reach the video-generation-service's model router — treat it as
+        // no override (auto/bible-routing) for any scene the auto-pipeline does run.
+        if (modelOverride.trim().equalsIgnoreCase("googleflow_omni")) return;
         for (Map<String, Object> m : veoScenes) m.put("modelOverride", modelOverride.trim());
     }
 

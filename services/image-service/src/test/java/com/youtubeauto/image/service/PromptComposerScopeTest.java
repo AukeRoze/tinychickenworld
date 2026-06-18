@@ -161,6 +161,18 @@ class PromptComposerScopeTest {
     }
 
     @Test
+    void neutralisesFlockCountWordsForReducedCast() {
+        // GUARD-PARITY: keep IDENTICAL to orchestrator
+        // VeoPromptCompilerLeanTest.neutralisesFlockCountWordsForReducedCast.
+        assertEquals("the smallest chick of the flock",
+                PromptComposer.neutraliseCountWords("the smallest chick of the trio"));
+        assertEquals("slightly the largest of the flock",
+                PromptComposer.neutraliseCountWords("slightly the largest of the three"));
+        assertEquals("the tiniest of the flock",
+                PromptComposer.neutraliseCountWords("the tiniest of the four"));
+    }
+
+    @Test
     void guardsAreNoOpOnMigratedCastNeutralText() {
         // Contract (proza→velden migratie, stap 4): a migrated silhouetteShape/
         // bodyBuild is cast-neutral, so the scrub guard must leave it BYTE-FOR-BYTE
