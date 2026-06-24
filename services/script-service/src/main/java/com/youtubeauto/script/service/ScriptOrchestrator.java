@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -351,6 +352,45 @@ public class ScriptOrchestrator {
             j.setError(error);
             jobRepo.save(j);
         });
+    }
+
+    /**
+     * Canonical SOURCE-FIX write-back. Persists orchestrator-sanitized scene
+     * action text onto the stored {@link com.youtubeauto.script.domain.ScriptScene}
+     * rows so a corrected accessory-vs-action contradiction stops re-appearing on
+     * every downstream compile. Only non-null fields overwrite; an unknown {@code
+     * seq} is skipped (a stale caller can never corrupt the store). Idempotent —
+     * re-patching identical text changes nothing. Returns the refreshed script.
+     */
+    @Transactional
+    public ScriptResponse patchScenes(UUID jobId, com.youtubeauto.script.api.dto.PatchScenesRequest req) {
+        Script script = scriptRepo.findByJobId(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("No script for job " + jobId));
+        Map<Integer, ScriptScene> bySeq = new java.util.HashMap<>();
+        for (ScriptScene sc : script.getScenes()) bySeq.put(sc.getSeq(), sc);
+        int changed = 0;
+        for (var p : req.scenes()) {
+            ScriptScene sc = bySeq.get(p.seq());
+            if (sc == null) {
+                log.warn("patchScenes job {}: unknown seq {} — skipped", jobId, p.seq());
+                continue;
+            }
+            boolean dirty = false;
+            if (p.visualDesc() != null && !p.visualDesc().equals(sc.getVisualDesc())) {
+                sc.setVisualDesc(p.visualDesc());
+                dirty = true;
+            }
+            if (p.motionDesc() != null && !p.motionDesc().equals(sc.getMotionDesc())) {
+                sc.setMotionDesc(p.motionDesc());
+                dirty = true;
+            }
+            if (dirty) changed++;
+        }
+        if (changed > 0) {
+            scriptRepo.save(script);
+            log.info("patchScenes job {}: source-fixed {} scene(s) (accessory-vs-action)", jobId, changed);
+        }
+        return get(jobId);
     }
 
     @Transactional(readOnly = true)

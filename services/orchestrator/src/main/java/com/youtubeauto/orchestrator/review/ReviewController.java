@@ -105,6 +105,35 @@ public class ReviewController {
                 "veoCameraOverride", value == null ? "" : value, "result", "CAMERA_OVERRIDE_SET"));
     }
 
+    /** Trim a scene to an in/out window. Body: {"startSec": 1.5, "endSec": 7.0}
+     *  (seconds within the clip). The montage renders [start, end] — seeks to
+     *  start and runs for (end-start)s. Minimum 2s window. Takes effect on the
+     *  next Re-assemble. */
+    @PostMapping("/scenes/{seq}/trim")
+    public ResponseEntity<Map<String, Object>> trimScene(@PathVariable UUID id, @PathVariable int seq,
+                                                         @RequestBody Map<String, Number> body) {
+        double start = body == null || body.get("startSec") == null ? 0.0 : body.get("startSec").doubleValue();
+        double end = body == null || body.get("endSec") == null ? 0.0 : body.get("endSec").doubleValue();
+        orchestrator.setSceneTrim(id, seq, start, end);
+        return ResponseEntity.ok(Map.of("id", id.toString(), "seq", seq,
+                "startSec", start, "endSec", end, "result", "TRIMMED"));
+    }
+
+    /** Set (or clear) the transition INTO this scene (the boundary before it).
+     *  Body: {"type": "wipeleft", "seconds": 0.4}; type "cut" = hard cut, blank/absent
+     *  clears it to the phase-default. Takes effect on the next Re-assemble. */
+    @PostMapping("/scenes/{seq}/transition")
+    public ResponseEntity<Map<String, Object>> setTransition(@PathVariable UUID id, @PathVariable int seq,
+                                                             @RequestBody(required = false) Map<String, Object> body) {
+        String type = body == null || body.get("type") == null ? null : String.valueOf(body.get("type"));
+        Double seconds = null;
+        Object sec = body == null ? null : body.get("seconds");
+        if (sec instanceof Number n) seconds = n.doubleValue();
+        orchestrator.setSceneTransition(id, seq, type, seconds);
+        return ResponseEntity.ok(Map.of("id", id.toString(), "seq", seq,
+                "type", type == null ? "" : type, "result", "TRANSITION_SET"));
+    }
+
     /** Set the cast for this scene (single source of truth). Body:
      *  {"characters": ["pip","bo"]}. The cast drives the still ("exactly N
      *  chicks"), the Veo cast-lock AND the vision-QC, so correcting it here keeps

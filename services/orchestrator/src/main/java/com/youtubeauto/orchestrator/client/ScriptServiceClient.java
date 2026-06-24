@@ -66,6 +66,25 @@ public class ScriptServiceClient {
                 java.time.Duration.ofSeconds(30), "script-service get");
     }
 
+    /**
+     * Canonical SOURCE-FIX write-back: persist orchestrator-sanitized scene
+     * action text (visualDesc / motionDesc) onto the stored script_scenes rows.
+     * Each patch is {@code {seq, visualDesc?, motionDesc?}}; null fields are left
+     * untouched. Idempotent on the server, so this is treated as a safe-to-retry
+     * call. Best-effort by contract — callers should not fail the render when the
+     * canonical write-back is unavailable (the assembly-store fix already keeps
+     * THIS job correct).
+     */
+    public JsonNode patchScenes(UUID scriptJobId, java.util.List<Map<String, Object>> scenePatches) {
+        Map<String, Object> body = java.util.Map.of("scenes", scenePatches);
+        return Resilience.idempotent(
+                client.patch()
+                        .uri("/api/v1/scripts/{id}/scenes", scriptJobId)
+                        .bodyValue(body)
+                        .retrieve().bodyToMono(JsonNode.class),
+                java.time.Duration.ofSeconds(30), "script-service patchScenes");
+    }
+
     /** Story-treatment preview (front-end stage #1) — synchronous, creates no
      *  job. Idempotent: a re-fire just recomputes a (cheap) treatment. */
     public JsonNode treatment(String topic, String audience, int targetSeconds,

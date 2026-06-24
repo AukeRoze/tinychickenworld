@@ -1,0 +1,5 @@
+{
+  "method": "POST",
+  "service": "orchestrator",
+  "path": "/api/v1/videos/95367c07-922a-4d53-a58a-d9f61cd8ee12/import-clips?episode=1"
+}

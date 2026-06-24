@@ -32,6 +32,13 @@ public class VideoJob {
     @Column(name = "burn_subtitles") private Boolean burnSubtitles;
     @Column(name = "privacy_status") private String privacyStatus;
     @Column(name = "background_music_path") private String backgroundMusicPath;
+    /** Bumper-overgangen (Auke): overgang op de grens intro→scène 1 en laatste
+     *  scène→outro. Type = ffmpeg xfade-naam of "cut"; seconds = 0,05–1,5.
+     *  Leeg = de bestaande default-dissolve in de assembly. */
+    @Column(name = "intro_transition_type") private String introTransitionType;
+    @Column(name = "intro_transition_seconds") private Double introTransitionSeconds;
+    @Column(name = "outro_transition_type") private String outroTransitionType;
+    @Column(name = "outro_transition_seconds") private Double outroTransitionSeconds;
     /** Optional per-episode recurring visual motif (injected into image prompts).
      *  Eggs are no longer a channel-wide default; set this to opt a motif in. */
     @Column(name = "recurring_motif", columnDefinition = "text") private String recurringMotif;

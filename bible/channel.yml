@@ -181,6 +181,7 @@ review:
   reviewImages:  ${REVIEW_IMAGES:true}            # per-scene image review + regenerate
   afterAssets:   ${REVIEW_AFTER_ASSETS:false}     # gate after voice + image (whole batch)
   beforeVeo:     ${REVIEW_BEFORE_VEO:false}       # only fires if motionMode=veo
+  beforeMontage: ${REVIEW_BEFORE_MONTAGE:true}    # montage-poort (Auke): aparte stap ná de clips, vóór de assemblage — volgorde, knippen/trimmen, overgangen en achtergrondmuziek. Zet op false om direct door te assembleren.
   beforeUpload:  ${REVIEW_BEFORE_UPLOAD:false}    # planning/upload-poort: standaard AUTO-doorgaan (Auke 17 jun) — direct als Private uploaden; zet REVIEW_BEFORE_UPLOAD=true terug voor de handmatige poort
   notify:
     to:   ${REVIEW_EMAIL_TO:}                     # blank = no mail, gate still pauses
@@ -234,13 +235,13 @@ visualStyle:
 # built-in "Soft 3D Pixar look" string.
 renderStyle:
   veoLook: >-
-    Smooth, clean stylized 3D cartoon look: smooth matte bodies without
-    individual feather textures, thick chunky shapes with soft clay-like volume
-    and bold solid colours, a small matte beak and extra-large glossy eyes with
-    bright catch-lights, smooth rounded storybook surfaces and shallow soft depth
-    of field. Minimalist approach to textures, zero realism: never photorealistic,
-    no fluffy down feathers, no subsurface skin/feather shading, no micro-texture,
-    never flat 2D.
+    Soft, clean stylized 3D cartoon look: rounded fluffy ball-of-fluff bodies
+    with soft DOWN, but rendered SMOOTH, clean and matte — no individual feather
+    strands, no realistic feather detail, no micro-texture, no subsurface
+    skin/feather shading. Thick chunky shapes with soft clay-like volume and bold
+    solid colours, a small matte beak and extra-large glossy eyes with bright
+    catch-lights, smooth rounded storybook surfaces and shallow soft depth of
+    field. Zero realism: never photorealistic, never flat 2D.
 
 # Colour-script (Story D) — an EMOTIONAL colour progression per phase, the way
 # Pixar colour-scripts a film so the palette supports each beat's feeling. The
@@ -558,13 +559,13 @@ characters:
       coreColor: "pure white (never yellow)"
       # Compacte Veo-identiteit (lean-modus): alleen de consistentie-kritische
       # kenmerken. De rest leunt op het startframe als referentie.
-      veoKey: "PURE WHITE down (clean white, NEVER yellow or cream-yellow — she is not the yellow duckling), perfectly ROUND ball-of-fluff body, straw farmer hat + red neck bandana, HUGE sparkling brown eyes"
+      veoKey: "PURE WHITE soft down (clean white, NEVER yellow or cream-yellow — she is not the yellow duckling), perfectly ROUND ball-of-fluff body, a SMALL red pointy comb peeking out at the front base of her straw farmer hat, straw farmer hat + red neck bandana (always worn), HUGE sparkling brown eyes with thick dark eyelashes, NO wattles or red flaps under the beak"
       # Compacte relatieve-grootte (lean-modus): de compiler bouwt de "Relative
       # size:"-zin alleen uit de personages die ECHT in de scène staan. Eén losse
       # zinsnede per personage, zonder afsluitende punt — de compiler voegt samen
       # en interpunctueert. Zo komt "Mo is slightly larger" nooit meer in een
       # scène waar Mo niet voorkomt.
-      veoSizeRank: "Pip is the smallest"
+      veoSizeRank: "Pip is the smallest — a tiny, petite, compact ROUND chick, the shortest of the flock"
       # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): noemt
       # GEEN ander personage en GEEN flock-telling ("trio"/"three"). Compilers
       # verkiezen deze boven silhouette/build; die blijven als fallback.
@@ -595,10 +596,10 @@ characters:
       weight: "light and bouncy, as if a gentle breeze could lift her"
       eyeColor: "warm chocolate-brown irises with large bright white catch-light highlights"
       # Scale lock — the three chicks have DISTINCT but FIXED proportions so each
-      # has its own silhouette: Mo is the tallest + sturdiest, Pip is the medium
-      # round one, Bo is the smallest + slimmest. Keep this Mo > Pip > Bo size
-      # order identical in every shot; only the world dwarfs them all.
-      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x her height, roughly half a sunflower tall; tiny and petite, dwarfed by the world."
+      # has its own silhouette: Mo is the tallest + broadest, Bo is the middle
+      # height (tall but slim), Pip is the smallest round one. Keep this Mo > Bo >
+      # Pip height order identical in every shot; only the world dwarfs them all.
+      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x her height, a sunflower stands about twice her height; a tiny, petite ROUND chick, dwarfed by the world."
       # Accessories this character must NEVER wear (anti-swap lock). Pip is the
       # only one with a straw hat; she must never get Bo's glasses or Mo's scarf.
       antiAccessory: "any eyeglasses or glasses, any knitted scarf, any green scarf"
@@ -652,8 +653,8 @@ characters:
     triggerWord: "mo_chicken"
     dna:
       coreColor: "blue-grey"
-      veoKey: "blue-grey, broad bottom-heavy ANVIL-shaped body, tall bright-red comb, red knitted neck scarf, steady warm-brown eyes"
-      veoSizeRank: "Mo is slightly larger"
+      veoKey: "blue-grey soft down, broad bottom-heavy ANVIL-shaped body, tall bright-red comb AND small red wattles under the beak, red knitted neck scarf (always worn), steady warm-brown eyes, no eyelashes"
+      veoSizeRank: "Mo is the largest — the TALLEST and BROADEST chick, sturdy and solid, the biggest of the flock"
       # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie, pilot Mo):
       # noemt GEEN ander personage en GEEN flock-telling ("trio"/"three"); relatieve
       # grootte komt uit veoSizeRank over de AANWEZIGE cast. De compilers (image
@@ -672,10 +673,10 @@ characters:
       # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "solid and settled — plants both feet when he stops to think"
       eyeColor: "deep gentle brown irises, steady and warm, soft round highlights"
-      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x; a small, sturdy chick dwarfed by the world."
+      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x his height, a sunflower stands about twice his height; a small but STURDY, broad chick, dwarfed by the world."
       # Mo wears ONLY a chunky red KNITTED scarf — never a thin bandana/kerchief
       # (that's Pip's), never glasses (Bo's), never a hat (Pip's).
-      antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any wattles or red flaps under the beak, any eyelashes or feminine eye makeup"
+      antiAccessory: "any bandana or thin neck kerchief, any eyeglasses or glasses, any hat, any green scarf, any eyelashes or feminine eye makeup"
     personality: >
       Mo is the quiet thinker of the group. He speaks slowly, in complete sentences,
       often pausing to find the right word. He notices things the others miss — a
@@ -717,13 +718,13 @@ characters:
     triggerWord: "bo_chicken"
     dna:
       coreColor: "tan and sandy-brown"
-      veoKey: "tan/sandy-brown, slim UPRIGHT body with a spiky cowlick tuft on top, round thin-framed eyeglasses + green neck scarf, bright amber eyes"
-      veoSizeRank: "Bo is slightly taller and slimmer"
+      veoKey: "tan/sandy-brown soft down, slim UPRIGHT body with a distinctly LONG upright neck about one head-height of visible neck between body and head (never a short stubby neck, never a round neckless ball body), with a spiky cowlick tuft on top, NO comb and NO wattles, round thin-framed eyeglasses + green neck scarf (both always worn), bright amber eyes"
+      veoSizeRank: "Bo is mid-sized — the MIDDLE height, a tall but slim narrow upright chick, slimmer than the others"
       # Gestructureerde, CAST-NEUTRALE identiteit (proza→velden migratie): geen
       # ander personage, geen flock-telling. Compilers verkiezen deze; oude
       # silhouette/build blijven fallback.
-      silhouetteShape: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body, neck stretched tall, the comic cowlick tuft spiking straight up, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette"
-      bodyBuild: "a slim, VERTICAL, springy little body stretched upward — a line rather than a ball — light and twitchy, with an oversized head; a tall, thin small chick"
+      silhouetteShape: "a narrow, UPRIGHT exclamation-mark of a chick — slim vertical body with a distinctly LONG neck stretched tall, about one head-height of visible neck between body and head, the comic cowlick tuft spiking straight up, big round eyeglasses dominating the face; reads tall-and-thin as a black silhouette"
+      bodyBuild: "a slim, VERTICAL, springy little body stretched upward — a line rather than a ball, with a distinctly LONG upright neck about one head-height of visible neck between body and head (never a short stubby neck or round neckless ball) — light and twitchy, with an oversized head; a tall, thin small chick"
       # Vorm-taal: Bo = VERTICALE STREEP — smal, gestrekt, tuft als spits.
       # silhouette: gemigreerd → silhouetteShape (proza→velden, stap 5)
       accessory: "round thin-framed eyeglasses and a green neck scarf"
@@ -735,7 +736,7 @@ characters:
       # build: gemigreerd → bodyBuild (proza→velden, stap 5)
       weight: "light and twitchy, looks caught half-way through a hop"
       eyeColor: "bright amber-brown eyes, comically magnified behind the round glasses"
-      scaleAnchor: "a small chick against the world — a small, slim chick dwarfed by the world."
+      scaleAnchor: "a small chick against the world — the Big Oak towers ~50x her height, a sunflower stands about twice her height; a small, SLIM upright chick, dwarfed by the world."
       # Bo's glasses are ALWAYS thin round wire frames (never thick/black). Never a
       # hat (Pip's), never a bandana or red scarf (Pip/Mo's) — Bo's scarf is green.
       antiAccessory: "any hat, any bandana, any red scarf or red kerchief, thick or black-framed glasses"
@@ -836,6 +837,37 @@ characters:
 #   • optional weather overlay
 #   • a glimpse of a relevant landmark in the background
 # This is what turns "static decor" into a felt world.
+
+# ─── Hero props (key objects) ──────────────────────────────────────────
+# Objecten die een hoofdrol spelen krijgen — net als de personages — een
+# VASTE canon die de compiler in ELKE scène injecteert waar het object in de
+# actietekst voorkomt (KEY OBJECT-sectie). Zo blijft de look identiek door de
+# hele aflevering. `role: hero` = harde injectie. De `states`-lijst is een
+# ÉÉNRICHTING toestand-machine; de volgorde = de toegestane progressie. De
+# actuele staat per scène komt uit het scène-veld `propStates` (bv. {egg: cracked});
+# zonder dat veld wordt alleen de look + anti-drift gelockt, geen staat geclaimd.
+props:
+  - id: egg
+    name: "The Wobbly Egg"
+    role: hero
+    aliases: ["egg", "the egg", "wobbly egg", "the wobbly egg"]
+    veoKey: "a smooth matte cream-white egg, slightly larger than Pip's head, with faint pale-brown speckles, a rounded oval shape, never glossy"
+    scaleAnchor: "about the size of Pip's head — never shrinks or grows between shots"
+    antiDrift: "never glossy or plastic, never pure white, never patterned, never a second egg, never changing colour or size"
+    signatureSound: "a soft hollow wooden tok-tok when tapped"
+    states:
+      - id: intact
+        look: "whole, unblemished cream shell"
+        behaviour: "rests heavy and still; a gentle touch makes it give ONE slow heavy wobble then settle — never bounces, never rolls off on its own"
+      - id: hairline
+        look: "a single faint hairline crack, shell still fully closed"
+        behaviour: "same heavy stillness; a faint creak when touched; the hairline crack never widens by itself"
+      - id: cracked
+        look: "a jagged crack with a small chip missing, shell still mostly together"
+        behaviour: "settles with the chipped side down, tiny uneven wobbles, a soft rattle from within; never re-seals"
+      - id: hatched
+        look: "broken open into two empty halves"
+        behaviour: "the two halves lie still where they fell, light as paper; permanent — never re-forms, never moves on its own"
 
 world:
   # Overall sense of place — used as a wrap around every scene prompt so
@@ -1307,52 +1339,4 @@ music:
     - id: starlight_nest
       path: /bible/music/starlight_nest.mp3
       mood: calm
-    - id: warm_straw_sunset
-      path: /bible/music/warm_straw_sunset.mp3
-      mood: calm
-    - id: drowsy_dandelions
-      path: /bible/music/drowsy_dandelions.mp3
-      mood: calm
-    - id: gentle_morning
-      path: "/bible/music/gentle_morning.mp3"
-      mood: calm
-    - id: sunny_adventure
-      path: "/bible/music/sunny_adventure.mp3"
-      mood: energetic
-    - id: curious_clouds
-      path: "/bible/music/curious_clouds.mp3"
-      mood: thoughtful
-
-# Voice handling. Three modes:
-#   silent     — generate silent MP3 of estimated duration (no characters speak)
-#   elevenlabs — full TTS via ElevenLabs (one voice per character)
-#   sounds     — character-specific chicken sound effects from bible/sfx/
-#                + optional narrator TTS for intro/outro lines
-#
-# `sounds` mode is the Shaun-the-Sheep / Pingu approach — chickens
-# communicate via sound + emotion + expression, no spoken words. Massively
-# scalable globally (no language barrier), authentic to the characters,
-# zero per-video TTS cost. Recommended default.
-voice:
-  mode: ${VOICE_MODE:silent}      # silent | elevenlabs | sounds
-  # ──────────────────────────────────────────────────────────────────
-  # Sounds-mode configuration
-  # ──────────────────────────────────────────────────────────────────
-  sfx:
-    rootPath: "/bible/sfx"        # mounted readonly into voice-service
-    # How long each SFX clip plays per script line, in seconds. Sounds get
-    # naturally repeated/stretched if the line was longer in dialogue mode.
-    defaultClipDuration: 1.5
-    # If a clip is too short for the scene's narration target, we loop it
-    # this many extra times (with small pitch variation) to fill the gap.
-    maxLoopRepeat: 3
-    # Per-character SFX volume gain (dB). Pip's high peeps need less, Bo's
-    # dramatic squawks get pulled down a bit so they don't dominate.
-    gainDb:
-      pip: -2.0
-      mo:  0.0
-      bo:  -3.0
-    # When a scene's character + emotion has no matching file, fall back
-    # to this generic per-character "talking" sound. Last-resort safety net.
-    fallbackEmotion: "content"
-  # ─────
+    - id: warm_straw_sunse

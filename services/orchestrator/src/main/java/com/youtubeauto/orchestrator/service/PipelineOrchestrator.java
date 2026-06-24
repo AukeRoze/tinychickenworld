@@ -239,14 +239,19 @@ public class PipelineOrchestrator {
         switch (job.getStatus()) {
             case SCRIPT_REVIEW_PENDING -> self.runAssetsStage(jobId);
             case IMAGES_REVIEW_PENDING -> {
+                // Veo aan → eerst clips renderen (die eindigen in de montage-gate);
+                // Veo uit (Ken Burns / geïmporteerde Flow-clips) → direct naar de
+                // montage-stap (volgorde, knippen/trimmen, overgangen, muziek),
+                // NIET rechtstreeks assembleren.
                 if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
-                else                              self.runAssemblyStage(jobId);
+                else                              enterMontageGate(jobId);
             }
             case ASSETS_REVIEW_PENDING -> {
                 if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
-                else                              self.runAssemblyStage(jobId);
+                else                              enterMontageGate(jobId);
             }
             case VEO_REVIEW_PENDING    -> self.runVeoStage(jobId);
+            case MONTAGE_REVIEW_PENDING -> self.runAssemblyStage(jobId);
             case THUMBNAIL_REVIEW_PENDING -> self.runUploadGate(jobId);
             case UPLOAD_REVIEW_PENDING -> self.runUploadStage(jobId);
             case DISTRIBUTION_PENDING  -> self.finalizeDistribution(jobId);
@@ -293,7 +298,19 @@ public class PipelineOrchestrator {
     public void resumeAfterRestart(UUID jobId, JobStatus status) {
         switch (status) {
             case PENDING, SCRIPT_GENERATING -> self.runScriptStage(jobId);
-            case ASSETS_GENERATING          -> self.runAssetsStage(jobId);
+            case ASSETS_GENERATING          -> {
+                // Niet blind opnieuw assets genereren: staan de stills er al, ga dan
+                // door naar de volgende stap (montage-gate, of Veo als dat aan staat)
+                // i.p.v. ASSETS_GENERATING te herhalen (gebruikerswens Auke).
+                VideoJob job = load(jobId);
+                if (assetsComplete(loadAssemblyScenes(job))) {
+                    log.info("Job {} crash-recovery: stills al compleet — sla ASSETS_GENERATING over, door naar de volgende stap.", jobId);
+                    if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
+                    else                              enterMontageGate(jobId);
+                } else {
+                    self.runAssetsStage(jobId);   // vult alleen de ontbrekende stills
+                }
+            }
             case VEO_GENERATING             -> self.runVeoStage(jobId);
             case ASSEMBLING                 -> self.runAssemblyStage(jobId);
             case UPLOADING                  -> self.runUploadStage(jobId);
@@ -363,8 +380,11 @@ public class PipelineOrchestrator {
         List<Integer> missing = new java.util.ArrayList<>();
         for (SceneDto s : scenes) {
             int seq = s.effectiveSeq();
-            java.nio.file.Path src = srcDir.resolve("scene-" + seq + ".mp4");
-            if (!java.nio.file.Files.isRegularFile(src)) {
+            // Accept BOTH the bare scene-<seq>.mp4 and the new naming convention
+            // scene-<seq>-<title>.mp4 (title = the scene-goal slug). Prefix match on
+            // "scene-<seq>-" so the descriptive suffix is free-form.
+            java.nio.file.Path src = resolveSceneClip(srcDir, seq);
+            if (src == null) {
                 missing.add(seq);
                 continue;
             }
@@ -396,6 +416,32 @@ public class PipelineOrchestrator {
         out.put("totalScenes", scenes.size());
         out.put("note", "run Reassemble to build the master with these clips");
         return out;
+    }
+
+    /**
+     * Locate a scene's externally-produced clip in {@code dir}. Tries the exact
+     * {@code scene-<seq>.mp4} first, then the descriptive convention
+     * {@code scene-<seq>-<title>.mp4} (prefix {@code "scene-<seq>-"}; the hyphen
+     * after the number means {@code scene-1-…} never matches {@code scene-10-…}).
+     * When several match, the alphabetically first is chosen (deterministic).
+     * Returns {@code null} when no clip exists (or the folder is absent).
+     */
+    private static java.nio.file.Path resolveSceneClip(java.nio.file.Path dir, int seq) {
+        java.nio.file.Path exact = dir.resolve("scene-" + seq + ".mp4");
+        if (java.nio.file.Files.isRegularFile(exact)) return exact;
+        String prefix = "scene-" + seq + "-";
+        try (java.util.stream.Stream<java.nio.file.Path> st = java.nio.file.Files.list(dir)) {
+            return st.filter(java.nio.file.Files::isRegularFile)
+                    .filter(p -> {
+                        String n = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+                        return n.startsWith(prefix) && n.endsWith(".mp4");
+                    })
+                    .sorted()
+                    .findFirst()
+                    .orElse(null);
+        } catch (java.io.IOException e) {
+            return null;   // folder missing / unreadable → treated as not found
+        }
     }
 
     /**
@@ -562,12 +608,15 @@ public class PipelineOrchestrator {
         return JobStatus.UPLOADING;
     }
 
-    /** True when every scene already has an image AND a voice file on disk. */
+    /** True when every scene already has its still image on disk. NB: er wordt
+     *  GEEN audio-bestand meer vereist — de voice-service is verwijderd, de stem
+     *  komt uit de Omni-clip (zie regel ~1498). Vroeger eiste dit ook een
+     *  audioPath, waardoor assets NOOIT "compleet" waren en de pipeline bij elke
+     *  herstart/Retry onnodig ASSETS_GENERATING herhaalde. */
     private boolean assetsComplete(List<SceneDto> scenes) {
         if (scenes.isEmpty()) return false;
         for (SceneDto s : scenes) {
             if (!fileExists(s.getImagePath())) return false;
-            if (!fileExists(s.getAudioPath())) return false;
         }
         return true;
     }
@@ -756,6 +805,53 @@ public class PipelineOrchestrator {
         saveAssemblyScenes(jobId, assembly);
         unlockScene(jobId, seq);
         log.info("Job {} scene {} veoCameraOverride set to: {}", jobId, seq, v);
+    }
+
+    /** Trim a scene to an in/out window within its clip. {@code startSec}/{@code endSec}
+     *  are seconds from the start of the (10s) clip; the scene then renders the window
+     *  [start, end] — the montage seeks with ffmpeg {@code -ss start} and runs for
+     *  (end−start) seconds. Stored as {@link SceneDto#setTrimStartSeconds} (= in-point)
+     *  plus {@link SceneDto#setDurationSeconds} (= the length, end−start). Minimum
+     *  length 2s (the assembly's SceneInput floor). Takes effect on the next Re-assemble. */
+    public void setSceneTrim(UUID jobId, int seq, double startSec, double endSec) {
+        VideoJob job = load(jobId);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
+        double start = Math.max(0.0, startSec);
+        double end = endSec;
+        if (end - start < 2.0) {
+            throw new IllegalArgumentException(
+                    "Scene window must be at least 2s (got " + (end - start) + "s).");
+        }
+        int length = (int) Math.round(end - start);
+        scene.setTrimStartSeconds(start <= 0.0 ? null : start);
+        scene.setDurationSeconds(length);
+        saveAssemblyScenes(jobId, assembly);
+        log.info("Job {} scene {} trimmed to [{}s, {}s] (length {}s)", jobId, seq, start, end, length);
+    }
+
+    /** Set (or clear) the transition INTO a scene (the boundary before it). {@code type}
+     *  is an ffmpeg xfade name (e.g. "wipeleft", "dissolve") or "cut" for a hard cut;
+     *  blank/null clears it back to the phase-default. {@code seconds} is the xfade
+     *  length (0.05–1.5); null falls back to a per-type default. Takes effect on the
+     *  next Re-assemble. */
+    public void setSceneTransition(UUID jobId, int seq, String type, Double seconds) {
+        VideoJob job = load(jobId);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
+        String t = type == null ? null : type.trim().toLowerCase();
+        scene.setTransitionType(t == null || t.isBlank() ? null : t);
+        Double sec = seconds == null ? null : Math.max(0.05, Math.min(1.5, seconds));
+        scene.setTransitionSeconds(scene.getTransitionType() == null ? null : sec);
+        saveAssemblyScenes(jobId, assembly);
+        log.info("Job {} scene {} transition set to: {} ({}s)", jobId, seq,
+                scene.getTransitionType(), scene.getTransitionSeconds());
     }
 
     /** Set the cast for a scene at the single source ({@link SceneDto#setCharacters}).
@@ -1014,6 +1110,41 @@ public class PipelineOrchestrator {
         return "calm";   // default / cozy / quiet / bedtime / warm
     }
 
+    /**
+     * Montage gate (Auke): zodra elke scène een clip heeft en VÓÓR de master
+     * wordt geassembleerd, pauzeert de pipeline hier zodat de mens de montage
+     * kan doen — definitieve scène-volgorde, knippen/trimmen (in/uit-punten),
+     * overgangen tussen scènes en de achtergrondmuziek. Eigen status
+     * ({@link JobStatus#MONTAGE_REVIEW_PENDING}) met eigen score-bolletje in de UI.
+     *
+     * Gestuurd door de bible-vlag {@code review.beforeMontage} (default aan). Staat
+     * de gate uit, dan loopt de flow exact als vroeger rechtstreeks door naar
+     * assembly. Idempotent: pre-selecteert één keer een default-muziektrack
+     * (mood-auto-pick) als er nog geen gekozen is, zodat het montage-paneel met een
+     * zinnige selectie opent die de gebruiker kan wijzigen.
+     */
+    private void enterMontageGate(UUID jobId) {
+        if (!reviewConfig.getReview().beforeMontage()) {
+            self.runAssemblyStage(jobId);
+            return;
+        }
+        try {
+            VideoJob job = load(jobId);
+            if (job.getBackgroundMusicPath() == null || job.getBackgroundMusicPath().isBlank()) {
+                String pick = autoPickMusic(job.getMood());
+                if (pick != null) {
+                    saveBackgroundMusicPath(jobId, pick);
+                    log.info("Job {} montage-gate: default-muziek voorgeselecteerd → {}", jobId, pick);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Job {} montage-gate muziek-voorselectie faalde (niet-fataal): {}",
+                    jobId, e.getMessage());
+        }
+        pauseForReview(jobId, JobStatus.MONTAGE_REVIEW_PENDING,
+                "montage: volgorde, knippen/trimmen, overgangen en achtergrondmuziek");
+    }
+
     public void lockScene(UUID jobId, int seq) {
         VideoJob job = load(jobId);
         Set<Integer> locked = parseLocked(job.getLockedSceneSeqs());
@@ -1197,6 +1328,19 @@ public class PipelineOrchestrator {
                 asm.setMotionSpeed(s.path("motionSpeed").asText(""));
                 asm.setEndPose(s.path("endPose").asText(""));
                 asm.setMotionDesc(s.path("motionDesc").asText(""));
+                // Hero-prop states for this scene (prop id -> state id, e.g.
+                // {egg: cracked}); drives the KEY OBJECT "Current state" line in the
+                // compiled Veo prompt. Absent → the compiler still locks the prop's
+                // canonical look + anti-drift, it just claims no state.
+                JsonNode psNode = s.path("propStates");
+                if (psNode.isObject()) {
+                    Map<String, String> ps = new HashMap<>();
+                    psNode.fields().forEachRemaining(e -> {
+                        String v = e.getValue().asText("");
+                        if (!v.isBlank()) ps.put(e.getKey(), v);
+                    });
+                    if (!ps.isEmpty()) asm.setPropStates(ps);
+                }
                 // Carry the cast list on the assembly scene: the vision-QC needs it
                 // to verify accessories/colour, and the Veo tic-injection +
                 // per-character compiler read it too. Without this they ran blind.
@@ -1205,6 +1349,18 @@ public class PipelineOrchestrator {
                 asm.setCharacters(chars);
                 assemblyScenes.add(asm);
             }
+            // Advisory (non-blocking): the script guidance asks for one-way, monotone
+            // hero-prop states (the egg never un-cracks). Surface any regression for
+            // review — log only, never fail the run.
+            try {
+                List<Map<String, String>> propSeq = new ArrayList<>();
+                for (SceneDto sc : assemblyScenes) propSeq.add(sc.getPropStates());
+                List<String> regress = VeoPromptLinter.lintPropMonotonicity(
+                        propSeq, veoPromptCompiler.propStateOrders());
+                if (!regress.isEmpty()) {
+                    log.warn("Job {} hero-prop state monotonicity issues: {}", jobId, regress);
+                }
+            } catch (Exception ignore) { /* advisory only */ }
             saveScriptIdAndScenes(jobId, scriptId, assemblyScenes,
                     nullableInt(scriptBody, "structureScore"),
                     nullableInt(scriptBody, "criticScore"));
@@ -1241,6 +1397,14 @@ public class PipelineOrchestrator {
             for (JsonNode s : scriptBody.path("scenes")) allVisualDescs.add(s.path("visualDesc").asText(""));
             List<PropAnchorService.Prop> propAnchors =
                     propAnchorService.buildAnchors(jobId, allVisualDescs, format.imageFormat);
+
+            // SOURCE-FIX (accessory-vs-action): collected as we walk the scenes so
+            // the cleaned action text can be persisted ONCE — to the assembly
+            // scene-store AND the canonical script-service — instead of the silent
+            // per-compile rewrite in VeoPromptCompiler re-running on the same dirty
+            // source on every reuse / re-roll / episode rebuild (Auke).
+            Map<Integer, String[]> accClean = new HashMap<>();           // seq -> [cleanVisualDesc, cleanMotionDesc]
+            List<Map<String, Object>> accPatches = new ArrayList<>();     // script-service canonical write-back
 
             // Board-audit — auto-establishing: track the previous scene's phase so
             // the one setup scene that directly follows the hook can be framed as
@@ -1284,9 +1448,28 @@ public class PipelineOrchestrator {
 
                 List<String> chars = new ArrayList<>();
                 for (JsonNode c : s.path("characters")) chars.add(c.asText());
+                // SOURCE-FIX: sanitize the authored action ONCE here, using THIS
+                // scene's cast, so every consumer (image payload below, assembly
+                // scene-store, canonical script-service) sees clean text. Already-
+                // clean text is returned unchanged → no patch, no log.
+                String rawVd = s.path("visualDesc").asText();
+                String rawMd = s.path("motionDesc").asText("");
+                String cleanVd = veoPromptCompiler.sanitizeAccessoryAction(rawVd, chars);
+                String cleanMd = veoPromptCompiler.sanitizeAccessoryAction(rawMd, chars);
+                if (!cleanVd.equals(rawVd) || !cleanMd.equals(rawMd)) {
+                    accClean.put(seq, new String[]{cleanVd, cleanMd});
+                    Map<String, Object> patch = new HashMap<>();
+                    patch.put("seq", seq);
+                    patch.put("visualDesc", cleanVd);
+                    if (!cleanMd.isBlank()) patch.put("motionDesc", cleanMd);
+                    accPatches.add(patch);
+                    String snippet = rawVd.length() > 80 ? rawVd.substring(0, 80) + "…" : rawVd;
+                    log.warn("Job {} scene {} accessory-vs-action source-fixed at the scene-store "
+                            + "(was: \"{}\")", jobId, seq, snippet);
+                }
                 Map<String, Object> img = new HashMap<>();
                 img.put("seq", seq);
-                img.put("visualDesc", withMotif(s.path("visualDesc").asText(), job));
+                img.put("visualDesc", withMotif(cleanVd, job));
                 img.put("characters", chars);
                 img.put("locationId", s.path("locationId").asText(""));
                 img.put("timeOfDay", s.path("timeOfDay").asText(""));
@@ -1305,7 +1488,7 @@ public class PipelineOrchestrator {
                 }
                 // Attach the prop anchors whose keyword appears in this scene's text.
                 if (!propAnchors.isEmpty()) {
-                    String vd = s.path("visualDesc").asText("").toLowerCase();
+                    String vd = cleanVd.toLowerCase();
                     List<Map<String, Object>> refs = new ArrayList<>();
                     for (PropAnchorService.Prop p : propAnchors) {
                         if (p.keyword() != null && !p.keyword().isBlank()
@@ -1380,9 +1563,34 @@ public class PipelineOrchestrator {
 
             List<SceneDto> assemblyScenes = loadAssemblyScenes(job);
             mergeAssets(assemblyScenes, voiceResp, imageResp);
+            // SOURCE-FIX write-back: apply the once-sanitized accessory-vs-action
+            // text to the assembly scene-store (so every later compile/re-roll of
+            // THIS job sees clean text) AND push it to the canonical script-service
+            // (so future jobs / reuse refetch clean source). Canonical push is
+            // best-effort — the assembly fix already keeps THIS job correct.
+            if (!accClean.isEmpty()) {
+                for (SceneDto a : assemblyScenes) {
+                    String[] c = accClean.get(a.effectiveSeq());
+                    if (c == null) continue;
+                    a.setVisualDesc(c[0]);
+                    if (c[1] != null && !c[1].isBlank()) a.setMotionDesc(c[1]);
+                }
+                try {
+                    scriptClient.patchScenes(job.getScriptJobId(), accPatches);
+                    log.info("Job {} accessory source-fix: {} scene(s) cleaned in assembly + canonical script-store",
+                            jobId, accPatches.size());
+                } catch (Exception ex) {
+                    log.warn("Job {} canonical accessory source-fix failed ({}); assembly scene-store already fixed",
+                            jobId, ex.getMessage());
+                }
+            }
             // Automated vision-QC: reroll weak scene images (missing accessory,
             // cut-off subject, duplicate cast) before the gate / Veo spend.
-            autoQcImages(jobId, assemblyScenes, imageFormat);
+            // SKIP reused/kept stills (already on disk = already accepted/QC'd in a
+            // prior attempt of this job): the human review gate is the backstop, and
+            // re-QC'ing them only risks a needless paid re-roll + identity drift on
+            // an already-approved still (Auke — "QC volledig overslaan").
+            autoQcImages(jobId, assemblyScenes, imageFormat, haveImage);
             // Episode-ConsistencyState (Story B): AFTER the QC pass — so only
             // approved stills qualify — elect per character the best still of
             // THIS episode and persist it as the job's visual canon. Every
@@ -1408,7 +1616,7 @@ public class PipelineOrchestrator {
                 return;
             }
             if (veo) self.runVeoStage(jobId);
-            else     self.runAssemblyStage(jobId);
+            else     enterMontageGate(jobId);   // clips ready (Ken Burns) → montage gate
         } catch (Exception e) {
             log.error("Job {} assets stage FAILED", jobId, e);
             fail(jobId, e.getMessage());
@@ -1480,8 +1688,8 @@ public class PipelineOrchestrator {
         // which uses the imported clips (and, unless clips-only, Ken Burns).
         if (!veoEnabled) {
             log.info("Job {} Veo stage requested but Veo is DISABLED (app.veo.enabled=false) — "
-                    + "skipping straight to assembly.", jobId);
-            self.runAssemblyStage(jobId);
+                    + "skipping straight to the montage gate.", jobId);
+            enterMontageGate(jobId);
             return;
         }
         try {
@@ -1518,8 +1726,8 @@ public class PipelineOrchestrator {
                         jobId, beforeSkip - veoCandidates.size(), beforeSkip, veoCandidates.size());
             }
             if (veoCandidates.isEmpty()) {
-                log.info("Job {} no scenes to Veo-ify, skipping to assembly", jobId);
-                self.runAssemblyStage(jobId);
+                log.info("Job {} no scenes to Veo-ify, skipping to the montage gate", jobId);
+                enterMontageGate(jobId);
                 return;
             }
             // Generate end-pose stills (best-effort) so Veo interpolates a
@@ -1592,8 +1800,9 @@ public class PipelineOrchestrator {
                         jobId, metricsErr.getMessage());
             }
 
-            // No dedicated "after Veo" gate — flow continues straight to assembly.
-            self.runAssemblyStage(jobId);
+            // Clips klaar → montage gate (volgorde, trim, overgangen, muziek),
+            // daarna pas assembly. Gate uit = direct door naar assembly.
+            enterMontageGate(jobId);
         } catch (Exception e) {
             log.error("Job {} veo stage FAILED", jobId, e);
             fail(jobId, e.getMessage());
@@ -1856,7 +2065,9 @@ public class PipelineOrchestrator {
                     props.brand().outroPath(),
                     format.videoWidth, format.videoHeight,
                     Boolean.TRUE.equals(job.getBurnSubtitles()),
-                    title
+                    title,
+                    job.getIntroTransitionType(), job.getIntroTransitionSeconds(),
+                    job.getOutroTransitionType(), job.getOutroTransitionSeconds()
             );
             String videoPath = assembled.path("outputPath").asText();
             String captionsPath = assembled.path("captionsPath").asText(null);
@@ -2932,12 +3143,29 @@ public class PipelineOrchestrator {
      * {@code qcMaxTotalRerolls} cost cap. Best-effort: never throws, never blocks.
      */
     private void autoQcImages(UUID jobId, List<SceneDto> assembly, String imageFormat) {
+        autoQcImages(jobId, assembly, imageFormat, java.util.Set.of());
+    }
+
+    /**
+     * @param skipSeqs scene seqs whose still was REUSED/kept (already on disk from
+     *        a prior attempt, hence already accepted) — these skip QC and re-roll
+     *        entirely. Newly generated stills are still QC'd as before. Empty set
+     *        = QC every still (the original behaviour / first run).
+     */
+    private void autoQcImages(UUID jobId, List<SceneDto> assembly, String imageFormat,
+                              Set<Integer> skipSeqs) {
         if (!qcEnabled) return;
         Map<String, String> dna = dnaAccessoryLines();
         int totalRerolls = 0;
+        int skipped = 0;
         for (SceneDto a : assembly) {
             if (!a.hasImage()) continue;
             int seq = a.effectiveSeq();
+            // Reused/kept still — already accepted upstream; don't re-QC or re-roll.
+            if (skipSeqs != null && skipSeqs.contains(seq)) {
+                skipped++;
+                continue;
+            }
             List<String> charIds = a.charactersOrEmpty();
             List<String> expected = new ArrayList<>();
             for (String id : charIds) {
@@ -2974,6 +3202,7 @@ public class PipelineOrchestrator {
             }
         }
         if (totalRerolls > 0) log.info("Job {} QC rerolled {} scene image(s)", jobId, totalRerolls);
+        if (skipped > 0) log.info("Job {} QC skipped {} reused/kept still(s) (already accepted)", jobId, skipped);
     }
 
     /**
@@ -3596,7 +3825,7 @@ public class PipelineOrchestrator {
             }
             String compiled = veoPromptCompiler.compile(vd, phase, sceneChars, locationId,
                     timeOfDay, weather, goal, emotion, motionSpeed, cameraMove,
-                    nz(a.getVeoCameraOverride()), musicMood, a.getLines());
+                    nz(a.getVeoCameraOverride()), musicMood, a.getLines(), a.getPropStates());
             // G5 — when this hero clip directly follows another hero clip, tell
             // VEO to start from where the previous one ended so the cut flows.
             if ("hero".equals(type) && "hero".equals(prevType)
@@ -4034,6 +4263,19 @@ public class PipelineOrchestrator {
     }
     public void saveBackgroundMusicPath(UUID id, String path) {
         retryOnConflict(id, j -> j.setBackgroundMusicPath(path));
+    }
+
+    /** Zet de bumper-overgang voor "intro" (intro→scène 1) of "outro" (laatste
+     *  scène→outro). Leeg type wist 'm (terug naar de default-dissolve). Wordt
+     *  toegepast bij de (re-)assemblage. */
+    public void saveBumperTransition(UUID id, String position, String type, Double seconds) {
+        boolean intro = "intro".equalsIgnoreCase(position);
+        String t = (type == null || type.isBlank()) ? null : type.trim();
+        Double s = t == null ? null : (seconds == null ? 0.3 : seconds);
+        retryOnConflict(id, j -> {
+            if (intro) { j.setIntroTransitionType(t); j.setIntroTransitionSeconds(s); }
+            else       { j.setOutroTransitionType(t); j.setOutroTransitionSeconds(s); }
+        });
     }
 
     public void savePlannedPublishAt(UUID id, java.time.OffsetDateTime at) {

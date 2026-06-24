@@ -48,6 +48,18 @@ public class SceneDto {
      *  because persisted jobs may carry a Double (e.g. ffprobe-derived
      *  stretch values) — the exact numeric type must round-trip. */
     private Number durationSeconds;
+    /** Optioneel in-punt: waar in de bronclip deze scène begint (seconden). De
+     *  montage seekt hier met ffmpeg {@code -ss}; samen met {@link #durationSeconds}
+     *  (= de lengte, uit−in) knipt dat de clip op het door de gebruiker gekozen
+     *  in/uit-punt. Afwezig/0 → de clip start gewoon op 0 (huidig gedrag). */
+    private Double trimStartSeconds;
+    /** Optionele overgang NAAR deze scène (de grens vóór deze scène): een ffmpeg
+     *  xfade-naam (bv. "wipeleft", "dissolve") of "cut" voor een harde snit.
+     *  Afwezig → de montage gebruikt de phase-default uit de cameraBible/TransitionConfig. */
+    private String transitionType;
+    /** Duur van {@link #transitionType} in seconden (0,05–1,5). Afwezig → een
+     *  zinnige default per type. */
+    private Double transitionSeconds;
     private String phase;
     private String narration;
     private String visualDesc;
@@ -75,6 +87,13 @@ public class SceneDto {
      *  (hoek, lens, beweging, focus, diepte) in de Veo-prompt. Bedoeld voor
      *  scènes waar het shot-type in visualDesc botst met het phase-preset. */
     private String veoCameraOverride;
+    /** Optionele per-scène hero-prop toestand(en): prop-id → state-id (bv.
+     *  {@code {"egg":"cracked"}}). Leeg/afwezig → de Veo-compiler lockt alleen de
+     *  look + anti-drift van het prop (geen staat geclaimd); gezet → die staat
+     *  verschijnt als "Current state" in de KEY OBJECT-sectie. Bedoeld als
+     *  ÉÉNRICHTING (monotoon) over de scène-volgorde — een prop valt nooit terug
+     *  naar een eerdere staat. */
+    private Map<String, String> propStates;
     /** Per-character dialogue lines: {speaker, text[, emotion]}. */
     private List<Map<String, Object>> lines;
     /** Per-line voice timing: {startMs, durMs, ...} (numbers). */
@@ -169,6 +188,15 @@ public class SceneDto {
     public Number getDurationSeconds() { return durationSeconds; }
     public void setDurationSeconds(Number durationSeconds) { this.durationSeconds = durationSeconds; }
 
+    public Double getTrimStartSeconds() { return trimStartSeconds; }
+    public void setTrimStartSeconds(Double trimStartSeconds) { this.trimStartSeconds = trimStartSeconds; }
+
+    public String getTransitionType() { return transitionType; }
+    public void setTransitionType(String transitionType) { this.transitionType = transitionType; }
+
+    public Double getTransitionSeconds() { return transitionSeconds; }
+    public void setTransitionSeconds(Double transitionSeconds) { this.transitionSeconds = transitionSeconds; }
+
     public String getPhase() { return phase; }
     public void setPhase(String phase) { this.phase = phase; }
 
@@ -225,6 +253,9 @@ public class SceneDto {
 
     public String getVeoCameraOverride() { return veoCameraOverride; }
     public void setVeoCameraOverride(String veoCameraOverride) { this.veoCameraOverride = veoCameraOverride; }
+
+    public Map<String, String> getPropStates() { return propStates; }
+    public void setPropStates(Map<String, String> propStates) { this.propStates = propStates; }
 
     public List<Map<String, Object>> getLines() { return lines; }
     public void setLines(List<Map<String, Object>> lines) { this.lines = lines; }

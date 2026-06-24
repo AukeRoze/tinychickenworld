@@ -152,6 +152,22 @@ public class MediaController {
         }
     }
 
+    /** Streams a background-music track from the bible library for preview in
+     *  the montage step's music dropdown. trackId is validated against a strict
+     *  charset and resolved INSIDE /bible/music only, so it can't read arbitrary
+     *  files. 404 = no such track. */
+    @GetMapping("/dashboard/music/{trackId}.mp3")
+    public ResponseEntity<byte[]> musicPreview(@PathVariable String trackId) throws IOException {
+        if (trackId == null || !trackId.matches("[A-Za-z0-9_-]+")) return ResponseEntity.notFound().build();
+        Path dir = Paths.get("/bible", "music").normalize();
+        Path p = dir.resolve(trackId + ".mp3").normalize();
+        if (!p.startsWith(dir) || !Files.exists(p)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "audio/mpeg")
+                .header("Cache-Control", "public, max-age=3600")
+                .body(Files.readAllBytes(p));
+    }
+
     /** The assembled master MP4 for inline playback. */
     @GetMapping("/dashboard/{id}/master.mp4")
     public void masterVideo(@PathVariable UUID id, @RequestHeader HttpHeaders headers,

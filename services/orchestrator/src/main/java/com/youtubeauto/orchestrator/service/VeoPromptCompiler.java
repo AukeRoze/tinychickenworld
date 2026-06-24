@@ -62,6 +62,7 @@ public class VeoPromptCompiler {
         negativeConstraintsCache = null;
         rosterNounCache = null;
         accessoryModelCache = null;
+        propCache = null;
     }
 
     // ---- Camera-Bible + world -------------------------------------------------
@@ -1188,6 +1189,30 @@ public class VeoPromptCompiler {
         return out;
     }
 
+    /**
+     * SOURCE-FIX helpers — let a caller (the orchestrator) detect and clean an
+     * accessory-vs-action contradiction in a scene's authored action text ONCE,
+     * and persist the cleaned text back to the scene-store, instead of relying on
+     * the silent per-compile rewrite inside {@link #compile} re-running forever on
+     * the same dirty source. The inline guard in {@code compile} stays as an
+     * idempotent backstop (sanitizing already-clean text is a no-op).
+     *
+     * <p>Both methods are bible-driven via {@link #accessoryModels()} — the exact
+     * same models the compile-time guard uses — so a finding here is the same
+     * finding the prompt would have had to rewrite.
+     */
+    public List<String> findAccessoryContradictions(String text, List<String> charIds) {
+        if (text == null || text.isBlank()) return java.util.List.of();
+        return AccessoryGuard.findContradictions(text, charIds, accessoryModels());
+    }
+
+    /** Returns {@code text} with every accessory-vs-action contradiction rewritten
+     *  to the acting character's OWN signature accessory; unchanged when clean. */
+    public String sanitizeAccessoryAction(String text, List<String> charIds) {
+        if (text == null || text.isBlank()) return text;
+        return AccessoryGuard.sanitize(text, charIds, accessoryModels());
+    }
+
     // ---- Species-aware roster (chickens vs the duckling) ----------------------
 
     /** Cache of character id -> roster noun (the word used in the CHARACTER
@@ -1214,6 +1239,255 @@ public class VeoPromptCompiler {
         }
         rosterNounCache = out;
         return out;
+    }
+
+    /** id -> lowercased word tokens that signal the character is present when one of
+     *  them appears in the scene's visual text (its id, display name and roster noun).
+     *  Used to recover a guest character (e.g. the duckling) that the script left out
+     *  of a scene's cast. */
+    private volatile Map<String, java.util.List<String>> matchTokenCache;
+
+    private Map<String, java.util.List<String>> characterMatchTokens() {
+        Map<String, java.util.List<String>> c = matchTokenCache;
+        if (c != null) return c;
+        Map<String, java.util.List<String>> out = new HashMap<>();
+        try {
+            for (JsonNode ch : readBible().path("characters")) {
+                String id = ch.path("id").asText("").toLowerCase();
+                if (id.isBlank()) continue;
+                java.util.LinkedHashSet<String> toks = new java.util.LinkedHashSet<>();
+                toks.add(id);
+                String name = ch.path("name").asText("").trim().toLowerCase();
+                if (!name.isBlank()) toks.add(name);
+                String noun = ch.path("rosterNoun").asText("").trim().toLowerCase();
+                if (!noun.isBlank()) toks.add(noun);
+                out.put(id, new ArrayList<>(toks));
+            }
+        } catch (Exception e) {
+            log.warn("Could not load character match tokens: {}", e.getMessage());
+        }
+        matchTokenCache = out;
+        return out;
+    }
+
+    /** Ensure every character that SPEAKS a line, or is a non-chicken guest NAMED in
+     *  the scene's visual text, is in the cast — so a present character can never be
+     *  dropped from the roster/identity locks. Fixes EP3 sc.19/21/24 where the
+     *  just-hatched duckling was visible (and in sc.24 even spoke) yet was missing
+     *  from the scene cast, so the roster counted only chickens and the
+     *  anti-duplication clause never covered the duckling. Chicken rosters never
+     *  change: a speaking chicken is already in the cast, and text-name recovery is
+     *  restricted to non-chicken species. */
+    private List<String> augmentPresentCast(List<String> charIds, String visualText,
+                                            List<Map<String, Object>> lines) {
+        return augmentPresentCast(charIds, visualText, lines, rosterNouns(), characterMatchTokens());
+    }
+
+    /** Pure cast-augmentation logic (no bible I/O) so it is unit-testable in
+     *  isolation. Order: declared cast first, then recovered speakers, then
+     *  text-named non-chicken guests. */
+    static List<String> augmentPresentCast(List<String> charIds, String visualText,
+                                           List<Map<String, Object>> lines,
+                                           Map<String, String> rosterNouns,
+                                           Map<String, java.util.List<String>> matchTokens) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (charIds != null) for (String id : charIds)
+            if (id != null && !id.isBlank()) out.add(id.trim().toLowerCase());
+        // 1) A character that speaks a line is present by definition.
+        if (lines != null) for (Map<String, Object> ln : lines) {
+            Object sp = ln == null ? null : ln.get("speaker");
+            if (sp == null) continue;
+            String id = sp.toString().trim().toLowerCase();
+            if (!id.isBlank() && rosterNouns.containsKey(id)) out.add(id);
+        }
+        // 2) A non-chicken guest named in the visual text is present even if the
+        //    script omitted it (restricted to non-chickens so chicken rosters that
+        //    are already correct stay byte-identical).
+        String lc = visualText == null ? "" : visualText.toLowerCase();
+        if (!lc.isBlank() && matchTokens != null) {
+            for (Map.Entry<String, java.util.List<String>> e : matchTokens.entrySet()) {
+                String id = e.getKey();
+                if (out.contains(id)) continue;
+                if ("chicken".equals(rosterNouns.getOrDefault(id, "chicken"))) continue;
+                if (e.getValue() == null) continue;
+                for (String tok : e.getValue()) {
+                    if (tok != null && !tok.isBlank() && containsWordIgnoreCase(lc, tok)) {
+                        out.add(id);
+                        break;
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    private static boolean containsWordIgnoreCase(String lowerHaystack, String lowerToken) {
+        return java.util.regex.Pattern
+                .compile("\\b" + java.util.regex.Pattern.quote(lowerToken) + "\\b")
+                .matcher(lowerHaystack)
+                .find();
+    }
+
+    // ---- Hero props (key objects) — bible-driven canon ------------------------
+    // A hero prop (the egg) gets the SAME treatment as a character: a fixed
+    // canonical look + behaviour injected into every scene where it appears, so it
+    // stays visually identical across the whole episode. Detection mirrors the cast
+    // path (alias as a whole word in the action text). The current state per scene
+    // comes from the optional `propStates` map; without it only the look + anti-drift
+    // are locked (no possibly-wrong state is claimed). Bible `props:` absent/empty →
+    // no KEY OBJECT section → byte-identical output (golden/lean tests untouched).
+
+    /** Immutable canonical definition of a hero prop, loaded from bible `props:`. */
+    static final class PropDef {
+        final String id, name, role, veoKey, scaleAnchor, antiDrift, signatureSound;
+        final List<String> aliases;
+        final List<String> stateIds;                 // order = allowed one-way progression
+        final Map<String, String> stateLook;         // stateId -> look
+        final Map<String, String> stateBehaviour;    // stateId -> behaviour
+        PropDef(String id, String name, String role, String veoKey, String scaleAnchor,
+                String antiDrift, String signatureSound, List<String> aliases,
+                List<String> stateIds, Map<String, String> stateLook,
+                Map<String, String> stateBehaviour) {
+            this.id = id; this.name = name; this.role = role; this.veoKey = veoKey;
+            this.scaleAnchor = scaleAnchor; this.antiDrift = antiDrift;
+            this.signatureSound = signatureSound; this.aliases = aliases;
+            this.stateIds = stateIds; this.stateLook = stateLook;
+            this.stateBehaviour = stateBehaviour;
+        }
+    }
+
+    private volatile List<PropDef> propCache;
+
+    private List<PropDef> heroProps() {
+        List<PropDef> c = propCache;
+        if (c != null) return c;
+        List<PropDef> out = new ArrayList<>();
+        try {
+            JsonNode arr = readBible().path("props");
+            if (arr.isArray()) {
+                for (JsonNode p : arr) {
+                    String id = p.path("id").asText("").trim().toLowerCase();
+                    if (id.isBlank()) continue;
+                    List<String> aliases = new ArrayList<>();
+                    JsonNode al = p.path("aliases");
+                    if (al.isArray()) for (JsonNode a : al) {
+                        String s = a.asText("").trim().toLowerCase();
+                        if (!s.isBlank()) aliases.add(s);
+                    }
+                    if (aliases.isEmpty()) aliases.add(id);
+                    List<String> stateIds = new ArrayList<>();
+                    Map<String, String> look = new java.util.LinkedHashMap<>();
+                    Map<String, String> beh = new java.util.LinkedHashMap<>();
+                    JsonNode st = p.path("states");
+                    if (st.isArray()) for (JsonNode s : st) {
+                        String sid = s.path("id").asText("").trim().toLowerCase();
+                        if (sid.isBlank()) continue;
+                        stateIds.add(sid);
+                        look.put(sid, s.path("look").asText("").trim());
+                        beh.put(sid, s.path("behaviour").asText("").trim());
+                    }
+                    out.add(new PropDef(id,
+                            p.path("name").asText("").trim(),
+                            p.path("role").asText("recurring").trim().toLowerCase(),
+                            p.path("veoKey").asText("").trim(),
+                            p.path("scaleAnchor").asText("").trim(),
+                            p.path("antiDrift").asText("").trim(),
+                            p.path("signatureSound").asText("").trim(),
+                            aliases, stateIds, look, beh));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not load props: {}", e.getMessage());
+        }
+        propCache = out;
+        return out;
+    }
+
+    /** Ordered state ids per hero prop (bible order), for the cross-scene
+     *  monotonicity check ({@link VeoPromptLinter#lintPropMonotonicity}). A state's
+     *  index in its list is its one-way progression rank. */
+    public Map<String, List<String>> propStateOrders() {
+        Map<String, List<String>> out = new java.util.LinkedHashMap<>();
+        for (PropDef pd : heroProps()) {
+            if (!"hero".equals(pd.role)) continue;
+            out.put(pd.id, List.copyOf(pd.stateIds));
+        }
+        return out;
+    }
+
+    /** Hero props whose alias appears as a whole word in the action text. Order =
+     *  bible order. Only role=hero gets the hard KEY OBJECT injection. */
+    private List<PropDef> presentHeroProps(String actionText) {
+        String lc = actionText == null ? "" : actionText.toLowerCase();
+        if (lc.isBlank()) return List.of();
+        List<PropDef> defs = heroProps();
+        if (defs.isEmpty()) return List.of();
+        List<PropDef> out = new ArrayList<>();
+        for (PropDef pd : defs) {
+            if (!"hero".equals(pd.role)) continue;
+            for (String a : pd.aliases) {
+                if (a != null && !a.isBlank() && containsWordIgnoreCase(lc, a)) {
+                    out.add(pd);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The scene's state id for this prop, or null when none is explicitly given
+     *  (so we lock the look without claiming a possibly-wrong state). */
+    private static String resolveState(PropDef pd, Map<String, String> propStates) {
+        String sid = propStates == null ? null : propStates.get(pd.id);
+        if (sid != null) sid = sid.trim().toLowerCase();
+        if (sid == null || sid.isBlank() || !pd.stateLook.containsKey(sid)) return null;
+        return sid;
+    }
+
+    /** Builds the KEY OBJECT section(s) for the hero props present in this scene.
+     *  Empty string when none are present → output byte-identical for prop-less
+     *  scenes (and for any bible without a `props:` block). */
+    private String keyObjectSection(String actionText, Map<String, String> propStates) {
+        List<PropDef> present = presentHeroProps(actionText);
+        if (present.isEmpty()) return "";
+        StringBuilder p = new StringBuilder();
+        for (PropDef pd : present) {
+            String label = (pd.name == null || pd.name.isBlank()) ? pd.id : pd.name;
+            p.append("KEY OBJECT — ").append(label.toUpperCase(java.util.Locale.ROOT))
+             .append(" (exactly one, never duplicated)\n");
+            StringBuilder line = new StringBuilder();
+            appendClause(line, pd.veoKey);
+            appendClause(line, pd.scaleAnchor);
+            String sid = resolveState(pd, propStates);
+            if (sid != null) {
+                String look = pd.stateLook.getOrDefault(sid, "");
+                String beh = pd.stateBehaviour.getOrDefault(sid, "");
+                if (!look.isBlank()) appendClause(line, "Current state: " + look);
+                appendClause(line, beh);
+            }
+            if (!pd.signatureSound.isBlank()) appendClause(line, "Sound: " + pd.signatureSound);
+            if (!pd.antiDrift.isBlank()) appendClause(line, "Never: " + pd.antiDrift);
+            String s = line.toString().trim();
+            if (!s.isEmpty()) {
+                p.append(s);
+                if (!s.endsWith(".")) p.append('.');
+                p.append('\n');
+            }
+            p.append("This object stays visually identical in every frame — no morphing, "
+                   + "no colour or size drift, exactly one of it, and it never reverts to an "
+                   + "earlier state.\n");
+        }
+        p.append('\n');
+        return p.toString();
+    }
+
+    /** Joins clauses with ". ", trimming any trailing sentence punctuation first. */
+    private static void appendClause(StringBuilder sb, String clause) {
+        if (clause == null) return;
+        String c = clause.trim().replaceAll("[\\s.]+$", "");
+        if (c.isEmpty()) return;
+        if (sb.length() > 0) sb.append(". ");
+        sb.append(c);
     }
 
     /** Groups a cast by roster noun, preserving first-appearance order. */
@@ -1471,7 +1745,7 @@ public class VeoPromptCompiler {
                                  String goal, String emotion, String motionSpeed,
                                  String[] cam, String camOverride, String moveDirective,
                                  boolean closeUp, String dialogue, List<String> speakerNames,
-                                 String impactSfx) {
+                                 String impactSfx, Map<String, String> propStates) {
         StringBuilder p = new StringBuilder();
         String look = veoLook();
         int speakerCount = speakerNames == null ? 0 : speakerNames.size();
@@ -1575,6 +1849,13 @@ public class VeoPromptCompiler {
         p.append("HARD IDENTITY LOCK: absolutely no morphing, no flicker, no melting; "
                 + "each chick keeps its OWN body colour and its OWN accessory for every frame, "
                 + "and accessories are NEVER swapped, shared or added between characters.\n\n");
+
+        // 2.5) KEY OBJECT(S) — hero props (the egg) get the same hard canon lock as
+        // the cast: a fixed look + anti-drift injected in every scene they appear in,
+        // so the object stays identical across the whole episode. Empty (and thus the
+        // output is unchanged) for scenes without a hero prop, and for any bible
+        // without a `props:` block.
+        p.append(keyObjectSection(base, propStates));
 
         // 3) CHRONOLOGICAL ACTION & CAMERA MOVEMENT
         // FIXED 10-SECOND CLIPS (Auke 2026-06-17): every clip runs a full 10s. The
@@ -1771,6 +2052,25 @@ public class VeoPromptCompiler {
                           String goal, String emotion, String motionSpeed,
                           String cameraMove, String veoCameraOverride, String musicMood,
                           List<Map<String, Object>> lines) {
+        return compile(visualDesc, phase, charIds, locationId, timeOfDay, weather,
+                goal, emotion, motionSpeed, cameraMove, veoCameraOverride, musicMood,
+                lines, null);
+    }
+
+    /**
+     * Same as the 13-arg {@link #compile}, plus the scene's optional {@code
+     * propStates} (prop id → current state id, e.g. {@code {egg: cracked}}). When
+     * {@code veoNativeAudio} is on, every hero prop (bible {@code props:}) named in
+     * the action gets a KEY OBJECT canon block; {@code propStates} selects its
+     * current state. Null/absent → only the look + anti-drift are locked (no state
+     * claimed). No hero prop present, or no {@code props:} block → byte-identical
+     * output, so existing scenes and the golden/lean tests are untouched.
+     */
+    public String compile(String visualDesc, String phase, List<String> charIds,
+                          String locationId, String timeOfDay, String weather,
+                          String goal, String emotion, String motionSpeed,
+                          String cameraMove, String veoCameraOverride, String musicMood,
+                          List<Map<String, Object>> lines, Map<String, String> propStates) {
         boolean nativeAudio = veoNativeAudio();
         // Impact-onomatopoeia coded as a spoken line (Bo "Bonk!" while plopping
         // onto the egg) is a foley sound, not speech — route it to the SFX layer
@@ -1782,6 +2082,12 @@ public class VeoPromptCompiler {
         String dialogue = dialogueClause(spokenLines);
         List<String> speakerNames = speakingNames(spokenLines);
         String base = visualDesc == null ? "" : visualDesc.trim();
+        // Cast recovery: a character that speaks, or a non-chicken guest (the
+        // duckling) named in the action, must be in the cast even if the script left
+        // it out — otherwise the roster counts only chickens and the anti-duplication
+        // lock never covers the guest (EP3 sc.19/21/24). Chicken-only scenes are
+        // unaffected. Runs before the roster/DNA/headcount clauses are built below.
+        charIds = augmentPresentCast(charIds, base, lines);
         // Accessory-vs-action guard: rewrite an action that hands a uniquely-owned
         // accessory to the wrong chick (Mo "adjusting his glasses" → his own
         // "thick red knitted scarf"), so the action stops fighting the identity
@@ -1790,7 +2096,11 @@ public class VeoPromptCompiler {
             List<AccessoryGuard.CharModel> models = accessoryModels();
             List<String> accFindings = AccessoryGuard.findContradictions(base, charIds, models);
             if (!accFindings.isEmpty()) {
-                log.warn("Accessory-action contradiction auto-corrected in scene action: {}", accFindings);
+                // Neem een stukje van de scènetekst mee zodat je in de log ziet WELKE
+                // scène het betreft (compile() krijgt de seq niet mee).
+                String snippet = base.length() > 80 ? base.substring(0, 80) + "…" : base;
+                log.warn("Accessory-action contradiction auto-corrected — scene action \"{}\": {}",
+                        snippet, accFindings);
                 base = AccessoryGuard.sanitize(base, charIds, models);
             }
         }
@@ -1817,7 +2127,7 @@ public class VeoPromptCompiler {
         if (nativeAudio) {
             return directorBrief(base, descLc, phase, charIds, locationId, timeOfDay,
                     weather, goal, emotion, motionSpeed, cam, camOverride, moveDirective,
-                    closeUp, dialogue, speakerNames, impactSfx);
+                    closeUp, dialogue, speakerNames, impactSfx, propStates);
         }
         StringBuilder p = new StringBuilder();
         p.append("Animate from the start frame with ").append(pacePhrase(motionSpeed))

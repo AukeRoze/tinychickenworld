@@ -44,7 +44,7 @@ class SceneClipBuilderRenderTest {
 
     private SceneInput scene(Path image, Path voice, int scriptedSeconds) {
         return new SceneInput(1, image.toString(), voice.toString(), scriptedSeconds,
-                "test narration", null, null, null, null, null, null);
+                "test narration", null, null, null, null, null, null, null, null, null);
     }
 
     @Test

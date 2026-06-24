@@ -8,15 +8,28 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
 
 import java.time.Duration;
 
 @Configuration
 public class WebClientConfig {
 
+    /** Idle-eviction pool: voorkomt "Connection prematurely closed BEFORE
+     *  response" door stale keep-alive-connecties niet meer te hergebruiken. */
+    private static ConnectionProvider evictingPool(String name) {
+        return ConnectionProvider.builder(name)
+                .maxConnections(50)
+                .maxIdleTime(Duration.ofSeconds(20))
+                .maxLifeTime(Duration.ofMinutes(5))
+                .pendingAcquireTimeout(Duration.ofSeconds(60))
+                .evictInBackground(Duration.ofSeconds(30))
+                .build();
+    }
+
     @Bean
     public WebClient openAiImageWebClient(ImageProperties props) {
-        HttpClient http = HttpClient.create()
+        HttpClient http = HttpClient.create(evictingPool("image-openai-pool"))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
                 .responseTimeout(Duration.ofSeconds(props.openai().timeoutSeconds()));
 

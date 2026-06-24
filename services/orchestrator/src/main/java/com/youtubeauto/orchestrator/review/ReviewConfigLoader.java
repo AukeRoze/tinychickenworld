@@ -53,6 +53,7 @@ public class ReviewConfigLoader {
                 resolveBool(r.path("reviewImages"), true),
                 resolveBool(r.path("afterAssets"),  false),
                 resolveBool(r.path("beforeVeo"),    false),
+                resolveBool(r.path("beforeMontage"), true),
                 resolveBool(r.path("beforeUpload"), true),
                 new ReviewProperties.Mail(
                         resolveStr(r.path("notify").path("to"),      ""),
@@ -60,9 +61,9 @@ public class ReviewConfigLoader {
                         resolveStr(r.path("notify").path("baseUrl"), "http://localhost:8080")
                 )
         );
-        log.info("Review gates: script={} images={} assets={} veo={} upload={} mailTo={}",
+        log.info("Review gates: script={} images={} assets={} veo={} montage={} upload={} mailTo={}",
                 review.afterScript(), review.reviewImages(), review.afterAssets(),
-                review.beforeVeo(),   review.beforeUpload(),
+                review.beforeVeo(),   review.beforeMontage(), review.beforeUpload(),
                 review.mail().to().isBlank() ? "(none)" : review.mail().to());
     }
 

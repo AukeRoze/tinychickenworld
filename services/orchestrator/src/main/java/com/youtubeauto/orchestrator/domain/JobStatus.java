@@ -14,6 +14,9 @@ public enum JobStatus {
     ASSETS_REVIEW_PENDING,
     VEO_GENERATING,
     VEO_REVIEW_PENDING,
+    MONTAGE_REVIEW_PENDING,     // clips ready — human edits the montage (volgorde,
+                                // knippen/trimmen, overgangen, achtergrondmuziek)
+                                // before the pipeline assembles the master
     ASSEMBLING,
     THUMBNAIL_REVIEW_PENDING,   // thumbnail ready — human picks/approves before publish settings
     UPLOAD_REVIEW_PENDING,
@@ -27,6 +30,7 @@ public enum JobStatus {
                 || this == ASSETS_REVIEW_PENDING
                 || this == IMAGES_REVIEW_PENDING
                 || this == VEO_REVIEW_PENDING
+                || this == MONTAGE_REVIEW_PENDING
                 || this == THUMBNAIL_REVIEW_PENDING
                 || this == UPLOAD_REVIEW_PENDING
                 || this == DISTRIBUTION_PENDING;

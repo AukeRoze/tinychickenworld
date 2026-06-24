@@ -280,18 +280,25 @@ public class SceneClipBuilder {
 
         log.debug("scene seq={} (from clip, native audio) canvas={}x{}", scene.seq(), w, h);
 
-        List<String> args = List.of(
-                "-y",
-                "-t", String.valueOf(dur), "-i", scene.clipPath(),
-                "-filter_complex", filter,
-                "-map", "[v]", "-map", "[a]",
-                // crf 16 (was 20): first re-encode of the Veo clip — see above.
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-r", String.valueOf(fps),
-                "-pix_fmt", "yuv420p",
-                "-c:a", "pcm_s16le", "-ar", "48000",   // lossless intermediate (audit #1)
-                "-shortest",
-                output.toString()
-        );
+        // In-point trim (montage editor): seek to the user's chosen start BEFORE
+        // -i (fast input seek, accurate enough for whole-clip trims), then -t caps
+        // the read at the window length `dur`. So the scene shows [in, in+dur].
+        // Null/0 → no -ss, byte-identical to the previous whole-clip behaviour.
+        double trimSs = scene.trimStartSeconds() == null ? 0.0 : scene.trimStartSeconds();
+        List<String> args = new java.util.ArrayList<>();
+        args.add("-y");
+        if (trimSs > 0.0) { args.add("-ss"); args.add(String.valueOf(trimSs)); }
+        args.add("-t"); args.add(String.valueOf(dur));
+        args.add("-i"); args.add(scene.clipPath());
+        args.add("-filter_complex"); args.add(filter);
+        args.add("-map"); args.add("[v]"); args.add("-map"); args.add("[a]");
+        // crf 16 (was 20): first re-encode of the Veo clip — see above.
+        args.add("-c:v"); args.add("libx264"); args.add("-preset"); args.add("veryfast");
+        args.add("-crf"); args.add("16"); args.add("-r"); args.add(String.valueOf(fps));
+        args.add("-pix_fmt"); args.add("yuv420p");
+        args.add("-c:a"); args.add("pcm_s16le"); args.add("-ar"); args.add("48000");   // lossless intermediate (audit #1)
+        args.add("-shortest");
+        args.add(output.toString());
         runner.runFfmpeg(args, workdir);
         return output;
     }

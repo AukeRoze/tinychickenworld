@@ -49,6 +49,17 @@ public class AssemblyService {
     private static final Set<String> SCORE_PHASES = Set.of(
             "hook", "setup", "development", "climax", "resolution", "closer");
 
+    /** Per-scene key Concatenator reads to choose the transition INTO that scene:
+     *  a user override encoded as {@code "@t:<type>:<seconds>"} when set, else the
+     *  scene's plain phase (the existing phase-driven transition). Keeping the
+     *  override inside the phase list means the cut logic needs no new parameters. */
+    private static String transitionPhaseKey(SceneInput s) {
+        String t = s.transitionType();
+        if (t == null || t.isBlank()) return s.phase();
+        double sec = s.transitionSeconds() == null ? 0.0 : s.transitionSeconds();
+        return "@t:" + t.trim().toLowerCase(Locale.ROOT) + ":" + sec;
+    }
+
     /**
      * Seconds the FIRST scene's voice is held back when a branded intro is
      * attached, so the chick speaks only AFTER the intro→episode dissolve has
@@ -86,10 +97,12 @@ public class AssemblyService {
 
         // Step 3 — concat scenes (with title card opener + end-card + logo + color grade).
         // Per-scene phases (aligned to clip order = scenes sorted by seq) drive
-        // the transition style between scenes.
+        // the transition style between scenes. A user-chosen transition override is
+        // encoded into this same list as "@t:<type>:<seconds>" so Concatenator reads
+        // it without any signature change (it only ever uses this list for cuts).
         List<String> phases = req.scenes().stream()
                 .sorted(Comparator.comparingInt(SceneInput::seq))
-                .map(SceneInput::phase)
+                .map(AssemblyService::transitionPhaseKey)
                 .toList();
         Path joined = concatenator.concat(clips, phases, ws.concatList(), ws.joined(),
                 ws.root(), req.title(), req.outroPath());
@@ -330,7 +343,14 @@ public class AssemblyService {
         log.info("Attaching {}{} to scenes",
                 existing(req.introPath()) ? "intro " : "",
                 existing(req.outroPath()) ? "outro" : "");
-        return concatenator.concatHeterogeneous(parts, w, h, ws.branded(), ws.root());
+        // Bumper-overgangen alleen meegeven als de bijbehorende bumper er is, zodat
+        // de eerste/laatste grens de juiste (intro- resp. outro-)overgang krijgt.
+        String introT = existing(req.introPath()) ? req.introTransitionType() : null;
+        Double introS = existing(req.introPath()) ? req.introTransitionSeconds() : null;
+        String outroT = existing(req.outroPath()) ? req.outroTransitionType() : null;
+        Double outroS = existing(req.outroPath()) ? req.outroTransitionSeconds() : null;
+        return concatenator.concatHeterogeneous(parts, w, h, ws.branded(), ws.root(),
+                introT, introS, outroT, outroS);
     }
 
     private boolean existing(String path) {

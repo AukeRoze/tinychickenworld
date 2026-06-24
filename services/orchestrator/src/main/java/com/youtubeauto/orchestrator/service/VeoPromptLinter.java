@@ -152,6 +152,54 @@ public final class VeoPromptLinter {
                     + ") — at this length the model may truncate and drop the trailing style "
                     + "locks; compact the shared boilerplate or move the critical locks earlier.");
         }
+
+        // 9) Hero-prop canon integrity. When a KEY OBJECT block is injected (a hero
+        //    prop is named in the scene), it must carry the no-revert / identical-
+        //    every-frame lock — the clause that keeps the object stable and stops it
+        //    reverting to an earlier state. Only fires when a KEY OBJECT header is
+        //    present, so prop-less prompts are unaffected.
+        if (p.contains("KEY OBJECT") && !lc.contains("never reverts to an")) {
+            f.add("KEY OBJECT block is missing its no-revert / identical-every-frame lock.");
+        }
+        return f;
+    }
+
+    /**
+     * Cross-scene hero-prop state monotonicity (the one deterministic continuity
+     * check that is SAFE on structured data — unlike free-text continuity, which is
+     * left to the LLM critic). A hero prop must never move to an EARLIER state than
+     * it held in a previous scene (the egg never un-cracks).
+     *
+     * @param sceneStates per-scene {@code {propId: stateId}} maps, in scene order
+     *                    (null entries allowed for scenes without prop states)
+     * @param stateOrder  {@code propId -> ordered state ids} from the bible (a state's
+     *                    index in this list is its progression rank)
+     * @return findings; empty = every prop is monotone. Unknown props/states are skipped.
+     */
+    public static List<String> lintPropMonotonicity(
+            List<java.util.Map<String, String>> sceneStates,
+            java.util.Map<String, List<String>> stateOrder) {
+        List<String> f = new ArrayList<>();
+        if (sceneStates == null || stateOrder == null) return f;
+        java.util.Map<String, Integer> maxSeen = new java.util.HashMap<>();
+        int sceneIdx = 0;
+        for (java.util.Map<String, String> states : sceneStates) {
+            sceneIdx++;
+            if (states == null) continue;
+            for (java.util.Map.Entry<String, String> e : states.entrySet()) {
+                List<String> order = stateOrder.get(e.getKey());
+                if (order == null) continue;
+                int idx = order.indexOf(e.getValue());
+                if (idx < 0) continue;
+                Integer prev = maxSeen.get(e.getKey());
+                if (prev != null && idx < prev) {
+                    f.add("Prop '" + e.getKey() + "' regresses to an earlier state '"
+                            + e.getValue() + "' at scene " + sceneIdx
+                            + " (it was already further along) — prop states must be one-way.");
+                }
+                maxSeen.merge(e.getKey(), idx, Math::max);
+            }
+        }
         return f;
     }
 

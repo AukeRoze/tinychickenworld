@@ -13,6 +13,7 @@ public record ReviewProperties(
         boolean reviewImages,
         boolean afterAssets,
         boolean beforeVeo,
+        boolean beforeMontage,
         boolean beforeUpload,
         Mail mail
 ) {
@@ -20,7 +21,7 @@ public record ReviewProperties(
 
     public static ReviewProperties defaults() {
         return new ReviewProperties(
-                true, true, false, false, true,
+                true, true, false, false, true, true,
                 new Mail("", "noreply@yt-pipeline.local", "http://localhost:8080")
         );
     }

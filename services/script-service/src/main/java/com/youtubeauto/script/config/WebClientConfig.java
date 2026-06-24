@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -20,10 +21,22 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class WebClientConfig {
 
+    /** Idle-eviction pool: voorkomt "Connection prematurely closed BEFORE
+     *  response" door stale keep-alive-connecties niet meer te hergebruiken. */
+    private static ConnectionProvider evictingPool(String name) {
+        return ConnectionProvider.builder(name)
+                .maxConnections(50)
+                .maxIdleTime(Duration.ofSeconds(20))
+                .maxLifeTime(Duration.ofMinutes(5))
+                .pendingAcquireTimeout(Duration.ofSeconds(60))
+                .evictInBackground(Duration.ofSeconds(30))
+                .build();
+    }
+
     @Bean
     public WebClient anthropicWebClient(AnthropicProperties props) {
         int timeoutSec = props.timeoutSeconds() != null ? props.timeoutSeconds() : 60;
-        HttpClient httpClient = HttpClient.create()
+        HttpClient httpClient = HttpClient.create(evictingPool("script-anthropic-pool"))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
                 .responseTimeout(Duration.ofSeconds(timeoutSec))
                 .doOnConnected(c -> c.addHandlerLast(

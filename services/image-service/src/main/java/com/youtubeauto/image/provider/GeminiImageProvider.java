@@ -12,6 +12,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import io.netty.channel.ChannelOption;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -82,8 +86,22 @@ public class GeminiImageProvider implements ImageProvider {
         this.model = model;
         this.refsDir = refsDir;
         this.maxAttempts = maxAttempts;
+        // Eigen connector met idle-eviction + timeouts: voorkomt "Connection
+        // prematurely closed BEFORE response" (stale keep-alive naar Gemini) en
+        // een eindeloze hang (er stond eerder GEEN timeout op deze client).
+        HttpClient http = HttpClient.create(ConnectionProvider.builder("gemini-pool")
+                        .maxConnections(50)
+                        .maxIdleTime(Duration.ofSeconds(20))
+                        .maxLifeTime(Duration.ofMinutes(5))
+                        .pendingAcquireTimeout(Duration.ofSeconds(60))
+                        .evictInBackground(Duration.ofSeconds(30))
+                        .build())
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .responseTimeout(Duration.ofSeconds(180));
         this.client = WebClient.builder()
                 .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(http))
                 .defaultHeader("Content-Type", "application/json")
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(50 * 1024 * 1024))
                 .build();

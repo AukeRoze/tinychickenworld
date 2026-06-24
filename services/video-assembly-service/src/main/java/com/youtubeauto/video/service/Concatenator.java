@@ -339,7 +339,35 @@ public class Concatenator {
      * on calm/time-jump beats — a single uniform crossfade everywhere is what
      * makes a montage feel amateurish.
      */
+    /** xfade types the montage editor's "+" menu offers — guards a bad override
+     *  value from reaching the filtergraph (it would fail the whole render). */
+    private static final java.util.Set<String> OVERRIDE_XFADE = java.util.Set.of(
+            "fade", "fadeblack", "fadewhite", "dissolve",
+            "wipeleft", "wiperight", "wipeup", "wipedown",
+            "slideleft", "slideright", "circleopen", "circleclose",
+            "zoomin", "pixelize", "radial");
+
     private Transition transitionFor(String phase) {
+        // User override (montage editor) encoded by AssemblyService as
+        // "@t:<type>:<seconds>" — wins over the phase defaults. "cut" = a hard cut,
+        // rendered as a tiny fade so the uniform xfade filtergraph stays intact.
+        // An unknown xfade type falls through to the phase logic, so a bad value can
+        // never fail the render.
+        if (phase != null && phase.startsWith("@t:")) {
+            String[] p = phase.substring(3).split(":", 2);
+            String type = p.length > 0 ? p[0].trim().toLowerCase() : "";
+            double sec = 0.30;
+            if (p.length > 1) {
+                try { sec = Double.parseDouble(p[1].trim()); } catch (Exception ignore) {}
+            }
+            if (type.equals("cut")) return new Transition("fade", 0.04);
+            if (OVERRIDE_XFADE.contains(type)) {
+                if (sec < 0.05) sec = 0.05;
+                if (sec > 1.5) sec = 1.5;
+                return new Transition(type, sec);
+            }
+            phase = null;   // unknown type → fall through to the phase default
+        }
         // Bible first: channel.yml assembly.transitions lets the editor restyle
         // the cut language (any ffmpeg xfade type) without a recompile. Falls
         // through to the built-in mapping when unset/invalid.
@@ -1068,6 +1096,31 @@ public class Concatenator {
      */
     public Path concatHeterogeneous(List<Path> clips, int width, int height,
                                     Path output, Path workdir) {
+        return concatHeterogeneous(clips, width, height, output, workdir, null, null, null, null);
+    }
+
+    /** Bumper-overgang (intro→body / body→outro): valideert het type tegen
+     *  {@link #OVERRIDE_XFADE}, "cut" wordt een mini-fade, leeg/onbekend → de
+     *  meegegeven default-dissolve. */
+    private Transition bumperTransition(String type, Double sec, double defaultDur) {
+        if (type == null || type.isBlank()) return new Transition("fade", defaultDur);
+        String t = type.trim().toLowerCase();
+        if (t.equals("cut")) return new Transition("fade", 0.04);
+        if (OVERRIDE_XFADE.contains(t)) {
+            double s = sec != null ? sec : defaultDur;
+            if (s < 0.05) s = 0.05;
+            if (s > 1.5) s = 1.5;
+            return new Transition(t, s);
+        }
+        return new Transition("fade", defaultDur);   // onbekend type → default
+    }
+
+    /** As above, but with a user-chosen bumper-overgang op de intro- (eerste) en
+     *  outro- (laatste) grens. Null type → de bestaande default-dissolve. */
+    public Path concatHeterogeneous(List<Path> clips, int width, int height,
+                                    Path output, Path workdir,
+                                    String introType, Double introSec,
+                                    String outroType, Double outroSec) {
         if (clips.size() < 2) {
             throw new IllegalArgumentException("concatHeterogeneous needs >=2 inputs");
         }
@@ -1122,18 +1175,34 @@ public class Concatenator {
         final double DISSOLVE_INTRO = 2.0;   // intro → episode (was 1.6)
         final double DISSOLVE_OUTRO = 0.8;   // episode → outro
         final double DISSOLVE_OTHER = 0.5;
+        boolean introSet = introType != null && !introType.isBlank();
+        boolean outroSet = outroType != null && !outroType.isBlank();
         String prevV = "v0", prevA = "a0";
         double cumDur = durs[0];
         for (int i = 1; i < clips.size(); i++) {
-            double want = (i == 1) ? DISSOLVE_INTRO
-                    : (i == clips.size() - 1 ? DISSOLVE_OUTRO : DISSOLVE_OTHER);
-            double d = Math.min(want, Math.min(durs[i], durs[i - 1]) * 0.5);
+            boolean first = (i == 1), last = (i == clips.size() - 1);
+            // Kies de overgang: eerste grens = intro→body, laatste = body→outro,
+            // ertussen = snappy default. Bij 2 clips valt eerste==laatste samen;
+            // dan wint de bumper-overgang die gezet is.
+            Transition tr;
+            if (first && last) {
+                tr = introSet ? bumperTransition(introType, introSec, DISSOLVE_INTRO)
+                   : outroSet ? bumperTransition(outroType, outroSec, DISSOLVE_OUTRO)
+                   : new Transition("fade", DISSOLVE_INTRO);
+            } else if (first) {
+                tr = bumperTransition(introType, introSec, DISSOLVE_INTRO);
+            } else if (last) {
+                tr = bumperTransition(outroType, outroSec, DISSOLVE_OUTRO);
+            } else {
+                tr = new Transition("fade", DISSOLVE_OTHER);
+            }
+            double d = Math.min(tr.duration(), Math.min(durs[i], durs[i - 1]) * 0.5);
             if (d < 0.05) d = 0.05;
             double offset = cumDur - d;
-            String outV = (i == clips.size() - 1) ? "vout" : ("vx" + i);
-            String outA = (i == clips.size() - 1) ? "aout" : ("ax" + i);
+            String outV = last ? "vout" : ("vx" + i);
+            String outA = last ? "aout" : ("ax" + i);
             f.append('[').append(prevV).append("][v").append(i).append(']')
-             .append("xfade=transition=fade:duration=")
+             .append("xfade=transition=").append(tr.type()).append(":duration=")
              .append(String.format(java.util.Locale.ROOT, "%.3f", d))
              .append(":offset=").append(String.format(java.util.Locale.ROOT, "%.3f", offset))
              .append('[').append(outV).append("];");

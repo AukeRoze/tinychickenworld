@@ -177,6 +177,16 @@ public class VideoController {
                 .toList();
     }
 
+    /** Out-point for the trim slider = in-point (0 when unset) + the scene's RAW
+     *  (un-floored) length. Null when there is no length yet. The frontend clamps
+     *  to the clip length. */
+    private static Double trimEndSeconds(JsonNode s) {
+        double rawDur = s.path("durationSeconds").asDouble(0);
+        if (rawDur <= 0) return null;
+        double start = s.hasNonNull("trimStartSeconds") ? s.path("trimStartSeconds").asDouble() : 0.0;
+        return start + rawDur;
+    }
+
     /** Per-scene summary for the static job-detail grid. Parsed from the job's
      *  stored assembly scenes; empty list when assets aren't generated yet. */
     @GetMapping("/{id}/scenes")
@@ -293,6 +303,14 @@ public class VideoController {
                             sceneLines.add(m);
                         }
                     }
+                    java.util.Map<String, String> propStates = new java.util.HashMap<>();
+                    JsonNode psNode = s.path("propStates");
+                    if (psNode.isObject()) {
+                        psNode.fields().forEachRemaining(e -> {
+                            String v = e.getValue().asText("");
+                            if (!v.isBlank()) propStates.put(e.getKey(), v);
+                        });
+                    }
                     veoPrompt = veoPromptCompiler.compile(
                             vd, phase, sceneChars,
                             s.path("locationId").asText(""),
@@ -303,7 +321,7 @@ public class VideoController {
                             s.path("motionSpeed").asText(""),
                             cameraMove,
                             s.path("veoCameraOverride").asText(""),
-                            job.getMood(), sceneLines);
+                            job.getMood(), sceneLines, propStates);
                 } catch (Exception ignore) { /* prompt preview is best-effort */ }
                 prevPhase = phase;
                 out.add(new SceneSummary(
@@ -326,7 +344,12 @@ public class VideoController {
                         hasRejectedClip,
                         qcReject.isBlank() ? null : qcReject,
                         veoPrompt,
-                        imagePrompts.get(seq)));
+                        imagePrompts.get(seq),
+                        s.path("goal").asText(""),
+                        s.hasNonNull("trimStartSeconds") ? s.path("trimStartSeconds").asDouble() : null,
+                        trimEndSeconds(s),
+                        s.hasNonNull("transitionType") ? s.path("transitionType").asText("") : null,
+                        s.hasNonNull("transitionSeconds") ? s.path("transitionSeconds").asDouble() : null));
             }
         } catch (Exception e) {
             return List.of();
@@ -344,6 +367,53 @@ public class VideoController {
         } catch (Exception e) {
             return 0L;
         }
+    }
+
+    /** Background-music library for the montage step: every registered track
+     *  from the bible (id, mood, friendly display name, preview URL) plus which
+     *  one is currently selected for THIS job. Drives the music dropdown with
+     *  previews. Only tracks whose file actually exists on disk are returned. */
+    @GetMapping("/{id}/music")
+    public ResponseEntity<Map<String, Object>> musicLibrary(@PathVariable UUID id) {
+        VideoJob job = jobRepo.findById(id).orElse(null);
+        if (job == null) return ResponseEntity.notFound().build();
+        String current = job.getBackgroundMusicPath() == null ? "" : job.getBackgroundMusicPath();
+        String currentId = current.isBlank() ? "" : current.replaceFirst(".*/", "").replaceFirst("\\.mp3$", "");
+        List<Map<String, Object>> tracks = new ArrayList<>();
+        try {
+            java.nio.file.Path biblePath = java.nio.file.Paths.get("/bible", "channel.yml");
+            if (java.nio.file.Files.exists(biblePath)) {
+                JsonNode root = new com.fasterxml.jackson.dataformat.yaml.YAMLMapper().readTree(biblePath.toFile());
+                for (JsonNode t : root.path("music").path("tracks")) {
+                    String tid = t.path("id").asText("");
+                    String path = t.path("path").asText("");
+                    if (tid.isBlank() || path.isBlank()) continue;
+                    if (!java.nio.file.Files.exists(java.nio.file.Paths.get(path))) continue;
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", tid);
+                    m.put("mood", t.path("mood").asText(""));
+                    m.put("name", prettyTrackName(tid));
+                    m.put("previewUrl", "/dashboard/music/" + tid + ".mp3");
+                    m.put("selected", tid.equals(currentId));
+                    tracks.add(m);
+                }
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(Map.of("currentId", currentId, "tracks", tracks));
+    }
+
+    /** "cloud_watching" → "Cloud Watching" for the dropdown label. */
+    private static String prettyTrackName(String id) {
+        String[] parts = id.replace('-', '_').split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1));
+        }
+        return sb.length() == 0 ? id : sb.toString();
     }
 
     /** Pick a different background-music track for this job (UI select on the
@@ -365,6 +435,31 @@ public class VideoController {
         }
         orchestrator.saveBackgroundMusicPath(id, f.toString());
         return ResponseEntity.ok(Map.of("backgroundMusicPath", f.toString(),
+                "note", "run Reassemble to apply"));
+    }
+
+    /** Set/clear the intro or outro bumper-transition for this job (montage).
+     *  Body: {"position":"intro"|"outro", "type":"wipeleft"|"cut"|..., "seconds":0.4}.
+     *  Blank type clears it (back to the default dissolve). Takes effect on the
+     *  next (re)assemble. */
+    @PostMapping("/{id}/bumper-transition")
+    public ResponseEntity<?> bumperTransition(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        VideoJob job = jobRepo.findById(id).orElse(null);
+        if (job == null) return ResponseEntity.notFound().build();
+        String position = String.valueOf(body.getOrDefault("position", "")).toLowerCase();
+        if (!position.equals("intro") && !position.equals("outro")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "position must be 'intro' or 'outro'"));
+        }
+        String type = body.get("type") == null ? null : String.valueOf(body.get("type"));
+        Double seconds = null;
+        Object sec = body.get("seconds");
+        if (sec instanceof Number n) seconds = n.doubleValue();
+        else if (sec != null && !String.valueOf(sec).isBlank()) {
+            try { seconds = Double.parseDouble(String.valueOf(sec)); } catch (NumberFormatException ignore) {}
+        }
+        orchestrator.saveBumperTransition(id, position, type, seconds);
+        return ResponseEntity.ok(Map.of("position", position,
+                "type", type == null ? "" : type,
                 "note", "run Reassemble to apply"));
     }
 

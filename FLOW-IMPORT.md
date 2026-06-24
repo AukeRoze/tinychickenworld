@@ -5,7 +5,9 @@ beelden — **met de eigen audio van de clip** (Omni doet stem + snavel-sync zel
 ElevenLabs is volledig verwijderd. Wat de import doet:
 
 - **`POST /api/v1/videos/{id}/import-clips?episode=1`** (orchestrator) — kopieert
-  per scène `bible/afleveringen/1/scene-<seq>.mp4` naar het clip-slot van de job
+  per scène `bible/afleveringen/1/scene-<seq>.mp4` (óf de beschrijvende variant
+  `scene-<seq>-<titel>.mp4`, met de scene-goal als slug — de import matcht op het
+  `scene-<seq>-` voorvoegsel) naar het clip-slot van de job
   (`/workdir/jobs/<id>/scenes/<seq>/clip.mp4`) en zet de `clipPath`. De montage
   gebruikt jouw clip rechtstreeks en **behoudt de eigen audio van de clip**
   (Omni-stem + ambient); de muziek wordt daar in post overheen gemixt. Er is geen
@@ -31,7 +33,9 @@ ElevenLabs is volledig verwijderd. Wat de import doet:
    docker compose up -d --build orchestrator
    ```
 
-2. Zet je Flow-exports in `bible\afleveringen\1\` als `scene-1.mp4` … `scene-29.mp4`.
+2. Zet je Flow-exports in `bible\afleveringen\1\` als `scene-1.mp4` … `scene-29.mp4`,
+   óf met de beschrijvende naam `scene-1-<titel>.mp4` (de titel = de scene-goal-slug
+   die het dashboard per scène toont — die kop is meteen de aanbevolen bestandsnaam).
 
 3. **Importeren** — kies één van de twee:
 

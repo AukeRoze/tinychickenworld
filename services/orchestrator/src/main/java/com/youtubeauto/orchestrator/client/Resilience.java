@@ -37,11 +37,16 @@ final class Resilience {
 
     private Resilience() {}
 
-    /** Expensive call: timeout + retry only on "request never sent" failures. */
+    /** Expensive call: timeout + retry only on failures where the request
+     *  provably did NOT reach/processed by the service — a refused connection,
+     *  or a connection closed by the peer BEFORE any response byte ("prematurely
+     *  closed BEFORE response", the idle-pool-reuse race). Both mean no work was
+     *  done downstream, so re-firing can't double-bill. Ambiguous failures
+     *  (timeout, 5xx, close DURING response) still propagate without retry. */
     static <T> T paid(Mono<T> call, Duration timeout, String what) {
         return call.timeout(timeout)
                 .retryWhen(Retry.backoff(MAX_RETRIES, FIRST_BACKOFF)
-                        .filter(Resilience::connectionRefused)
+                        .filter(Resilience::requestNeverProcessed)
                         .doBeforeRetry(sig -> log.warn("{} retry #{} after {}",
                                 what, sig.totalRetries() + 1, String.valueOf(sig.failure())))
                         .onRetryExhaustedThrow((spec, sig) -> sig.failure()))
@@ -59,10 +64,33 @@ final class Resilience {
                 .block();
     }
 
+    /** True when the request provably never reached/was-processed by the service:
+     *  a refused connection, OR a peer that closed the socket BEFORE sending any
+     *  response ("Connection prematurely closed BEFORE response" — the stale-pool
+     *  reuse race). Safe to retry even for paid calls. */
+    private static boolean requestNeverProcessed(Throwable ex) {
+        return connectionRefused(ex) || prematureCloseBeforeResponse(ex);
+    }
+
     /** True only when the request provably never reached the service. */
     private static boolean connectionRefused(Throwable ex) {
         for (Throwable t = ex; t != null; t = (t.getCause() == t ? null : t.getCause())) {
             if (t instanceof java.net.ConnectException) return true;
+        }
+        return false;
+    }
+
+    /** Reactor Netty's PrematureCloseException "BEFORE response": the connection
+     *  (often a stale pooled one) closed before any response byte arrived, so the
+     *  server did not start responding — treat as not-processed. Matched on the
+     *  message to avoid a hard compile dep on the internal exception type. */
+    private static boolean prematureCloseBeforeResponse(Throwable ex) {
+        for (Throwable t = ex; t != null; t = (t.getCause() == t ? null : t.getCause())) {
+            String msg = t.getMessage();
+            if (msg != null) {
+                String m = msg.toLowerCase(java.util.Locale.ROOT);
+                if (m.contains("prematurely closed") && m.contains("before response")) return true;
+            }
         }
         return false;
     }

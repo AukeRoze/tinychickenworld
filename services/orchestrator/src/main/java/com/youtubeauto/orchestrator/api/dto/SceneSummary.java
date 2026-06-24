@@ -45,7 +45,23 @@ public record SceneSummary(
          *  image-provider 'm aan z'n model voert), opgehaald via de image-service
          *  preview-endpoint. Voor de "kopieer image-prompts"-knop op de jobpagina.
          *  Leeg/null als de preview niet lukt. */
-        String imagePrompt
+        String imagePrompt,
+        /** Het scène-'goal' (korte doel-/titelzin uit het script). De UI maakt er
+         *  een slug van voor het scène-label en de aanbevolen clip-bestandsnaam
+         *  (scene-<seq>-<goal-slug>). Leeg als het script geen goal zette. */
+        String goal,
+        /** In-punt van de scène binnen de clip (seconden); null = vanaf 0. Voedt
+         *  de linker handgreep van het inkort-schuifje. */
+        Double trimStartSeconds,
+        /** Uit-punt van de scène binnen de clip (seconden) = in-punt + (ruwe,
+         *  on-gevloerde) lengte; null = tot het clip-einde. Voedt de rechter
+         *  handgreep van het inkort-schuifje. */
+        Double trimEndSeconds,
+        /** Gekozen overgang NAAR deze scène (ffmpeg xfade-naam of "cut"); leeg =
+         *  phase-default. Voedt het label van het +-icoon vóór deze scène. */
+        String transitionType,
+        /** Duur van {@link #transitionType} in seconden; null = default. */
+        Double transitionSeconds
 ) {
     /** One spoken line in a scene. */
     public record Line(String speaker, String text) {}

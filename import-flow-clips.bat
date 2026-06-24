@@ -8,7 +8,9 @@ REM  Voorbeeld: import-flow-clips.bat 3f8c1a90-... 1
 REM
 REM  Vereist: de pipeline draait (docker compose up) en de job heeft script +
 REM  stemmen + scene-images. De clips staan in bible\afleveringen\<episode>\
-REM  als scene-1.mp4 .. scene-29.mp4.
+REM  als scene-1.mp4 .. scene-29.mp4, OF met beschrijvende naam
+REM  scene-1-<titel>.mp4 (titel = scene-goal-slug; de import matcht op het
+REM  "scene-<nummer>-" voorvoegsel, dus het achtervoegsel is vrij).
 REM ===========================================================================
 setlocal
 set "BASE=http://localhost:8080"

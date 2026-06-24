@@ -36,4 +36,17 @@ public class ScriptController {
     public ResponseEntity<ScriptResponse> get(@PathVariable UUID jobId) {
         return ResponseEntity.ok(orchestrator.get(jobId));
     }
+
+    /**
+     * Canonical SOURCE-FIX write-back: persist orchestrator-sanitized scene
+     * action text (visualDesc / motionDesc) onto the stored script_scenes rows,
+     * so a fixed accessory-vs-action contradiction is corrected ONCE at the
+     * source instead of being silently rewritten on every downstream compile.
+     * Idempotent: re-patching identical text is a no-op.
+     */
+    @PatchMapping("/{jobId}/scenes")
+    public ResponseEntity<ScriptResponse> patchScenes(@PathVariable UUID jobId,
+                                                      @Valid @RequestBody PatchScenesRequest req) {
+        return ResponseEntity.ok(orchestrator.patchScenes(jobId, req));
+    }
 }

@@ -85,7 +85,7 @@ class PipelineOrchestratorStateMachineTest {
 
     /** All bible review gates off — the job flows start to finish. */
     private static final ReviewProperties GATES_OFF = new ReviewProperties(
-            false, false, false, false, false,
+            false, false, false, false, false, false,
             new ReviewProperties.Mail("", "noreply@test", "http://localhost:8080"));
 
     // ── mocked collaborators (constructor order of PipelineOrchestrator) ──
@@ -190,7 +190,8 @@ class PipelineOrchestratorStateMachineTest {
                   {"seq":2,"imagePath":"/workdir/test/images/scene_02.png"}]}
                 """));
         when(assemblyClient.assembleAsync(any(), any(), anyList(), any(), any(), any(),
-                anyInt(), anyInt(), anyBoolean(), any())).thenReturn(json("""
+                anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any())).thenReturn(json("""
                 {"outputPath":"/workdir/test/out/master.mp4","durationSeconds":9.0}
                 """));
         // 8-args full form: ... customHint, castPresent (ground-truth cast voor
@@ -373,7 +374,8 @@ class PipelineOrchestratorStateMachineTest {
 
     private void verifyNeverAssembled() {
         verify(assemblyClient, never()).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
     }
 
     private void verifyNeverUploaded() {
@@ -424,7 +426,8 @@ class PipelineOrchestratorStateMachineTest {
         voiceOrder.verify(scriptClient).submit(any(), any(), anyInt(), any(), any(),
                 any(), any(), any(), any(), any());
         voiceOrder.verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
         voiceOrder.verify(uploadClient).upload(any(), any(), any(), any(), any(),
                 anyList(), any(), any(), any());
 
@@ -432,7 +435,8 @@ class PipelineOrchestratorStateMachineTest {
         InOrder imageOrder = inOrder(imageClient, assemblyClient, thumbnailClient, uploadClient);
         imageOrder.verify(imageClient).generate(any(), anyList(), any());
         imageOrder.verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
         imageOrder.verify(thumbnailClient).generate(any(), any(), any(), any(), anyList(), any(), any(), any());
         imageOrder.verify(uploadClient).upload(any(), any(), any(), any(), any(),
                 anyList(), any(), any(), any());
@@ -465,21 +469,27 @@ class PipelineOrchestratorStateMachineTest {
         verify(imageClient).generate(any(), anyList(), any());
         verifyNeverAssembled();
 
-        // approve #2 (ken_burns ⇒ no Veo) → runAssemblyStage pauses at the
-        // dedicated thumbnail gate (thumbnailGateEnabled).
+        // approve #2 (ken_burns ⇒ no Veo) → clips ready → pauses at the montage
+        // gate (beforeMontage, default on). Nothing is assembled yet.
+        orch.approve(jobId);
+        assertEquals(JobStatus.MONTAGE_REVIEW_PENDING, store.get(jobId).getStatus());
+        verifyNeverAssembled();
+
+        // approve #3 → runAssemblyStage pauses at the dedicated thumbnail gate.
         orch.approve(jobId);
         assertEquals(JobStatus.THUMBNAIL_REVIEW_PENDING, store.get(jobId).getStatus());
         verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
         verifyNeverUploaded();
 
-        // approve #3 → runUploadGate: QA Board says publishable, but the
+        // approve #4 → runUploadGate: QA Board says publishable, but the
         // beforeUpload review gate still holds the master.
         orch.approve(jobId);
         assertEquals(JobStatus.UPLOAD_REVIEW_PENDING, store.get(jobId).getStatus());
         verifyNeverUploaded();
 
-        // approve #4 → runUploadStage uploads, then parks the job at the
+        // approve #5 → runUploadStage uploads, then parks the job at the
         // manual distribution gate (distributionGateEnabled).
         orch.approve(jobId);
         assertEquals(JobStatus.DISTRIBUTION_PENDING, store.get(jobId).getStatus());
@@ -487,7 +497,7 @@ class PipelineOrchestratorStateMachineTest {
                 anyList(), any(), any(), any());
         assertEquals("yt-123", store.get(jobId).getYoutubeVideoId());
 
-        // approve #5 → finalizeDistribution completes the job.
+        // approve #6 → finalizeDistribution completes the job.
         orch.approve(jobId);
         assertEquals(JobStatus.COMPLETED, store.get(jobId).getStatus());
         assertEquals("https://youtu.be/yt-123", store.get(jobId).getYoutubeUrl());
@@ -570,7 +580,8 @@ class PipelineOrchestratorStateMachineTest {
                 any(), any(), any(), any(), any());
         verifyNoInteractions(imageClient, videoGenClient);
         verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
         verify(uploadClient).upload(any(), any(), any(), any(), any(),
                 anyList(), any(), any(), any());
     }
@@ -594,7 +605,8 @@ class PipelineOrchestratorStateMachineTest {
         // All assets existed → the (paid) generation clients are never hit.
         verify(imageClient, never()).generate(any(), anyList(), any());
         verify(assemblyClient).assembleAsync(any(), any(), anyList(), any(), any(),
-                any(), anyInt(), anyInt(), anyBoolean(), any());
+                any(), anyInt(), anyInt(), anyBoolean(), any(),
+                any(), any(), any(), any());
 
         // The reused paths survived mergeAssets (non-destructive merge).
         List<Map<String, Object>> persisted = MAPPER.readValue(

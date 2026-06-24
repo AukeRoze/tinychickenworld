@@ -17,6 +17,7 @@ const actionsHost = document.getElementById("actions-host");
 const statusLine = document.getElementById("status-line");
 const topicEl = document.getElementById("job-topic");
 const scenesHost = document.getElementById("scenes-host");
+const montageHost = document.getElementById("montage-host");
 const reviewHost = document.getElementById("review-host");
 const stepperHost = document.getElementById("stepper-host");
 const gateHost = document.getElementById("gate-host");
@@ -95,12 +96,15 @@ function statusKind(status) {
 
 // Pipeline stepper — mirrors the classic dashboard's phase model so you can see
 // exactly which production stage a job is in.
-const PHASES = ["Script", "Voice + Images", "Video", "Assembly",
+const PHASES = ["Script", "Scenes", "Montage", "Assembly",
                 "Thumbnail", "Planning", "Upload", "Distribution"];
 const PHASE_OF = {
   PENDING: [0, "queued"], SCRIPT_GENERATING: [0, "active"], SCRIPT_REVIEW_PENDING: [0, "review"],
   ASSETS_GENERATING: [1, "active"], IMAGES_REVIEW_PENDING: [1, "review"], ASSETS_REVIEW_PENDING: [1, "review"],
-  VEO_GENERATING: [2, "active"], VEO_REVIEW_PENDING: [2, "review"], ASSEMBLING: [3, "active"],
+  // Veo wordt niet gebruikt (clips komen uit Google Flow/Omni); mocht een
+  // Veo-status toch voorkomen, dan valt 'ie onder de Montage-stap.
+  VEO_GENERATING: [2, "active"], VEO_REVIEW_PENDING: [2, "review"],
+  MONTAGE_REVIEW_PENDING: [2, "review"], ASSEMBLING: [3, "active"],
   THUMBNAIL_REVIEW_PENDING: [4, "review"], UPLOAD_REVIEW_PENDING: [5, "review"], UPLOADING: [6, "active"],
   DISTRIBUTION_PENDING: [7, "review"], COMPLETED: [7, "done"], FAILED: [-1, "failed"],
 };
@@ -117,7 +121,8 @@ const PROGRESS = {
   ASSETS_REVIEW_PENDING:    [45, 45,    0, "⏸ Wacht op jouw assets-review"],
   VEO_GENERATING:           [46, 73,  900, "Veo-clips renderen — minuten per scène…"],
   VEO_REVIEW_PENDING:       [73, 73,    0, "⏸ Wacht op jouw Veo-review"],
-  ASSEMBLING:               [74, 88,  300, "Montage: scènes, muziek, intro/outro, gates en audit…"],
+  MONTAGE_REVIEW_PENDING:   [74, 74,    0, "⏸ Montage — volgorde, knippen/trimmen, overgangen en achtergrondmuziek"],
+  ASSEMBLING:               [75, 88,  300, "Assembleren: intro/outro, audio-mix, gates en audit…"],
   THUMBNAIL_REVIEW_PENDING: [88, 88,    0, "⏸ Kies en keur de thumbnail"],
   UPLOAD_REVIEW_PENDING:    [90, 90,    0, "⏸ Klaar voor publicatie — plan in of publiceer direct"],
   UPLOADING:                [90, 98,  240, "Uploaden naar YouTube…"],
@@ -188,13 +193,25 @@ function renderStepper(job) {
     else cls = "upcoming";
     const step = document.createElement("div");
     step.className = "step step--" + cls;
-    // Done/active/review steps are clickable → scroll to that stage's info.
-    if (cls !== "upcoming" && cls !== "failed") {
-      const target = i <= 2 ? "scenes-host" : "review-host";
+    // ELKE stap is selecteerbaar (Auke) — ook nog-niet-bereikte stappen: klik
+    // opent de bijbehorende sectie en scrollt ernaartoe, zodat je vrij door de
+    // stappen kunt navigeren i.p.v. alleen de actuele.
+    {
+      const sec = i === 2 ? ["step-montage", "montage-host"]
+                : i < 2   ? ["step-script", "scenes-host"]
+                :           ["step-review", "review-host"];
       step.classList.add("step--clickable");
-      step.title = "View this stage's details";
+      step.title = "Open deze stap";
       step.addEventListener("click", () => {
-        const el = document.getElementById(target);
+        const det = document.getElementById(sec[0]);
+        const el = document.getElementById(sec[1]);
+        if (det && det.tagName === "DETAILS") {
+          det.style.display = "";   // eventueel verborgen sectie weer tonen
+          det.open = true;          // en openklappen
+        }
+        document.querySelectorAll(".stepper .step--selected")
+          .forEach(s => s.classList.remove("step--selected"));
+        step.classList.add("step--selected");
         if (!el) return;
         el.scrollIntoView({ behavior: "smooth", block: "start" });
         el.classList.add("flash");
@@ -215,8 +232,10 @@ function renderStepper(job) {
     if (lastReview) {
       if (i === 0 && lastReview.storyScore && lastReview.storyScore.criticScore != null) {
         stepScore = lastReview.storyScore.criticScore;
+      } else if (i === 2 && lastReview.montageScore != null) {
+        stepScore = lastReview.montageScore;          // Montage-stap (Auke)
       } else if (i === 3 && lastReview.qaBoardScore != null) {
-        stepScore = lastReview.qaBoardScore;
+        stepScore = lastReview.qaBoardScore;          // Assembly = QA-board
       }
     }
     if (stepScore != null) {
@@ -252,25 +271,9 @@ function renderStepper(job) {
   updateProgress();
 }
 
-// Cost shown as a tidy euro line right under the pipeline steps.
-function renderCost(cost) {
-  if (!cost) { costHost.replaceChildren(); return; }
-  const pct = cost.capEur ? (cost.estimateEur / cost.capEur) * 100 : 0;
-  const kind = pct > 90 ? "danger" : pct > 70 ? "warning" : "success";
-  const line = document.createElement("div");
-  line.className = "cost-line";
-  const badge = document.createElement("span");
-  badge.className = "audit-score";
-  badge.style.background = "var(--" + kind + ")";
-  badge.textContent = "€" + Number(cost.estimateEur).toFixed(2);
-  line.appendChild(badge);
-  const cap = document.createElement("span");
-  cap.className = "small";
-  cap.style.color = "var(--muted)";
-  cap.textContent = "of €" + Number(cost.capEur).toFixed(2) + " budget";
-  line.appendChild(cap);
-  line.appendChild(bar(cost.estimateEur, cost.capEur || 1, kind));
-  costHost.replaceChildren(line);
+// Kosten-blok verwijderd (Auke): geen euro-balk meer onder de stappen.
+function renderCost(_cost) {
+  if (costHost) costHost.replaceChildren();
 }
 
 // Constant, non-user-data SVG (safe to use as innerHTML).
@@ -357,6 +360,17 @@ function renderGate(job) {
     card.appendChild(thumbRegenRow(id, card));
   }
 
+  // Montage-gate: korte uitleg dat de montage-controls (volgorde, knippen/trimmen,
+  // overgangen en muziek) in het scènes-paneel staan; deze knop bouwt de master.
+  if (job.status === "MONTAGE_REVIEW_PENDING") {
+    const hint = document.createElement("p");
+    hint.className = "sub";
+    hint.textContent = "Montage-stap: zet de scènes op volgorde, knip/trim de in/uit-punten, "
+        + "kies de overgangen en de achtergrondmuziek in het scènes-paneel hieronder. "
+        + "Klaar? Klik ‘Assembleren’ om de master te bouwen.";
+    card.appendChild(hint);
+  }
+
   // Script-gate (#4): toon de VERHAAL-score zodat je vóór akkoord ziet hoe sterk
   // het verhaal is (en waar het zwak is) — niet alleen blind approve/reject.
   if (job.status === "SCRIPT_REVIEW_PENDING") {
@@ -424,6 +438,8 @@ function renderGate(job) {
   } else {
     const label = job.status === "THUMBNAIL_REVIEW_PENDING"
         ? "✓ Thumbnail gekozen — doorgaan"
+        : job.status === "MONTAGE_REVIEW_PENDING"
+        ? "🎬 Assembleren"
         : "✓ Approve & continue";
     row.appendChild(actionButton(label, "approve",
       () => api.post(`/api/v1/videos/${id}/approve`)));
@@ -972,7 +988,7 @@ function renderReview(ctx) {
   {
     const c = ctx.cost || null;
     const fb = data.cost || null;
-    if (c || fb) {
+    if (false) {   // kosten-blok verwijderd (Auke) — geen Kosten-kaart meer
       any = true;
       const card = reviewCard("💶 Kosten");
       const est = c && c.estimateEur != null ? c.estimateEur : (fb ? fb.estimateEur : null);
@@ -1037,6 +1053,23 @@ function renderReview(ctx) {
       card.appendChild(node);
     };
 
+    // Eén opslag-route voor de metadata (dubbelklik-titel-edit én het
+    // Edit-formulier): nieuwe gevalideerde POST, met terugval op de legacy PATCH.
+    const saveMeta = async (body) => {
+      let res;
+      try {
+        res = await api.post(`/api/v1/videos/${id}/metadata`, body, { key: "meta-save-" + id });
+      } catch (e) {
+        if (e.name === "AbortError" || !/HTTP (404|405)/.test(e.message || "")) throw e;
+        res = null;
+        await api.patch(`/api/v1/videos/${id}/metadata`, body, { key: "meta-save-" + id });
+      }
+      meta.title = res && res.title != null ? res.title : body.title;
+      meta.description = res && res.description != null ? res.description : body.description;
+      meta.tags = res && res.tags != null ? res.tags : body.tags;
+      return res;
+    };
+
     // Bewerken kan alleen vóór de upload — daarna staat de metadata op YouTube
     // en zou een lokale edit stilletjes afwijken (de backend geeft dan 409).
     const metaFrozen = !!(lastJob && (lastJob.status === "UPLOADING" ||
@@ -1046,7 +1079,50 @@ function renderReview(ctx) {
       const body = document.createElement("div");
       const dl = document.createElement("dl");
       dl.className = "kv";
-      field(dl, "Title", meta.title);
+      // Title — dubbelklik om inline te hernoemen (alleen vóór de upload).
+      const tdt = document.createElement("dt");
+      tdt.textContent = "Title";
+      const tdd = document.createElement("dd");
+      tdd.textContent = meta.title || "";
+      if (!metaFrozen) {
+        tdd.title = "Dubbelklik om de titel te bewerken";
+        tdd.style.cursor = "text";
+        tdd.ondblclick = () => {
+          const inp = document.createElement("input");
+          inp.type = "text";
+          inp.value = meta.title || "";
+          inp.maxLength = 100;
+          inp.style.cssText = "width:100%;padding:6px 8px;border:1px solid var(--border,#ccc);" +
+              "border-radius:6px;background:var(--bg,#fff);color:inherit;font:inherit";
+          tdd.replaceChildren(inp);
+          inp.focus();
+          inp.select();
+          let done = false;
+          const commit = async () => {
+            if (done) return;
+            done = true;
+            const v = inp.value.trim();
+            if (!v || v === (meta.title || "")) { showView(); return; }
+            if (v.length > 100) {
+              toast("Titel langer dan 100 tekens — YouTube weigert dat. Kort 'm in.", "error", 6000);
+              showView();
+              return;
+            }
+            try {
+              const res = await saveMeta({ title: v, description: meta.description, tags: meta.tags });
+              toast("Titel opgeslagen" + (res && res.title ? ` — “${res.title}”` : ` — “${v}”`), "info");
+            } catch (e) { /* api.js toasted */ }
+            showView();
+          };
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); commit(); }
+            else if (e.key === "Escape") { done = true; showView(); }
+          });
+          inp.addEventListener("blur", commit);
+        };
+      }
+      dl.appendChild(tdt);
+      dl.appendChild(tdd);
       field(dl, "Description", meta.description);
       field(dl, "Tags", meta.tags);
       body.appendChild(dl);
@@ -1122,11 +1198,16 @@ function renderReview(ctx) {
     wrap.appendChild(card);
   }
 
-  // ── Planning — Episode is een dropdown (snel zetten/wijzigen, mirror van de
-  // jobs-grid); de rest read-only. Altijd zichtbaar zodat je de aflevering ook
-  // kunt zetten als die nog leeg is. ──
+  // ── Planning — alleen zichtbaar vanaf de planning-stap (Auke): de gate
+  // UPLOAD_REVIEW_PENDING en alles daarna (uploaden/distributie/klaar). Daarvoor
+  // niet tonen zodat de review-sectie niet vol staat met nog-niet-relevante info.
   const pl = data.planning || {};
-  {
+  const planningStep = !!(lastJob && (
+      lastJob.status === "UPLOAD_REVIEW_PENDING" ||
+      lastJob.status === "UPLOADING" ||
+      lastJob.status === "DISTRIBUTION_PENDING" ||
+      lastJob.status === "COMPLETED"));
+  if (planningStep) {
     any = true;
     const card = reviewCard("Planning");
     const dl = document.createElement("dl");
@@ -1630,20 +1711,37 @@ function setSceneBusy(frame, on, label) {
 /** A single labelled still (start or end) with a graceful "no image yet" box.
  *  `version` (the still's mtime) is appended as ?v= so a regenerated image
  *  refreshes — and only when it actually changed (poll re-renders stay cached). */
-function stillFrame(seq, label, version) {
+function stillFrame(seq, label, version, hasClip) {
   const frame = document.createElement("div");
   frame.className = "scene-img-frame";
-  const img = document.createElement("img");
-  img.loading = "lazy";
-  img.alt = (label || "Scene") + " " + seq;
   const ph = document.createElement("div");
   ph.className = "scene-img-ph";
-  ph.textContent = "no image yet";
+  ph.textContent = hasClip ? "clip laden…" : "no image yet";
   ph.style.display = "none";
-  img.onload = () => { img.style.display = ""; ph.style.display = "none"; };
-  img.onerror = () => { img.style.display = "none"; ph.style.display = "flex"; };
-  img.src = `/review/images/${encodeURIComponent(id)}/file/${seq}.png`
-          + (version ? `?v=${version}` : "");
+  let img;
+  if (hasClip) {
+    // Frame UIT de geïmporteerde clip (Auke): toon een echt beeld uit het
+    // filmpje i.p.v. de AI-gegenereerde still. Een <video> met media-fragment
+    // #t=0.5 schildert het frame op ~0,5s als statische poster (geen autoplay,
+    // geen JS-seek). preload=metadata houdt het licht voor alle scènes tegelijk.
+    img = document.createElement("video");
+    img.muted = true;
+    img.playsInline = true;
+    img.setAttribute("playsinline", "");
+    img.preload = "metadata";
+    img.alt = (label || "Scene") + " " + seq;
+    img.onloadeddata = () => { img.style.display = ""; ph.style.display = "none"; };
+    img.onerror = () => { img.style.display = "none"; ph.style.display = "flex"; };
+    img.src = `/dashboard/${encodeURIComponent(id)}/scene/${seq}/clip.mp4#t=0.5`;
+  } else {
+    img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = (label || "Scene") + " " + seq;
+    img.onload = () => { img.style.display = ""; ph.style.display = "none"; };
+    img.onerror = () => { img.style.display = "none"; ph.style.display = "flex"; };
+    img.src = `/review/images/${encodeURIComponent(id)}/file/${seq}.png`
+            + (version ? `?v=${version}` : "");
+  }
   frame.appendChild(img);
   frame.appendChild(ph);
   if (label) {
@@ -1663,7 +1761,7 @@ function stillFrame(seq, label, version) {
  * Returns { frame, img } where img is the START still (for cache-busting on regen).
  */
 function sceneImage(s) {
-  const start = stillFrame(s.seq, null, s.imageVersion);
+  const start = stillFrame(s.seq, null, s.imageVersion, s.hasClip);
   return { frame: start.frame, img: start.img };
 }
 
@@ -2080,15 +2178,627 @@ function scenePromptsBar(scenes) {
 
 // One row per scene: script (dialogue + visual description) on the LEFT,
 // the scene image (or placeholder) + per-scene actions on the RIGHT.
+// Slugify a scene goal into the file-/label-safe token used in the
+// "scene-<seq>-<title>" naming: lowercase, accent-stripped, hyphen-separated,
+// capped to 6 words so filenames stay sane. Empty goal → "".
+function slugifyGoal(goal) {
+  if (!goal) return "";
+  return String(goal)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .split("-").filter(Boolean).slice(0, 6).join("-");
+}
+
+// Read-only: surface the HERO OBJECTS the compiler injected into the Veo prompt
+// (the "KEY OBJECT — NAME ( … ) / Current state: X" block). No backend call — we
+// parse what is already present in s.veoPrompt. Returns [{name, state}].
+function keyObjectsFromPrompt(veoPrompt) {
+  const out = [];
+  if (!veoPrompt) return out;
+  const lines = String(veoPrompt).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^KEY OBJECT\s*[—-]\s*(.+?)\s*\(/);
+    if (!m) continue;
+    let state = "";
+    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+      const sm = lines[j].match(/Current state:\s*([^.]+)/i);
+      if (sm) { state = sm[1].trim(); break; }
+    }
+    out.push({ name: m[1].trim(), state });
+  }
+  return out;
+}
+
+// Compact overview line: which hero objects appear, and in how many scenes.
+// Empty (no element) when the episode has none, so it never adds clutter.
+function keyObjectsSummary(scenes) {
+  const wrap = document.createElement("div");
+  const counts = {};
+  for (const s of (scenes || [])) {
+    for (const o of keyObjectsFromPrompt(s.veoPrompt)) {
+      counts[o.name] = (counts[o.name] || 0) + 1;
+    }
+  }
+  const names = Object.keys(counts);
+  if (!names.length) return wrap;
+  wrap.className = "small";
+  wrap.style.cssText = "margin:4px 0 8px;padding:6px 8px;border-left:3px solid #1f7a4d;" +
+      "background:rgba(31,122,77,.06);border-radius:4px";
+  wrap.textContent = "📦 Belangrijke objecten: " +
+      names.map(n => n + " (" + counts[n] + " scène" + (counts[n] === 1 ? "" : "s") + ")").join(" · ");
+  return wrap;
+}
+
+// 🎞 Film-rol — alle scènes als een horizontale strook miniaturen, met tussen
+// elke twee scènes een +-knop om de overgang te kiezen. Read-only thumbnails;
+// de overgang slaat op via /scenes/{seq}/transition (zichtbaar na Re-assemble).
+const TRANSITION_OPTS = [
+  ["", "(phase-default)"], ["cut", "cut (harde snit)"], ["fade", "crossfade"],
+  ["fadeblack", "fade → zwart"], ["fadewhite", "fade → wit"], ["dissolve", "dissolve"],
+  ["wipeleft", "wipe ←"], ["wiperight", "wipe →"], ["wipeup", "wipe ↑"], ["wipedown", "wipe ↓"],
+  ["slideleft", "slide ←"], ["slideright", "slide →"], ["circleopen", "circle open"],
+  ["circleclose", "circle close"], ["zoomin", "zoom in"], ["pixelize", "pixelize"], ["radial", "radial"]];
+
+// Grootte van de filmrol-miniaturen (Auke: groter + scrubbaar). 16:9.
+const REEL_W = 260, REEL_H = 146;
+const REEL_CLIP = 10;       // Omni-clips zijn 10s
+const REEL_MINLEN = 1;      // backend-minimum scènelengte
+
+function reelFrame(s) {
+  const f = document.createElement("div");
+  f.style.cssText = `flex:0 0 auto;width:${REEL_W}px;text-align:center`;
+
+  let media, video = null;
+  if (s.hasClip) {
+    video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.preload = "metadata";
+    video.src = `/dashboard/${encodeURIComponent(id)}/scene/${s.seq}/clip.mp4#t=0.1`;
+    media = video;
+  } else {
+    media = document.createElement("img");
+    media.src = `/review/images/${encodeURIComponent(id)}/file/${s.seq}.png`
+              + (s.imageVersion ? `?v=${s.imageVersion}` : "");
+  }
+  media.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;background:#222";
+  media.onerror = () => { media.style.visibility = "hidden"; };
+
+  // Houder = de filmcel. Trim-handvatten + dim-overlays liggen hier ÓP het beeld;
+  // de tijd-badge toont waar in de clip je staat tijdens slepen.
+  const holder = document.createElement("div");
+  holder.style.cssText = `position:relative;width:${REEL_W}px;height:${REEL_H}px;` +
+      "border-radius:6px;overflow:hidden;border:2px solid rgba(255,255,255,.12);background:#222";
+  const tBadge = document.createElement("div");
+  tBadge.style.cssText = "position:absolute;left:50%;top:6px;transform:translateX(-50%);" +
+      "background:rgba(0,0,0,.7);color:#fff;font:600 11px/1.5 ui-monospace,monospace;" +
+      "padding:1px 6px;border-radius:4px;pointer-events:none;display:none;z-index:3";
+  holder.append(media, tBadge);
+
+  const cap = document.createElement("div");
+  cap.className = "small";
+  cap.style.cssText = `margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:${REEL_W}px`;
+  const slug = slugifyGoal(s.goal);
+  cap.textContent = "scene-" + s.seq + (slug ? "-" + slug : "");
+  cap.title = cap.textContent;
+
+  // Bij een clip: trim-handvatten op het beeld + readout/opslaan eronder.
+  if (s.hasClip) {
+    f.append(holder, cap, reelTrim(s, video, tBadge, holder));
+  } else {
+    f.append(holder, cap);
+  }
+  return f;
+}
+
+// ✂️ Inkorten ÓP de afbeelding: een handvat aan de LINKERkant (in-punt) en aan de
+// RECHTERkant (uit-punt). Slepen scrubt live het video-frame (tijd-badge toont waar
+// je staat) en dimt het weggesneden stuk. Onder het beeld de readout + "✓ opslaan".
+function reelTrim(s, video, tBadge, holder) {
+  const W = REEL_W, CLIP = REEL_CLIP, MINLEN = REEL_MINLEN;
+  let inV = Math.min(CLIP - MINLEN, Math.max(0, +(s.trimStartSeconds || 0)));
+  let outV = Math.max(inV + MINLEN, Math.min(CLIP, +(s.trimEndSeconds || CLIP)));
+  const fmt = (v) => v.toFixed(1);
+  const xOf = (t) => (t / CLIP) * W;
+  const tOf = (x) => Math.max(0, Math.min(CLIP, (x / W) * CLIP));
+
+  const dimCss = "position:absolute;top:0;bottom:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:1";
+  const leftDim = document.createElement("div");  leftDim.style.cssText = dimCss + ";left:0";
+  const rightDim = document.createElement("div"); rightDim.style.cssText = dimCss + ";right:0";
+  const handleCss = "position:absolute;top:0;bottom:0;width:12px;background:#f0b010;cursor:ew-resize;" +
+      "z-index:2;touch-action:none;display:flex;align-items:center;justify-content:center;" +
+      "box-shadow:0 0 0 1px rgba(0,0,0,.45);color:#000;font:700 11px/1 sans-serif";
+  const leftH = document.createElement("div");  leftH.style.cssText = handleCss;  leftH.textContent = "⟨";
+  const rightH = document.createElement("div"); rightH.style.cssText = handleCss; rightH.textContent = "⟩";
+  leftH.title = "in-punt — sleep om in te korten en door de clip te scrubben";
+  rightH.title = "uit-punt — sleep om in te korten en door de clip te scrubben";
+  holder.append(leftDim, rightDim, leftH, rightH);
+
+  const layout = () => {
+    leftDim.style.width = xOf(inV) + "px";
+    rightDim.style.width = (W - xOf(outV)) + "px";
+    leftH.style.left = (xOf(inV) - 6) + "px";
+    rightH.style.left = (xOf(outV) - 6) + "px";
+  };
+
+  // Live scrub (seek-coalescing: snel slepen verstopt de speler niet).
+  let pending = null;
+  const scrubTo = (t) => {
+    if (!video) return;
+    if (tBadge) { tBadge.style.display = "block"; tBadge.textContent = fmt(t) + "s"; }
+    if (video.readyState < 1) {
+      video.addEventListener("loadedmetadata", () => { try { video.currentTime = t; } catch (e) {} }, { once: true });
+      return;
+    }
+    if (video.seeking) { pending = t; return; }
+    try { video.currentTime = t; } catch (e) {}
+  };
+  if (video) video.addEventListener("seeked", () => {
+    if (pending != null) { const t = pending; pending = null; try { video.currentTime = t; } catch (e) {} }
+  });
+
+  const read = document.createElement("div");
+  read.className = "small";
+  read.style.cssText = "white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11px;margin-top:3px";
+  const sync = () => { read.textContent = `✂ ${fmt(inV)}–${fmt(outV)}s (${fmt(outV - inV)}s)`; };
+
+  const startDrag = (handle, which) => {
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      const rect = holder.getBoundingClientRect();
+      const move = (ev) => {
+        let t = tOf(ev.clientX - rect.left);
+        if (which === "in")  inV = Math.max(0, Math.min(t, outV - MINLEN));
+        else                 outV = Math.min(CLIP, Math.max(t, inV + MINLEN));
+        layout(); scrubTo(which === "in" ? inV : outV); sync();
+      };
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
+  };
+  startDrag(leftH, "in");
+  startDrag(rightH, "out");
+  layout();
+  sync();
+
+  const box = document.createElement("div");
+  box.style.cssText = `width:${W}px;display:flex;flex-direction:column;align-items:center;gap:2px`;
+  const apply = sceneBtn("✓ Inkorten opslaan", "Inkorting opslaan (zichtbaar na Re-assemble)", async () => {
+    const startSec = +inV.toFixed(1), endSec = +outV.toFixed(1);
+    await api.post(`/api/v1/videos/${id}/scenes/${s.seq}/trim`,
+      { startSec, endSec }, { key: `trim-${s.seq}` });
+    toast(`Scène ${s.seq} ingekort naar ${fmt(inV)}-${fmt(outV)}s. Druk op Re-assemble om het toe te passen.`, "info");
+    loadScenes();
+  });
+  apply.style.cssText += ";margin-top:2px";
+  box.append(read, apply);
+  return box;
+}
+
+// Nog-niet-opgeslagen overgangskeuzes (Auke: één save-knop i.p.v. per stuk).
+// seq → {type, seconds}. Blijft over een poll heen bewaard (module-scope); de
+// "Overgangen opslaan"-knop bovenaan de filmrol schrijft alles in één keer weg.
+const pendingTransitions = new Map();
+let transitionsSaveBtn = null;
+let lastScenesArr = null;   // laatste scènes (voor een gerichte filmrol-herteken)
+// Bumper-overgangen (intro → scène 1 en laatste scène → outro). De bumpers
+// hebben geen scène-nummer, dus die overgangen leven los van pendingTransitions.
+// Worden direct gepersisteerd (POST /bumper-transition) en renderen in de
+// assemblage (Concatenator); de preview-speler simuleert ze mee.
+const bumperTransitions = { intro: { type: "", seconds: 0.3 }, outro: { type: "", seconds: 0.3 } };
+
+function updateTransitionsSaveBar() {
+  if (!transitionsSaveBtn) return;
+  const n = pendingTransitions.size;
+  transitionsSaveBtn.textContent = n ? `💾 Overgangen opslaan (${n})` : "💾 Overgangen opslaan";
+  transitionsSaveBtn.disabled = n === 0;
+  transitionsSaveBtn.style.opacity = n ? "1" : ".5";
+}
+
+// Regel boven de filmrol: één overgang + duur voor de HELE film instellen, plus
+// de ene save-knop die alle (globale én per-scène) keuzes wegschrijft.
+function transitionsSaveBar(scenes) {
+  const bar = document.createElement("div");
+  bar.style.cssText = "margin:4px 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+
+  // ── Hele film: dezelfde overgang + duur op elke grens tussen scènes ──
+  const allLbl = document.createElement("span");
+  allLbl.className = "small";
+  allLbl.style.fontWeight = "600";
+  allLbl.textContent = "Hele film:";
+  const allSel = document.createElement("select");
+  allSel.className = "scene-model-sel";
+  allSel.title = "Overgang voor alle scènes";
+  for (const [v, l] of TRANSITION_OPTS) allSel.appendChild(new Option(l, v));
+  const allSec = document.createElement("input");
+  allSec.type = "number"; allSec.min = "0.05"; allSec.max = "1.5"; allSec.step = "0.05";
+  allSec.value = "0.3"; allSec.style.width = "54px";
+  allSec.title = "duur (s) voor alle overgangen";
+  const allBtn = document.createElement("button");
+  allBtn.className = "btn sm";
+  allBtn.textContent = "Toepassen op alle scènes";
+  allBtn.title = "Zet deze overgang + duur op elke grens tussen scènes; daarna opslaan met de knop hiernaast";
+  allBtn.addEventListener("click", () => {
+    const type = allSel.value;
+    const seconds = parseFloat(allSec.value) || 0.3;
+    const bnds = (scenes || []).slice(1);   // grenzen tussen scènes (bumpers hebben eigen +)
+    for (const s of bnds) pendingTransitions.set(s.seq, { type, seconds });
+    updateTransitionsSaveBar();
+    renderMontageSection(lastScenesArr);     // herteken zodat elke + de keuze toont
+    toast(`Overgang "${type || "(geen)"}" ${seconds}s op alle ${bnds.length} grenzen gezet — klik nu Opslaan.`, "info");
+  });
+
+  const spacer = document.createElement("span");
+  spacer.style.cssText = "margin-left:auto";
+
+  // ── Save-knop: schrijft alle onthouden overgangen ineens weg ──
+  const btn = document.createElement("button");
+  btn.className = "btn sm approve";
+  btn.title = "Slaat alle gekozen overgangen in één keer op (zichtbaar na Re-assemble)";
+  btn.addEventListener("click", async () => {
+    if (!pendingTransitions.size) return;
+    btn.disabled = true;
+    const entries = [...pendingTransitions.entries()];
+    try {
+      for (const [seq, t] of entries) {
+        await api.post(`/api/v1/videos/${id}/scenes/${seq}/transition`,
+          t.type ? { type: t.type, seconds: t.seconds } : { type: "" },
+          { key: `transition-${seq}` });
+      }
+      pendingTransitions.clear();
+      toast(`${entries.length} overgang(en) opgeslagen. Druk op Re-assemble om toe te passen.`, "info");
+      loadScenes();
+    } catch (e) { btn.disabled = false; /* api.js toasted */ }
+  });
+  transitionsSaveBtn = btn;
+
+  bar.append(allLbl, allSel, allSec, allBtn, spacer, btn);
+  updateTransitionsSaveBar();
+  return bar;
+}
+
+// De +-knop op de grens VÓÓR `scene` (de overgang ernaartoe). Klikken opent een
+// picker (type + duur); "OK" onthoudt de keuze lokaal — opslaan doe je met de
+// ene knop bovenaan de filmrol.
+function transitionPlus(scene) {
+  const seq = scene.seq;
+  const cur = pendingTransitions.has(seq)
+      ? { ...pendingTransitions.get(seq) }
+      : { type: scene.transitionType || "", seconds: scene.transitionSeconds || 0.3 };
+  const btn = document.createElement("button");
+  btn.className = "btn sm";
+  // Verticaal in het midden van de afbeeldingen.
+  const midTop = Math.round(REEL_H / 2) - 13;
+  btn.style.cssText = `flex:0 0 auto;align-self:flex-start;margin:${midTop}px 1px 0;min-width:28px`;
+  const refreshLabel = () => {
+    const pending = pendingTransitions.has(seq);
+    btn.textContent = (cur.type ? "⇄" : "+") + (pending ? "•" : "");
+    btn.title = cur.type
+        ? `Overgang: ${cur.type}${cur.seconds ? " " + cur.seconds + "s" : ""}`
+          + (pending ? " (nog niet opgeslagen)" : "") + " — klik om te wijzigen"
+        : "Kies de overgang tussen deze twee scènes";
+  };
+  refreshLabel();
+  btn.addEventListener("click", () => {
+    const box = document.createElement("span");
+    box.style.cssText = `display:inline-flex;align-items:center;gap:3px;align-self:flex-start;margin-top:${midTop - 4}px`;
+    const sel = document.createElement("select");
+    sel.className = "scene-model-sel";
+    for (const [v, l] of TRANSITION_OPTS) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = l;
+      if (v === cur.type) o.selected = true;
+      sel.appendChild(o);
+    }
+    const sec = document.createElement("input");
+    sec.type = "number"; sec.min = "0.05"; sec.max = "1.5"; sec.step = "0.05";
+    sec.style.width = "54px"; sec.title = "duur (s)";
+    sec.value = cur.seconds || 0.3;
+    const ok = document.createElement("button");
+    ok.className = "btn sm";
+    ok.textContent = "OK";
+    ok.title = "Onthoud deze overgang — opslaan met de knop bovenaan de filmrol";
+    ok.addEventListener("click", () => {
+      cur.type = sel.value;
+      cur.seconds = parseFloat(sec.value) || 0.3;
+      pendingTransitions.set(seq, { type: cur.type, seconds: cur.seconds });
+      updateTransitionsSaveBar();
+      box.replaceWith(btn);
+      refreshLabel();
+    });
+    box.append(sel, sec, ok);
+    btn.replaceWith(box);
+  });
+  return btn;
+}
+
+// Overgang-+ op een bumper-grens (intro → scène 1, of laatste scène → outro).
+// Slaat op in bumperTransitions[position]; werkt in de preview-speler.
+function bumperTransitionPlus(position) {
+  const cur = bumperTransitions[position];
+  const btn = document.createElement("button");
+  btn.className = "btn sm";
+  const midTop = Math.round(REEL_H / 2) - 13;
+  btn.style.cssText = `flex:0 0 auto;align-self:flex-start;margin:${midTop}px 1px 0;min-width:28px`;
+  const refresh = () => {
+    btn.textContent = cur.type ? "⇄" : "+";
+    btn.title = (position === "intro" ? "Overgang intro → scène 1" : "Overgang laatste scène → outro")
+        + (cur.type ? `: ${cur.type} ${cur.seconds}s` : "");
+  };
+  refresh();
+  btn.addEventListener("click", () => {
+    const box = document.createElement("span");
+    box.style.cssText = `display:inline-flex;align-items:center;gap:3px;align-self:flex-start;margin-top:${midTop - 4}px`;
+    const sel = document.createElement("select");
+    sel.className = "scene-model-sel";
+    for (const [v, l] of TRANSITION_OPTS) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = l;
+      if (v === cur.type) o.selected = true;
+      sel.appendChild(o);
+    }
+    const sec = document.createElement("input");
+    sec.type = "number"; sec.min = "0.05"; sec.max = "1.5"; sec.step = "0.05";
+    sec.style.width = "54px"; sec.title = "duur (s)";
+    sec.value = cur.seconds || 0.3;
+    const ok = document.createElement("button");
+    ok.className = "btn sm"; ok.textContent = "OK";
+    ok.addEventListener("click", async () => {
+      cur.type = sel.value; cur.seconds = parseFloat(sec.value) || 0.3;
+      box.replaceWith(btn); refresh();
+      // Persisteer op de job (wordt toegepast bij de (re)assemblage); de preview
+      // gebruikt de lokale bumperTransitions-state.
+      try {
+        await api.post(`/api/v1/videos/${id}/bumper-transition`,
+          { position, type: cur.type, seconds: cur.seconds }, { key: `bumper-${position}` });
+        toast(`Overgang ${position === "intro" ? "intro → scène 1" : "laatste scène → outro"} opgeslagen. Druk op Re-assemble om toe te passen.`, "info");
+      } catch (e) { /* api.js toasted */ }
+    });
+    box.append(sel, sec, ok);
+    btn.replaceWith(box);
+  });
+  return btn;
+}
+
+// Vaste brand-bumper (intro/outro) als eerste/laatste frame in de filmrol —
+// read-only context (geen trim/overgang). Toont een frame uit bible/intro.mp4
+// resp. outro.mp4; ontbreekt de clip, dan een nette placeholder.
+function bumperFrame(kind) {
+  const isIntro = kind === "intro";
+  const f = document.createElement("div");
+  f.style.cssText = `flex:0 0 auto;width:${REEL_W}px;text-align:center`;
+  const holder = document.createElement("div");
+  holder.style.cssText = `position:relative;width:${REEL_W}px;height:${REEL_H}px;border-radius:6px;` +
+      "overflow:hidden;border:2px solid rgba(240,176,16,.5);background:#1a1a1d";
+  const v = document.createElement("video");
+  v.muted = true; v.playsInline = true; v.setAttribute("playsinline", "");
+  v.preload = "metadata";
+  v.src = `/api/v1/${kind}/current.mp4#t=0.5`;
+  v.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;background:#1a1a1d";
+  v.onerror = () => {
+    v.style.display = "none";
+    const ph = document.createElement("div");
+    ph.textContent = (isIntro ? "Intro" : "Outro") + " — geen clip";
+    ph.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px";
+    holder.appendChild(ph);
+  };
+  const tag = document.createElement("div");
+  tag.textContent = isIntro ? "▶ INTRO" : "OUTRO ⏹";
+  tag.style.cssText = "position:absolute;left:50%;bottom:6px;transform:translateX(-50%);" +
+      "background:rgba(0,0,0,.72);color:#f0b010;font:700 11px/1.5 sans-serif;padding:1px 8px;border-radius:4px";
+  holder.append(v, tag);
+  const cap = document.createElement("div");
+  cap.className = "small";
+  cap.style.cssText = `margin-top:3px;width:${REEL_W}px;font-weight:600;color:var(--muted,#888)`;
+  cap.textContent = isIntro ? "Intro (vast)" : "Outro (vast)";
+  f.append(holder, cap);
+  return f;
+}
+
+// ▶ Speel de hele film in een nieuw venster: intro → alle scènes (mét hun
+// inkortingen) → outro, achter elkaar, met een GESIMULEERDE overgang tussen de
+// clips (korte fade; "cut" = harde snit, "fadewhite" flitst wit, rest fade door
+// zwart, met de ingestelde duur). De echte ffmpeg-overgangen + muziek komen pas
+// bij het assembleren — dit is een benadering om de cut te kunnen beoordelen.
+function playWholeFilm(scenes) {
+  const transOf = (s) => pendingTransitions.has(s.seq)
+      ? pendingTransitions.get(s.seq)
+      : { type: s.transitionType || "", seconds: s.transitionSeconds || 0 };
+  const playlist = [{ src: "/api/v1/intro/current.mp4", label: "Intro", trans: null }];
+  (scenes || []).forEach((s, idx) => {
+    const start = +(s.trimStartSeconds || 0);
+    const end = s.trimEndSeconds != null && s.trimEndSeconds !== "" ? +s.trimEndSeconds : null;
+    // Overgang NAAR deze scène: voor scène 1 de bumper-overgang (intro → scène 1),
+    // daarna de gewone tussen-scène-overgang.
+    const t = idx === 0 ? bumperTransitions.intro : transOf(s);
+    playlist.push({
+      src: `/dashboard/${encodeURIComponent(id)}/scene/${s.seq}/clip.mp4`,
+      start, end, label: "Scène " + s.seq,
+      trans: { type: t.type || "", seconds: +(t.seconds || 0.3) }
+    });
+  });
+  playlist.push({
+    src: "/api/v1/outro/current.mp4", label: "Outro",
+    trans: { type: bumperTransitions.outro.type || "", seconds: +(bumperTransitions.outro.seconds || 0.3) }
+  });
+
+  const w = window.open("", "_blank");
+  if (!w) { toast("Pop-up geblokkeerd — sta pop-ups toe voor deze pagina", "error"); return; }
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hele film — preview</title>'
+    + '<style>html,body{margin:0;height:100%;background:#000;color:#ccc;'
+    + 'font:13px system-ui,sans-serif}body{display:flex;flex-direction:column}'
+    + '.stage{position:relative;flex:1;min-height:0}'
+    + 'video{position:absolute;inset:0;width:100%;height:100%;background:#000}'
+    + '#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}'
+    + '.bar{padding:6px 12px;display:flex;gap:14px;align-items:center}'
+    + '.note{color:#888}</style></head><body>'
+    + '<div class="stage"><video id="v" controls autoplay playsinline></video><div id="fade"></div></div>'
+    + '<div class="bar"><b id="lbl"></b>'
+    + '<span class="note">Preview — volgorde, inkortingen &amp; <i>gesimuleerde</i> overgangen; echte overgangen + muziek pas na assembleren.</span></div>'
+    + '<script>'
+    + 'var PL=' + JSON.stringify(playlist) + ';'
+    + 'var v=document.getElementById("v"),fade=document.getElementById("fade"),lbl=document.getElementById("lbl"),i=0;'
+    + 'function fadeColor(t){return (t&&/white/.test(t.type))?"#fff":"#000";}'
+    + 'function dur(t){return t&&t.type&&t.type!=="cut"?Math.max(0.1,Math.min(1.5,t.seconds||0.3)):0;}'
+    // Fade het huidige beeld uit (kleur o.b.v. de overgang van het VOLGENDE segment), wissel, fade in.
+    + 'function nx(){var nt=PL[i+1]?PL[i+1].trans:null;var d=dur(nt);'
+    + 'if(d<=0){i++;load();return;}'
+    + 'fade.style.background=fadeColor(nt);fade.style.transition="opacity "+(d/2)+"s";fade.style.opacity="1";'
+    + 'setTimeout(function(){i++;load(true);setTimeout(function(){fade.style.opacity="0";},30);},d*500);}'
+    + 'function load(fadingIn){if(i>=PL.length){lbl.textContent="Einde";try{v.pause();}catch(e){}v.removeAttribute("src");return;}'
+    + 'var p=PL[i];lbl.textContent=(i+1)+"/"+PL.length+" \\u00b7 "+p.label;'
+    + 'v.src=p.src;v.load();'
+    + 'v.onloadedmetadata=function(){if(p.start){try{v.currentTime=p.start;}catch(e){}}v.play().catch(function(){});};'
+    + 'v.ontimeupdate=function(){if(p.end!=null&&v.currentTime>=p.end){v.ontimeupdate=null;nx();}};'
+    + 'v.onended=function(){nx();};v.onerror=function(){i++;load();};}'
+    + 'load();'
+    + '<\/script></body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+function filmReel(scenes) {
+  const wrap = document.createElement("div");
+  if (!scenes || !scenes.length) return wrap;
+  const titleRow = document.createElement("div");
+  titleRow.style.cssText = "display:flex;align-items:flex-start;gap:10px;margin:6px 0 2px";
+  const title = document.createElement("div");
+  title.className = "small";
+  title.style.cssText = "font-weight:600;flex:1";
+  title.textContent = "🎞 Film-rol — vaste intro/outro vooraan en achteraan; kort scènes in met de handvatten op het beeld (links = begin, rechts = eind), kies met de + tussen de beelden de overgang (een • = nog niet opgeslagen) en sla ze samen op met de knop hieronder";
+  const playBtn = document.createElement("button");
+  playBtn.className = "btn sm";
+  playBtn.style.cssText = "flex:0 0 auto;white-space:nowrap";
+  playBtn.textContent = "▶ Speel hele film ⧉";
+  playBtn.title = "Speelt intro → alle scènes (met inkortingen) → outro achter elkaar af in een nieuw venster. Ruwe preview; overgangen en muziek komen er pas bij het assembleren in.";
+  playBtn.addEventListener("click", () => playWholeFilm(scenes));
+  titleRow.append(title, playBtn);
+  const reel = document.createElement("div");
+  reel.className = "film-reel";   // filmstrip-look (perforaties) staat in dashboard.css
+  reel.appendChild(bumperFrame("intro"));            // vaste intro vooraan
+  reel.appendChild(bumperTransitionPlus("intro"));   // intro → scène 1
+  scenes.forEach((s, idx) => {
+    if (idx > 0) reel.appendChild(transitionPlus(s));   // grens tussen scènes
+    reel.appendChild(reelFrame(s));
+  });
+  reel.appendChild(bumperTransitionPlus("outro"));   // laatste scène → outro
+  reel.appendChild(bumperFrame("outro"));            // vaste outro achteraan
+  wrap.append(titleRow, transitionsSaveBar(scenes), reel);   // titel + play, hele-film-instelling + save, filmrol
+  return wrap;
+}
+
+// 💬 Stabiele kleur per spreker — hetzelfde personage krijgt altijd dezelfde
+// tint, zodat je in het gespreksblok in één oogopslag ziet wie aan het woord is.
+const SPEAKER_COLORS = ["#2f7ad4", "#d9700f", "#1f7a4d", "#a23bb5",
+  "#c0392b", "#0d8b8b", "#b8860b", "#6b6bd6"];
+function speakerColor(name) {
+  const n = (name || "?").trim().toLowerCase();
+  let h = 0;
+  for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+  return SPEAKER_COLORS[h % SPEAKER_COLORS.length];
+}
+
+// ── Montage-paneel (Auke): aparte montage-stap vóór de assemblage. Verschijnt
+// alleen als de job bij de montage-gate staat (MONTAGE_REVIEW_PENDING). Bundelt
+// de achtergrondmuziek-keuze (met preview) en de "Assembleren"-actie; de
+// volgorde, het knippen/trimmen en de overgangen doe je per scène hieronder
+// (film-rol + de in/uit-schuifjes en het +-overgangsmenu).
+function montagePanel() {
+  if (!lastJob || lastJob.status !== "MONTAGE_REVIEW_PENDING") return null;
+  const panel = document.createElement("div");
+  panel.className = "card";
+  panel.style.cssText = "border:1px solid var(--warning,#f59e0b);border-radius:10px;" +
+    "padding:12px 14px;margin:4px 0 12px;background:rgba(245,158,11,.06)";
+
+  const h = document.createElement("div");
+  h.style.cssText = "font-weight:700;font-size:15px;margin-bottom:4px";
+  h.textContent = "🎬 Montage";
+  panel.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.style.cssText = "font-size:12px;color:var(--muted,#888);margin-bottom:10px";
+  sub.textContent = "Zet de scènes op volgorde, knip/trim de in- en uitpunten en kies de "
+    + "overgangen (hieronder per scène). Kies hier de achtergrondmuziek en assembleer.";
+  panel.appendChild(sub);
+
+  // Achtergrondmuziek met preview — leest de job-scoped library (toont de
+  // huidige keuze, speelt een fragment af vóór je kiest).
+  const musicRow = document.createElement("div");
+  musicRow.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap";
+  const lbl = document.createElement("span");
+  lbl.style.cssText = "font-size:13px";
+  lbl.textContent = "🎵 Achtergrondmuziek:";
+  const sel = document.createElement("select");
+  sel.className = "btn";
+  const audio = new Audio();
+  const preview = document.createElement("button");
+  preview.className = "btn sm";
+  preview.textContent = "▶ Preview";
+  preview.title = "Speel een fragment van de gekozen track";
+  let playing = false;
+  preview.addEventListener("click", () => {
+    if (!sel.value) { toast("Kies eerst een track", "error"); return; }
+    if (playing) { audio.pause(); audio.currentTime = 0; playing = false; preview.textContent = "▶ Preview"; return; }
+    audio.src = `/dashboard/music/${encodeURIComponent(sel.value)}.mp3`;
+    audio.play().then(() => { playing = true; preview.textContent = "⏹ Stop"; }).catch(() => {});
+  });
+  audio.addEventListener("ended", () => { playing = false; preview.textContent = "▶ Preview"; });
+  const apply = document.createElement("button");
+  apply.className = "btn sm";
+  apply.textContent = "Toepassen";
+  apply.addEventListener("click", async () => {
+    if (!sel.value) { toast("Kies eerst een track", "error"); return; }
+    apply.disabled = true;
+    try {
+      await api.post(`/api/v1/videos/${id}/music`, { trackId: sel.value }, { key: "montage-music" });
+      toast(`Muziek → ${sel.value}`, "info");
+    } catch (e) { /* api.js toasted */ }
+    finally { apply.disabled = false; }
+  });
+  api.get(`/api/v1/videos/${id}/music`, { key: "montage-music-list" }).then(data => {
+    sel.replaceChildren(new Option("— kies een track —", ""));
+    for (const t of (data.tracks || [])) {
+      const o = new Option(`${t.name} · ${t.mood}`, t.id);
+      if (t.selected) o.selected = true;
+      sel.appendChild(o);
+    }
+  }).catch(() => {});
+  musicRow.append(lbl, sel, preview, apply);
+  panel.appendChild(musicRow);
+
+  // De definitieve "Assembleren" (= approve) zit in de review-gate bovenaan de
+  // pagina; hier alleen een verwijzing zodat er één duidelijke knop is.
+  const note = document.createElement("div");
+  note.style.cssText = "font-size:12px;color:var(--muted,#888);margin-top:8px";
+  note.textContent = "Klaar? Klik bovenaan ‘Assembleren’ in de review-balk om de master te bouwen.";
+  panel.appendChild(note);
+  return panel;
+}
+
 function renderScenes(scenes) {
   if (!scenes || scenes.length === 0) {
     scenesHost.textContent = "no scenes yet (script not generated)";
+    renderMontageSection(scenes);
     return;
   }
   const list = document.createElement("div");
   list.className = "scene-rows";
+  // Het montage-paneel staat niet meer hier maar in de Montage-sectie
+  // (renderMontageSection), samen met de filmrol.
   list.appendChild(sceneActionsHelp());
   list.appendChild(scenePromptsBar(scenes));
+  list.appendChild(keyObjectsSummary(scenes));
+  // De filmrol staat niet meer hier maar in de eigen Video-sectie (zie
+  // renderVideoReel) — onder de Video-stap.
   for (const s of scenes) {
     const seq = s.seq;
     const row = document.createElement("div");
@@ -2137,26 +2847,66 @@ function renderScenes(scenes) {
     left.className = "scene-text";
     const head = document.createElement("div");
     head.className = "script-head";
-    const bits = ["Scene " + seq];
+    // Scene naming: scene-<seq>-<goal-slug> (this label IS the recommended Flow
+    // clip filename — file the export as "<this>.mp4" and import picks it up).
+    const slug = slugifyGoal(s.goal);
+    const sceneName = "scene-" + seq + (slug ? "-" + slug : "");
+    const bits = [sceneName];
     if (s.durationSeconds) bits.push(s.durationSeconds + "s");
     if (s.phase) bits.push(isHero ? "🌟 " + s.phase : isHumor ? "😄 " + s.phase : s.phase);
     if (s.hasClip) bits.push("🎬");
     if (s.locked) bits.push("🔒");
     head.textContent = bits.join(" · ");
+    head.title = "Aanbevolen clip-bestandsnaam: " + sceneName + ".mp4";
     left.appendChild(head);
+    // 📦 Read-only: hero objects in this scene + their state, parsed from the
+    // compiled Veo prompt (the KEY OBJECT block). Shows which objects matter and
+    // where the egg is in its life cycle, without any editing.
+    const kobs = keyObjectsFromPrompt(s.veoPrompt);
+    if (kobs.length) {
+      const kb = document.createElement("div");
+      kb.className = "small";
+      kb.style.cssText = "margin:2px 0 4px;color:#1f7a4d;font-weight:600";
+      kb.textContent = "📦 Belangrijk object: " +
+          kobs.map(o => o.name + (o.state ? " — " + o.state : "")).join("; ");
+      left.appendChild(kb);
+    }
     // 🛡 QC findings for this scene (filled async by annotateQcFindings).
     const qcSlot = document.createElement("div");
     qcSlot.className = "small";
     qcSlot.dataset.qcSeq = String(seq);
     left.appendChild(qcSlot);
-    for (const l of (s.lines || [])) {
-      const line = document.createElement("div");
-      line.className = "script-line";
-      const sp = document.createElement("b");
-      sp.textContent = (l.speaker || "?") + ": ";
-      line.appendChild(sp);
-      line.appendChild(document.createTextNode(l.text || ""));
-      left.appendChild(line);
+    // 💬 Gesprek — de dialoog van de scène als duidelijk leesbaar blok: per
+    // regel een gekleurde balk + sprekernaam (stabiele kleur per personage, zie
+    // speakerColor) zodat je meteen ziet wie wat zegt.
+    {
+      const lines = s.lines || [];
+      if (lines.length) {
+        const conv = document.createElement("div");
+        conv.className = "scene-conv";
+        conv.style.cssText = "margin:4px 0;padding:6px 8px;border-radius:8px;" +
+            "background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)";
+        const ch = document.createElement("div");
+        ch.className = "small";
+        ch.style.cssText = "font-weight:600;opacity:.7;margin-bottom:4px";
+        ch.textContent = "💬 Gesprek (" + lines.length + " regel" + (lines.length === 1 ? "" : "s") + ")";
+        conv.appendChild(ch);
+        for (const l of lines) {
+          const color = speakerColor(l.speaker);
+          const bubble = document.createElement("div");
+          bubble.className = "script-line";
+          bubble.style.cssText = "display:flex;gap:6px;align-items:baseline;margin:3px 0;" +
+              "padding-left:8px;border-left:3px solid " + color;
+          const sp = document.createElement("span");
+          sp.style.cssText = "font-weight:700;white-space:nowrap;color:" + color;
+          sp.textContent = l.speaker || "?";
+          const tx = document.createElement("span");
+          tx.textContent = l.text || "";
+          bubble.append(sp, tx);
+          conv.appendChild(bubble);
+        }
+        left.appendChild(conv);
+      }
     }
     if (s.visualDesc) {
       const vd = document.createElement("div");
@@ -2330,14 +3080,55 @@ function renderScenes(scenes) {
         ? "Ontgrendel deze scène zodat QC / auto-fix 'm weer mag aanpassen."
         : "Vergrendel deze scène zodat QC / auto-fix 'm met rust laat.",
       async () => { await P(s.locked ? "unlock" : "lock"); loadScenes(); }));
+    // ✂️ Inkorten — kies een in- en uit-punt binnen de 10s-clip met twee schuifjes.
+    // "Toepassen" slaat op via /trim; zichtbaar in de film na Re-assemble.
+    {
+      const CLIP = 10;                       // Omni-clips zijn 10s
+      let inV = Math.min(CLIP - 2, Math.max(0, Math.round(s.trimStartSeconds || 0)));
+      let outV = Math.max(inV + 2, Math.min(CLIP, Math.round(s.trimEndSeconds || CLIP)));
+      const wrap = document.createElement("div");
+      wrap.className = "scene-trim small";
+      wrap.style.cssText = "display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px";
+      const lbl = document.createElement("span");
+      lbl.textContent = "✂️ Inkorten:";
+      const inR = document.createElement("input");
+      inR.type = "range"; inR.min = "0"; inR.max = String(CLIP); inR.step = "1";
+      inR.value = String(inV); inR.title = "in-punt"; inR.style.width = "90px";
+      const outR = document.createElement("input");
+      outR.type = "range"; outR.min = "0"; outR.max = String(CLIP); outR.step = "1";
+      outR.value = String(outV); outR.title = "uit-punt"; outR.style.width = "90px";
+      const read = document.createElement("span");
+      read.style.cssText = "min-width:150px;font-variant-numeric:tabular-nums";
+      const sync = () => { read.textContent = `in ${inV}s · uit ${outV}s · lengte ${outV - inV}s`; };
+      inR.addEventListener("input", () => {
+        inV = parseInt(inR.value, 10);
+        if (inV > outV - 2) { outV = Math.min(CLIP, inV + 2); outR.value = String(outV); }
+        sync();
+      });
+      outR.addEventListener("input", () => {
+        outV = parseInt(outR.value, 10);
+        if (outV < inV + 2) { inV = Math.max(0, outV - 2); inR.value = String(inV); }
+        sync();
+      });
+      sync();
+      const apply = sceneBtn("Toepassen", "Sla het in/uit-punt op (zichtbaar na Re-assemble)",
+        async () => {
+          await P("trim", { startSec: inV, endSec: outV });
+          toast(`Scène ${seq} ingekort naar ${inV}-${outV}s. Druk op Re-assemble om het toe te passen.`, "info");
+          loadScenes();
+        });
+      wrap.append(lbl, inR, read, outR, apply);
+      acts.appendChild(wrap);
+    }
     {
       // Per-scène motion-model (dropdown) + clip maken/vernieuwen. Toont nu
       // óók bij scènes ZONDER clip — zo upgrade je een Ken Burns-fallback
       // (bijv. na een cost-cap-afkapping) alsnog naar een echte clip.
       const modelSel = document.createElement("select");
       modelSel.className = "scene-model-sel";
-      modelSel.title = "Veo-model voor deze re-roll";
-      [["", "Model: Veo Fast (720p, ~€0,10/s)"],
+      modelSel.title = "Model voor deze re-roll";
+      [["googleflow_omni", "Model: GoogleFlow Omni (Flow — handmatige clips)"],
+       ["", "Model: Veo Fast (720p, ~€0,10/s)"],
        ["veo3_1_lite", "Model: Veo Lite (720p, ~€0,05/s)"],
        ["veo3_1", "Model: Veo Premium (1080p, ~€0,40/s)"],
        ["seedance2_fast", "Model: Seedance Fast (fal.ai, ~€0,10/s)"],
@@ -2346,6 +3137,9 @@ function renderScenes(scenes) {
         o.value = v; o.textContent = l;
         modelSel.appendChild(o);
       });
+      // GoogleFlow Omni is de default-keuze (zelfde als het create-formulier) —
+      // direct geselecteerd zodat reroll/maak-clip standaard de Flow-workflow volgt.
+      modelSel.value = "googleflow_omni";
       acts.appendChild(modelSel);
 
       acts.appendChild(sceneItem(s.hasClip ? "🎬 Reroll clip" : "🎬 Maak clip",
@@ -2386,11 +3180,45 @@ function renderScenes(scenes) {
     list.appendChild(row);
   }
   scenesHost.replaceChildren(list);
+  renderMontageSection(scenes);
+}
+
+// De hele montage in één sectie (Auke): het montage-paneel (muziek + actie) bovenaan
+// en daaronder de filmrol (clip-tijdlijn met inkorten + overgangen). Verhuisd uit
+// het scènes-blok zodat alle montage-controls bij de Montage-stap zitten.
+function renderMontageSection(scenes) {
+  if (!montageHost) return;
+  lastScenesArr = scenes;
+  if (!scenes || !scenes.length) { montageHost.textContent = "—"; return; }
+  const wrap = document.createDocumentFragment();
+  const mp = montagePanel();
+  if (mp) wrap.appendChild(mp);
+  wrap.appendChild(filmReel(scenes));
+  montageHost.replaceChildren(wrap);
+}
+
+// STABIEL TUSSEN DE POLLS: de 5s-refresh herbouwde elke tick álle scène-rijen,
+// wat de <img>/<video>-miniaturen liet herladen (zichtbaar geflikker — vooral nu
+// de preview een frame uit de clip is). We renderen alleen opnieuw als de scène-
+// data écht veranderde (zelfde truc als de review-gate). Een geopend trim-/
+// overgang-/muziek-control blijft zo ook staan tijdens een poll.
+let lastScenesSig = null;
+function scenesSignature(scenes) {
+  const st = lastJob ? lastJob.status : "";
+  return st + "|" + (scenes || []).map(s => [
+    s.seq, s.hasClip ? 1 : 0, s.imageVersion || "", s.locked ? 1 : 0,
+    s.trimStartSeconds || 0, s.trimEndSeconds || "", s.transitionType || "",
+    s.transitionSeconds || "", s.hasRejectedClip ? 1 : 0, s.silentBeat ? 1 : 0
+  ].join(",")).join(";");
 }
 
 async function loadScenes() {
   try {
     const scenes = await api.get(`/api/v1/videos/${id}/scenes`, { key: "scenes-" + id });
+    const sig = scenesSignature(scenes);
+    // Ongewijzigd én al getekend → niet opnieuw renderen (geen flikker).
+    if (sig === lastScenesSig && scenesHost.childElementCount > 0) return;
+    lastScenesSig = sig;
     renderScenes(scenes);
     annotateQcFindings();
   } catch (e) {
@@ -2474,18 +3302,25 @@ function markSceneFailed(row, message) {
 // gebruiker staan (de 5s-poll mag die niet overschrijven).
 function applyStepFocus(status) {
   const script = document.getElementById("step-script");
+  const montage = document.getElementById("step-montage");
   const review = document.getElementById("step-review");
   if (!script || !review) return;
   const sig = String(status || "");
   if (document.body.dataset.stepSig === sig) return;
   document.body.dataset.stepSig = sig;
-  const scriptPhases = /^(PENDING|SCRIPT_|ASSETS_|IMAGES_|VEO_)/;
+  // De secties sluiten elkaar uit (Auke): in de scenes-fase de Montage-sectie
+  // helemaal VERBERGEN (niet alleen inklappen) en omgekeerd. Een stap-klik haalt
+  // een verborgen sectie weer tevoorschijn (zie renderStepper). Scenes → toon
+  // alleen Scenes; Montage/Veo → alleen Montage; daarna → alleen Review.
+  const scriptPhases = /^(PENDING|SCRIPT_|ASSETS_|IMAGES_)/;
+  const montagePhases = /^(VEO_|MONTAGE_)/;
+  const show = (el, on) => { if (!el) return; el.style.display = on ? "" : "none"; el.open = on; };
   if (scriptPhases.test(sig)) {
-    script.open = true;
-    review.open = false;
+    show(script, true);  show(montage, false); show(review, false);
+  } else if (montagePhases.test(sig)) {
+    show(script, false); show(montage, true);  show(review, false);
   } else {
-    script.open = false;
-    review.open = true;
+    show(script, false); show(montage, false); show(review, true);
   }
 }
 

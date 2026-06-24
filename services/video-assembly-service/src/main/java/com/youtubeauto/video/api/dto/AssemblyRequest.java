@@ -19,12 +19,23 @@ public record AssemblyRequest(
         boolean burnSubtitles,
         /** Optional video title shown as an animated card on the first
          *  2 seconds of the master. Falls back to "An adventure" if blank. */
-        String title
+        String title,
+        /** Bumper-overgang intro → scène 1: ffmpeg xfade-naam of "cut".
+         *  Null/leeg → de default intro-dissolve. */
+        String introTransitionType,
+        /** Duur van {@link #introTransitionType} in seconden (0,05–1,5). */
+        Double introTransitionSeconds,
+        /** Bumper-overgang laatste scène → outro: xfade-naam of "cut".
+         *  Null/leeg → de default outro-dissolve. */
+        String outroTransitionType,
+        /** Duur van {@link #outroTransitionType} in seconden (0,05–1,5). */
+        Double outroTransitionSeconds
 ) {
     public AssemblyRequest(UUID jobId, UUID scriptId, List<SceneInput> scenes,
                             String bgm, String intro, String outro,
                             Integer w, Integer h, boolean burn) {
-        this(jobId, scriptId, scenes, bgm, intro, outro, w, h, burn, null);
+        this(jobId, scriptId, scenes, bgm, intro, outro, w, h, burn, null,
+                null, null, null, null);
     }
     public record SceneInput(
             @Min(1) int seq,
@@ -61,7 +72,19 @@ public record AssemblyRequest(
             /** Optional per-line voice timing (from the voice-service) — when
              *  present the SRT gets one millisecond-accurate cue per LINE
              *  instead of one whole-scene cue on whole seconds. */
-            List<LineTiming> lineTimings
+            List<LineTiming> lineTimings,
+            /** Optional in-point (seconds) within the clip. The montage seeks here
+             *  with ffmpeg {@code -ss} before reading {@code durationSeconds}
+             *  seconds, so the scene shows the chosen [in, in+duration] window.
+             *  Null/0 → start at 0 (the whole clip, current behaviour). */
+            Double trimStartSeconds,
+            /** Optional user-chosen transition INTO this scene (the boundary before
+             *  it): an ffmpeg xfade name (e.g. "wipeleft") or "cut" for a hard cut.
+             *  Null → the phase-default transition. */
+            String transitionType,
+            /** Length of {@link #transitionType} in seconds (0.05–1.5). Null → a
+             *  per-type default. */
+            Double transitionSeconds
     ) {
         public record LineTiming(String speaker, String text, long startMs, long durMs) {}
     }

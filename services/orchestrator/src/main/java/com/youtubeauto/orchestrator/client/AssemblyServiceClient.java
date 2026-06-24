@@ -44,9 +44,22 @@ public class AssemblyServiceClient {
         this.pollTimeoutMs = pollTimeoutMs;
     }
 
+    /** Voegt de bumper-overgangen (intro/outro) aan de request-body toe als ze
+     *  gezet zijn; leeg laat de assembly-service de default-dissolve gebruiken. */
+    private static void putBumperTransitions(Map<String, Object> body,
+                                             String introType, Double introSec,
+                                             String outroType, Double outroSec) {
+        if (introType != null && !introType.isBlank()) body.put("introTransitionType", introType);
+        if (introSec != null) body.put("introTransitionSeconds", introSec);
+        if (outroType != null && !outroType.isBlank()) body.put("outroTransitionType", outroType);
+        if (outroSec != null) body.put("outroTransitionSeconds", outroSec);
+    }
+
     public JsonNode assemble(UUID jobId, UUID scriptId, List<Map<String, Object>> scenes,
                              String backgroundMusicPath, String introPath, String outroPath,
-                             int width, int height, boolean burnSubtitles, String title) {
+                             int width, int height, boolean burnSubtitles, String title,
+                             String introTransitionType, Double introTransitionSeconds,
+                             String outroTransitionType, Double outroTransitionSeconds) {
         Map<String, Object> body = new HashMap<>();
         body.put("jobId", jobId);
         body.put("scriptId", scriptId);
@@ -58,6 +71,8 @@ public class AssemblyServiceClient {
         body.put("height", height);
         body.put("burnSubtitles", burnSubtitles);
         if (title != null && !title.isBlank()) body.put("title", title);
+        putBumperTransitions(body, introTransitionType, introTransitionSeconds,
+                outroTransitionType, outroTransitionSeconds);
 
         return client.post().uri("/api/v1/assemble")
                 .bodyValue(body)
@@ -80,7 +95,9 @@ public class AssemblyServiceClient {
      */
     public JsonNode assembleAsync(UUID jobId, UUID scriptId, List<Map<String, Object>> scenes,
                                   String backgroundMusicPath, String introPath, String outroPath,
-                                  int width, int height, boolean burnSubtitles, String title) {
+                                  int width, int height, boolean burnSubtitles, String title,
+                                  String introTransitionType, Double introTransitionSeconds,
+                                  String outroTransitionType, Double outroTransitionSeconds) {
         Map<String, Object> body = new HashMap<>();
         body.put("jobId", jobId);
         body.put("scriptId", scriptId);
@@ -92,6 +109,8 @@ public class AssemblyServiceClient {
         body.put("height", height);
         body.put("burnSubtitles", burnSubtitles);
         if (title != null && !title.isBlank()) body.put("title", title);
+        putBumperTransitions(body, introTransitionType, introTransitionSeconds,
+                outroTransitionType, outroTransitionSeconds);
 
         JsonNode submit = client.post().uri("/api/v1/assemble-async")
                 .bodyValue(body)

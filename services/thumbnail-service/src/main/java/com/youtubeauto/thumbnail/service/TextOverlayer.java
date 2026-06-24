@@ -183,56 +183,75 @@ public class TextOverlayer {
     };
 
     /** Grote ALL-CAPS hook-headline met per-letter regenboogkleuren + dikke
-     *  zwarte rand, boven- of onderin. Tot 2 regels; vult ~90% breedte. */
+     *  zwarte rand, gebogen als halve cirkel (koepel, bolt omhoog) — in de
+     *  stijl van het "WHAT'S INSIDE?"-voorbeeld maar dan langs een boog.
+     *  Eén regel; de letters marcheren over de bovenkant van een cirkel.
+     *  (gebogen variant, gebruikerswens 2026-06-24) */
     private void drawRainbowHook(Graphics2D g, String title, int W, int H, boolean top) {
         if (title == null || title.isBlank()) return;
         String text = title.toUpperCase(java.util.Locale.ROOT);
-        int maxWidth = (int) (W * 0.90);
-        Font font = font(fitFontSize(g, text, maxWidth, 2, 64, 150));
-        java.util.List<String> lines = wrap(g, text, font, maxWidth);
+        // De boog mag breder zijn dan het canvas, want hij krult terug naar
+        // binnen — dus een ruime arc-budget voor de font-fit (één regel).
+        int maxArcLen = (int) (W * 1.25);
+        Font font = font(fitFontSize(g, text, maxArcLen, 1, 56, 140));
         FontMetrics fm = g.getFontMetrics(font);
-        int lineH = fm.getHeight();
-        int totalH = lineH * lines.size();
-        int blockTop = top ? (int) (H * 0.05) : H - totalH - (int) (H * 0.06);
-        int y = blockTop + fm.getAscent();
-        for (String line : lines) {
-            int lineW = fm.stringWidth(line);
-            int x = (W - lineW) / 2;
-            drawRainbowLine(g, line, x, y, font, 13f);
-            y += lineH;
-        }
+        int textW = fm.stringWidth(text);
+        if (textW <= 0) return;
+
+        // Zachte koepel: bredere/langere kop = grotere boog-hoek, geklemd zodat
+        // de straal nooit tot een onleesbaar strakke krul samenklapt.
+        double spanAngle = Math.max(0.9, Math.min(1.9, textW / (W * 0.55)));
+        double radius = textW / spanAngle;
+
+        int cx = W / 2;
+        // apexY = baseline van de bovenste (midden) letter; de letterhoogte
+        // komt daarboven uit, dus we schuiven met de ascent mee zodat de kop
+        // binnen de bovenste/onderste reservezone blijft.
+        int apexY = top ? (int) (H * 0.07) + fm.getAscent()
+                        : (int) (H * 0.60) + fm.getAscent();
+        double cy = apexY + radius;
+
+        drawRainbowArcLine(g, text, cx, cy, radius, spanAngle, font, 13f);
     }
 
-    /** Draws one line letter-by-letter, cycling the rainbow palette, each glyph
-     *  with a soft drop shadow + thick black outline (same grammar as
-     *  {@link #drawOutlined} but per-character colours). */
-    private void drawRainbowLine(Graphics2D g, String line, int startX, int baseY,
-                                 Font font, float outlineWidth) {
+    /** Draws one line letter-by-letter along the TOP of a circle (dome arch),
+     *  cycling the rainbow palette, each glyph rotated tangent to the curve
+     *  with a soft drop shadow + thick black outline. */
+    private void drawRainbowArcLine(Graphics2D g, String line, int cx, double cy,
+                                    double radius, double spanAngle, Font font,
+                                    float outlineWidth) {
         g.setFont(font);
         FontRenderContext frc = g.getFontRenderContext();
         FontMetrics fm = g.getFontMetrics(font);
         Stroke oldStroke = g.getStroke();
         Paint oldPaint = g.getPaint();
-        int x = startX;
+
+        double angle = -spanAngle / 2.0;   // leftmost glyph
         int colorIdx = 0;
         for (int i = 0; i < line.length(); i++) {
             String ch = line.substring(i, i + 1);
             int adv = fm.stringWidth(ch);
-            if (ch.isBlank()) { x += adv; colorIdx++; continue; }
-            TextLayout tl = new TextLayout(ch, font, frc);
-            Shape shape = tl.getOutline(AffineTransform.getTranslateInstance(x, baseY));
-            // soft drop shadow
-            g.setColor(new Color(0, 0, 0, 90));
-            g.translate(5, 5); g.fill(shape); g.translate(-5, -5);
-            // thick black outline
-            g.setStroke(new BasicStroke(outlineWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g.setColor(Color.BLACK);
-            g.draw(shape);
-            // rainbow fill
-            g.setColor(RAINBOW[colorIdx % RAINBOW.length]);
-            g.fill(shape);
+            double charAngle = angle + (adv / 2.0) / radius;   // glyph centre
+            if (!ch.isBlank()) {
+                AffineTransform tr = new AffineTransform();
+                tr.translate(cx, cy);               // circle centre
+                tr.rotate(charAngle);               // swing out along the arc
+                tr.translate(-adv / 2.0, -radius);  // ride the rim, centre the glyph
+                TextLayout tl = new TextLayout(ch, font, frc);
+                Shape shape = tl.getOutline(tr);
+                // soft drop shadow
+                g.setColor(new Color(0, 0, 0, 90));
+                g.translate(4, 5); g.fill(shape); g.translate(-4, -5);
+                // thick black outline
+                g.setStroke(new BasicStroke(outlineWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(Color.BLACK);
+                g.draw(shape);
+                // rainbow fill
+                g.setColor(RAINBOW[colorIdx % RAINBOW.length]);
+                g.fill(shape);
+            }
             colorIdx++;
-            x += adv;
+            angle += adv / radius;
         }
         g.setStroke(oldStroke);
         g.setPaint(oldPaint);
