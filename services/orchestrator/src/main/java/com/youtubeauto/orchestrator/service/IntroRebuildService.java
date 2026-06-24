@@ -101,16 +101,16 @@ public class IntroRebuildService {
             + "stays firmly on, never removed) — with a small nod, HIS beak moving during his "
             + "second only; seconds 2.9-4.0 Bo does her signature move — pushing her ROUND "
             + "glasses up the beak with a wing-tip — and a cheerful little bob, HER beak moving "
-            + "during her second only. "
-            + "From second 4 onward all three SETTLE, sit still together in the lower centre and "
+            + "during her second only. Then, from seconds 4.0 to 5.6, ALL THREE chickens speak TOGETHER in cheerful unison — every beak clearly opening and closing in sync at the same moment — saying the SAME short line in one bright voice: 'Welcome to Tiny Chicken World!' — warm and happy. "
+            + "From second 5.6 onward all three SETTLE, sit still together in the lower centre and "
             + "smile warmly at the camera with beaks CLOSED, leaving calm open space above them. "
             // The assembly HOLDS the final Veo frame while the title appears, so the
             // clip must END on an open-eyed pose — a closed/mid-blink last frame
             // freezes shut eyes under the title and looks bad.
-            + "From second 4.0 until the very final frame, freeze all blinking: ALL THREE "
+            + "From second 5.6 until the very final frame, freeze all blinking: ALL THREE "
             + "chickens' EYES MUST BE WIDE OPEN, bright and looking warmly at the camera, smiling "
             + "— the FINAL frame must have every chicken's eyes FULLY OPEN, never closed, never "
-            + "mid-blink, never half-closed. (This eyes-open rule applies ONLY from second 4.0 on "
+            + "mid-blink, never half-closed. (This eyes-open rule applies ONLY from second 5.6 on "
             + "— Pip's double-wink in her 0.5-1.6s greeting is intended and MUST still happen.) "
             + "NO signboard, "
             + "no sign, no banner and NO text anywhere in the scene. STABILITY: Pip's straw hat "
@@ -134,11 +134,12 @@ public class IntroRebuildService {
 
     /** The chickens' self-introduction lines — MUST match the words in
      *  {@link #MOTION_DESC} so the spoken ElevenLabs voices line up with what the
-     *  Veo clip shows them saying. Order = Pip, Mo, Bo. */
+     *  Veo clip shows them saying. Order = Pip, Mo, Bo, then all three together. */
     static final List<Map<String, String>> INTRO_LINES = List.of(
             Map.of("speaker", "pip", "text", "Hello! I'm Pip!",  "emotion", "excited"),
             Map.of("speaker", "mo",  "text", "Hi, I'm Mo.",      "emotion", "warm"),
-            Map.of("speaker", "bo",  "text", "And I'm Bo!",      "emotion", "happy"));
+            Map.of("speaker", "bo",  "text", "And I'm Bo!",      "emotion", "happy"),
+            Map.of("speaker", "all", "text", "Welcome to Tiny Chicken World!", "emotion", "cheerful"));
 
     private final ImageServiceClient imageClient;
     private final VideoGenerationServiceClient videoGenClient;
