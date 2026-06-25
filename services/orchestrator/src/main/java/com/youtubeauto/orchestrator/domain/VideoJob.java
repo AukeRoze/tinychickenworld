@@ -43,6 +43,10 @@ public class VideoJob {
      *  Eggs are no longer a channel-wide default; set this to opt a motif in. */
     @Column(name = "recurring_motif", columnDefinition = "text") private String recurringMotif;
 
+    /** Optional per-episode thumbnail overlay text. When set it is drawn VERBATIM
+     *  on every thumbnail variant, overriding the auto-derived title headline. */
+    @Column(name = "thumbnail_text", columnDefinition = "text") private String thumbnailText;
+
     /** When set, runAssetsStage copies scene-images from this job rather
      *  than calling image-service. */
     @Column(name = "reuse_images_from_job") private java.util.UUID reuseImagesFromJob;

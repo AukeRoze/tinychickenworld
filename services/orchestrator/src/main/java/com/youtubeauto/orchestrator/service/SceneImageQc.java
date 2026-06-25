@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -102,6 +103,7 @@ public class SceneImageQc {
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
     private final CharacterRefStills refStills;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record Result(boolean ok, List<String> issues) {
@@ -121,6 +123,9 @@ public class SceneImageQc {
     /** @param charIds cast ids — their approved reference stills (bible/refs)
      *  are shown FIRST so drift is judged against canonical pixels. */
     public Result check(Path image, List<String> expectedChars, List<String> charIds) {
+        // Kill-switch: QC is fail-safe (PASS) so skipping the paid call just lets
+        // the still through to the human review gate.
+        if (anthropicGate.skip("Scene image QC")) return Result.pass();
         try {
             if (image == null || !Files.exists(image)) return Result.pass();
             byte[] bytes = Files.readAllBytes(image);

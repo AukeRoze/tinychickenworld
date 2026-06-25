@@ -49,6 +49,9 @@ app:
     # 15-scene scripts; the previous 3-min cap was too tight under load.
     maxAttempts: 300
   anthropic:
+    # Master kill-switch for paid Claude calls. ANTHROPIC_ENABLED=false makes
+    # anthropicWebClient short-circuit every request (see WebClientConfig).
+    enabled: ${ANTHROPIC_ENABLED:true}
     base-url: https://api.anthropic.com/v1
     api-key: ${ANTHROPIC_API_KEY:}
     anthropic-version: "2023-06-01"

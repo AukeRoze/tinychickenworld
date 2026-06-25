@@ -1,12 +1,15 @@
 package com.youtubeauto.orchestrator.config;
 
 import io.netty.channel.ChannelOption;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
@@ -48,12 +51,40 @@ public class WebClientConfig {
     }
 
     @Bean
-    public WebClient anthropicWebClient(OrchestratorProperties props, WebClient.Builder builder) {
-        return builder
+    public WebClient anthropicWebClient(OrchestratorProperties props, WebClient.Builder builder,
+            @Value("${app.anthropic.enabled:true}") boolean anthropicEnabled) {
+        // CLONE first: WebClient.Builder is mutable and this is a SHARED singleton
+        // bean — every other client does builder.clone() before customising. If we
+        // mutate it in place (baseUrl/headers/filter), those leak into clients that
+        // clone afterwards. That's exactly how the kill-switch filter once blocked
+        // the assembly call (which never touches Anthropic). Cloning isolates the
+        // Anthropic config + filter to THIS client only.
+        WebClient.Builder b = builder.clone()
                 .baseUrl(props.anthropic().baseUrl())
                 .defaultHeader("x-api-key", props.anthropic().apiKey())
                 .defaultHeader("anthropic-version", props.anthropic().anthropicVersion())
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .build();
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+
+        // Master kill-switch (ANTHROPIC_ENABLED=false): short-circuit EVERY
+        // request on THIS client before it leaves the process, so no paid Claude
+        // call can fire no matter which feature triggers it (QC, scorers,
+        // metadata, lyrics, translations, suggestions, ...). Optional features
+        // already catch the exception and degrade gracefully (null / skip); the
+        // few generation features additionally guard with their own fallback.
+        // Read via @Value to avoid rippling a field through OrchestratorProperties'
+        // positional binding.
+        if (!anthropicEnabled) {
+            b = b.filter(disabledFilter());
+        }
+        return b.build();
+    }
+
+    /** Fails fast on any Anthropic call while the kill-switch is on, without
+     *  opening a socket. The message points straight at the flag. */
+    private static ExchangeFilterFunction disabledFilter() {
+        return (request, next) -> Mono.error(new IllegalStateException(
+                "Anthropic API disabled (ANTHROPIC_ENABLED=false) — paid call to "
+                + request.url() + " skipped to avoid spend. "
+                + "Set ANTHROPIC_ENABLED=true (or unset it) to re-enable."));
     }
 }

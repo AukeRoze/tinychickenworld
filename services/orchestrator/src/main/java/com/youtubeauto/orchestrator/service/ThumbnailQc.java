@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,12 +74,15 @@ public class ThumbnailQc {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record Result(int bestVariant, Map<Integer, Integer> scores) {}
 
     /** @param variants variant number → PNG path (≥2 entries required). */
     public Result rank(Map<Integer, Path> variants, String title) {
+        // Kill-switch: skip the paid ranking call; the existing default variant stays.
+        if (anthropicGate.skip("Thumbnail ranking")) return null;
         try {
             if (variants == null || variants.size() < 2) return null;
 

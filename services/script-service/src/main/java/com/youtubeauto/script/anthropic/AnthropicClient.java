@@ -8,6 +8,7 @@ import com.youtubeauto.script.config.AnthropicProperties;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -32,6 +33,17 @@ public class AnthropicClient {
     private final WebClient anthropicWebClient;
     private final AnthropicProperties props;
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * Master kill-switch for ALL paid Anthropic calls in this service. Set
+     * {@code ANTHROPIC_ENABLED=false} to stop the spend (every script-generation
+     * call funnels through {@link #callTool}). Read via {@code @Value} — not via
+     * {@link AnthropicProperties} — to avoid rippling a new field through the
+     * record's binding/constructors. Default true so production is unaffected
+     * unless the flag is explicitly flipped.
+     */
+    @Value("${app.anthropic.enabled:true}")
+    private boolean anthropicEnabled;
 
     public record ChatMessage(String role, String content) {}
     public record CompletionResult(String contentJson, Integer inputTokens, Integer outputTokens) {}
@@ -60,6 +72,15 @@ public class AnthropicClient {
                                      JsonNode toolInputSchema,
                                      String modelOverride,
                                      Double temperatureOverride) {
+        if (!anthropicEnabled) {
+            // Kill-switch: never open a paid call. Script generation has no
+            // sensible AI-free fallback, so fail fast and loud with a message
+            // that points straight at the flag.
+            throw new IllegalStateException(
+                    "Anthropic API disabled (ANTHROPIC_ENABLED=false) — script-service "
+                    + "call to tool '" + toolName + "' skipped to avoid spend. "
+                    + "Set ANTHROPIC_ENABLED=true (or unset it) to re-enable.");
+        }
         ObjectNode body = mapper.createObjectNode();
         body.put("model", (modelOverride != null && !modelOverride.isBlank())
                 ? modelOverride : props.model());

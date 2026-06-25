@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,6 +76,7 @@ public class BibleSuggestions {
     private final QcInsights qcInsights;
     private final OrchestratorProperties props;
     private final WebClient anthropicWebClient;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** Minimum recurrences before a pattern earns a proposal. */
@@ -96,6 +98,9 @@ public class BibleSuggestions {
 
     public synchronized List<Suggestion> suggestions(boolean refresh) {
         if (!refresh && System.currentTimeMillis() - cacheAtMs < TTL_MS) return cache;
+        // Kill-switch: every proposal is a paid call. Skip the whole pass and
+        // return an empty list (the QC-patterns page shows no proposals).
+        if (anthropicGate.skip("Bible suggestions")) return List.of();
         List<Suggestion> out = new ArrayList<>();
         try {
             for (QcInsights.Pattern p : qcInsights.patterns()) {

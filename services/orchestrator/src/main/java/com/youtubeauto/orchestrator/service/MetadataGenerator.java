@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,6 +115,7 @@ public class MetadataGenerator {
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
     private final KeywordSuggester keywordSuggester;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record Metadata(String title, String description, List<String> tags) {}
@@ -140,6 +142,18 @@ public class MetadataGenerator {
      */
     public Metadata generate(String topic, String scriptTitle, String hook, boolean isShort,
                              List<String> seoKeywords) {
+        if (!anthropicGate.enabled()) {
+            // No paid call: derive a usable title/description from what the
+            // pipeline already has. The reviewer can polish it by hand (inline
+            // metadata edit) or hit Regenerate once Anthropic is back on.
+            String title = (scriptTitle != null && !scriptTitle.isBlank())
+                    ? scriptTitle.trim()
+                    : (topic == null ? "" : topic.trim());
+            String desc = (hook != null && !hook.isBlank()) ? hook.trim() : title;
+            log.warn("Anthropic disabled (ANTHROPIC_ENABLED=false) — using deterministic "
+                    + "fallback metadata (title from script, no AI tags) for topic '{}'", topic);
+            return new Metadata(title, desc, List.of());
+        }
         String system = SYSTEM_BASE + (isShort ? VERTICAL_HINT : "");
 
         ObjectNode body = mapper.createObjectNode();
@@ -223,6 +237,9 @@ public class MetadataGenerator {
      * emit_metadata schema. The title is re-capped to the mobile-safe length.
      */
     public Metadata localize(Metadata en, String langName, boolean isShort) {
+        // Kill-switch: skip the paid localisation call and keep the English
+        // metadata as-is (the per-language upload just isn't localised).
+        if (anthropicGate.skip("Metadata localisation (" + langName + ")")) return en;
         ObjectNode body = mapper.createObjectNode();
         body.put("model", props.anthropic().model());
         body.put("max_tokens", 1500);
@@ -305,6 +322,8 @@ public class MetadataGenerator {
             String topic, String scriptTitle, java.util.LinkedHashMap<String, String> phaseToSample) {
         java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
         if (phaseToSample == null || phaseToSample.isEmpty()) return out;
+        // Kill-switch: skip the paid call; caller falls back to its static labels.
+        if (anthropicGate.skip("Chapter titles")) return out;
         try {
             StringBuilder u = new StringBuilder();
             u.append("Topic: ").append(topic).append("\nScript title: ").append(scriptTitle)

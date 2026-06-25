@@ -29,6 +29,15 @@ public class TextOverlayer {
     private volatile Font baseFont;
 
     public BufferedImage apply(BufferedImage base, LayoutTemplate layout, String title) {
+        return apply(base, layout, title, false);
+    }
+
+    /**
+     * @param verbatim when true the text is drawn with the user's exact casing
+     *        (no forced ALL-CAPS) — used for user-supplied per-episode thumbnail
+     *        text. When false the auto-derived headline keeps its ALL-CAPS look.
+     */
+    public BufferedImage apply(BufferedImage base, LayoutTemplate layout, String title, boolean verbatim) {
         int W = props.thumbnail().width();
         int H = props.thumbnail().height();
 
@@ -52,8 +61,8 @@ public class TextOverlayer {
             case TEXT_BOTTOM -> drawTextBottom(g, title, W, H);
             case TEXT_OUTLINE_CENTER -> drawTextCenter(g, title, W, H);
             case TEXT_TOP_BANNER -> drawTextBanner(g, title, W, H);
-            case HOOK_RAINBOW_TOP -> drawRainbowHook(g, title, W, H, true);
-            case HOOK_RAINBOW_BOTTOM -> drawRainbowHook(g, title, W, H, false);
+            case HOOK_RAINBOW_TOP -> drawRainbowHook(g, title, W, H, true, verbatim);
+            case HOOK_RAINBOW_BOTTOM -> drawRainbowHook(g, title, W, H, false, verbatim);
         }
 
         g.dispose();
@@ -187,21 +196,38 @@ public class TextOverlayer {
      *  stijl van het "WHAT'S INSIDE?"-voorbeeld maar dan langs een boog.
      *  Eén regel; de letters marcheren over de bovenkant van een cirkel.
      *  (gebogen variant, gebruikerswens 2026-06-24) */
-    private void drawRainbowHook(Graphics2D g, String title, int W, int H, boolean top) {
+    private void drawRainbowHook(Graphics2D g, String title, int W, int H, boolean top, boolean verbatim) {
         if (title == null || title.isBlank()) return;
-        String text = title.toUpperCase(java.util.Locale.ROOT);
-        // De boog mag breder zijn dan het canvas, want hij krult terug naar
-        // binnen — dus een ruime arc-budget voor de font-fit (één regel).
-        int maxArcLen = (int) (W * 1.25);
-        Font font = font(fitFontSize(g, text, maxArcLen, 1, 56, 140));
-        FontMetrics fm = g.getFontMetrics(font);
-        int textW = fm.stringWidth(text);
-        if (textW <= 0) return;
+        // Auto-headline → ALL-CAPS house style; user-supplied text → exact casing.
+        String text = verbatim ? title : title.toUpperCase(java.util.Locale.ROOT);
 
-        // Zachte koepel: bredere/langere kop = grotere boog-hoek, geklemd zodat
-        // de straal nooit tot een onleesbaar strakke krul samenklapt.
-        double spanAngle = Math.max(0.9, Math.min(1.9, textW / (W * 0.55)));
-        double radius = textW / spanAngle;
+        // Reservemarge aan weerszijden; binnen W - 2*marge moet ELKE letter
+        // vallen — ook de buitenste, die het verst naar buiten bollen.
+        int margin = Math.max(24, (int) (W * 0.02));
+        // Startpunt: grootste font dat als RECHTE regel binnen een ruim arc-budget
+        // past. De boog krult breder uit, dus dit is alleen een bovengrens.
+        int maxArcLen = (int) (W * 1.25);
+        int size = fitFontSize(g, text, maxArcLen, 1, 44, 140);
+
+        // Krimp door tot de WERKELIJKE gebogen breedte binnen het canvas past.
+        // De buitenste letter staat op hoek ±spanAngle/2; zijn horizontale
+        // uitslag t.o.v. het midden = radius*sin(spanAngle/2) + halve letterbreedte.
+        // Die moet ≤ W/2 - marge blijven, anders wordt hij afgekapt
+        // (gebruikersfeedback 2026-06-25: "past net niet, alle tekst moet zichtbaar").
+        Font font = font(size);
+        FontMetrics fm = g.getFontMetrics(font);
+        double spanAngle = 0.9, radius = 1;
+        while (true) {
+            font = font(size);
+            fm = g.getFontMetrics(font);
+            int textW = fm.stringWidth(text);
+            if (textW <= 0) return;
+            spanAngle = Math.max(0.9, Math.min(1.9, textW / (W * 0.55)));
+            radius = textW / spanAngle;
+            double halfExtent = radius * Math.sin(spanAngle / 2.0) + maxCharWidth(fm, text) / 2.0;
+            if (halfExtent <= (W / 2.0 - margin) || size <= 40) break;
+            size -= 2;
+        }
 
         int cx = W / 2;
         // apexY = baseline van de bovenste (midden) letter; de letterhoogte
@@ -212,6 +238,17 @@ public class TextOverlayer {
         double cy = apexY + radius;
 
         drawRainbowArcLine(g, text, cx, cy, radius, spanAngle, font, 13f);
+    }
+
+    /** Widest single-glyph advance in {@code text} — used to keep the outer
+     *  (most-bowed) letters of the arc fully inside the frame. */
+    private static int maxCharWidth(FontMetrics fm, String text) {
+        int max = 1;
+        for (int i = 0; i < text.length(); i++) {
+            int w = fm.stringWidth(text.substring(i, i + 1));
+            if (w > max) max = w;
+        }
+        return max;
     }
 
     /** Draws one line letter-by-letter along the TOP of a circle (dome arch),

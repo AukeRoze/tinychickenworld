@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.youtubeauto.orchestrator.client.AssemblyServiceClient;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import com.youtubeauto.orchestrator.domain.VideoAudit;
 import com.youtubeauto.orchestrator.domain.VideoJob;
@@ -95,10 +96,17 @@ public class QualityReviewer {
     private final VideoJobRepository jobRepo;
     private final VideoAuditRepository auditRepo;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** Run an audit on the given finished job. Best-effort — never throws. */
     public VideoAudit auditJob(UUID jobId) {
+        // Kill-switch: the audit is a paid vision call. Skip up front so a
+        // disabled API degrades to "no audit" cleanly, instead of firing the
+        // call and catching the filter's exception (which logged a full stack
+        // trace per job). The deterministic edge/duration gates are skipped too;
+        // the human review gate remains the backstop.
+        if (anthropicGate.skip("Quality audit")) return null;
         try {
             VideoJob job = jobRepo.findById(jobId).orElseThrow();
             if (job.getVideoPath() == null || job.getVideoPath().isBlank()) {

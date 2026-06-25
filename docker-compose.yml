@@ -48,6 +48,7 @@ services:
       DB_PASS: postgres
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      ANTHROPIC_ENABLED: ${ANTHROPIC_ENABLED:-true}
       BIBLE_PATH: /bible/channel.yml
     volumes:
       - ./bible:/bible:ro
@@ -203,6 +204,7 @@ services:
       DB_PASS: postgres
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      ANTHROPIC_ENABLED: ${ANTHROPIC_ENABLED:-true}
       SCRIPT_URL: http://script-service:8081
       IMAGE_URL: http://image-service:8084
       THUMBNAIL_URL: http://thumbnail-service:8086

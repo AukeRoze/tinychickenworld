@@ -228,6 +228,7 @@ public class PipelineOrchestrator {
                 .backgroundMusicPath(req.backgroundMusicPath())
                 .reuseImagesFromJob(req.reuseImagesFromJob())
                 .recurringMotif(req.recurringMotif())
+                .thumbnailText(req.thumbnailText())
                 .status(JobStatus.PENDING)
                 .build();
         return repo.save(job);
@@ -756,37 +757,157 @@ public class PipelineOrchestrator {
         if (newVisualDesc == null || newVisualDesc.isBlank()) {
             throw new IllegalArgumentException("visualDesc must not be empty");
         }
-        VideoFormat format = VideoFormat.parse(job.getFormat());
         List<SceneDto> assembly = loadAssemblyScenes(job);
         SceneDto scene = assembly.stream()
                 .filter(a -> a.effectiveSeq() == seq)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
 
-        // Persist the edit, then generate the image from the new text using the
-        // scene's own cast/location/world fields (+ the per-episode motif).
+        // SAVE-ONLY (2026-06-25, Auke): edit slaat ALLEEN de nieuwe omschrijving/
+        // prompt op en roept GEEN image-service meer aan. In de Flow-workflow komt
+        // het beeld uit de (handmatig gemaakte) clip, niet uit een vers gegenereerde
+        // still — een API-call hier was dus onnodig en ongewenst. De preview in de
+        // scène-rij is al een frame uit de clip. Om de clip zelf te updaten maak je
+        // na het opslaan een nieuwe Flow-/Veo-clip uit deze prompt.
         scene.setVisualDesc(newVisualDesc.trim());
-        Map<String, Object> imgScene = new HashMap<>();
-        imgScene.put("seq", seq);
-        imgScene.put("visualDesc", withMotif(newVisualDesc.trim(), job));
-        imgScene.put("characters", scene.charactersOrEmpty());
-        imgScene.put("locationId", nz(scene.getLocationId()));
-        imgScene.put("timeOfDay", nz(scene.getTimeOfDay()));
-        imgScene.put("weather", nz(scene.getWeather()));
-        attachEpisodeAnchors(imgScene, job);   // Story B: edited re-roll matches episode canon
-
-        JsonNode resp = imageClient.generate(jobId, List.of(imgScene), format.imageFormat);
-        String newPath = null;
-        for (JsonNode n : resp.path("scenes")) {
-            if (n.path("seq").asInt() == seq) { newPath = n.path("imagePath").asText(); break; }
-        }
-        if (newPath == null) throw new IllegalStateException("image-service did not return scene " + seq);
-
-        scene.setImagePath(newPath);
         saveAssemblyScenes(jobId, assembly);
         unlockScene(jobId, seq);
-        log.info("Job {} scene {} edited + regenerated -> {}", jobId, seq, newPath);
+        String newPath = scene.getImagePath();   // ongewijzigd — komt uit de clip
+        log.info("Job {} scene {} edited (save-only, no image regen)", jobId, seq);
         return newPath;
+    }
+
+    /** SAVE-ONLY dialogue edit (2026-06-25, Auke): parse "speaker: text" lines and
+     *  store them on the scene WITHOUT calling any voice/image API. The spoken audio
+     *  comes from the Omni clip; this only updates the script/prompt so the NEXT clip
+     *  speaks the new lines. Empty/blank input clears the dialogue (silent beat). */
+    public void editSceneDialogue(UUID jobId, int seq, String dialogueText) {
+        VideoJob job = load(jobId);
+        // Allow from the per-scene image review onward — including the
+        // post-assembly review gates and COMPLETED — so a subtitle typo spotted
+        // while watching the assembled master can still be corrected (then
+        // re-burned via reburnSubtitles). The early script/asset-generation
+        // states have no editable scene yet.
+        java.util.EnumSet<JobStatus> editable = java.util.EnumSet.of(
+                JobStatus.IMAGES_REVIEW_PENDING, JobStatus.ASSETS_REVIEW_PENDING,
+                JobStatus.VEO_REVIEW_PENDING, JobStatus.MONTAGE_REVIEW_PENDING,
+                JobStatus.THUMBNAIL_REVIEW_PENDING, JobStatus.UPLOAD_REVIEW_PENDING,
+                JobStatus.DISTRIBUTION_PENDING, JobStatus.COMPLETED);
+        if (!editable.contains(job.getStatus())) {
+            throw new IllegalStateException("Dialogue edit needs a reviewable or finished "
+                    + "job (was " + job.getStatus() + ")");
+        }
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        SceneDto scene = assembly.stream()
+                .filter(a -> a.effectiveSeq() == seq)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown scene seq " + seq));
+
+        List<Map<String, Object>> lines = new ArrayList<>();
+        if (dialogueText != null && !dialogueText.isBlank()) {
+            for (String raw : dialogueText.split("\\r?\\n")) {
+                String line = raw.trim();
+                if (line.isEmpty()) continue;
+                int c = line.indexOf(':');
+                Map<String, Object> entry = new HashMap<>();
+                if (c > 0) {
+                    entry.put("speaker", line.substring(0, c).trim());
+                    entry.put("text", line.substring(c + 1).trim());
+                } else {
+                    // No "speaker:" prefix → keep the whole line as text, no speaker.
+                    entry.put("speaker", "");
+                    entry.put("text", line);
+                }
+                lines.add(entry);
+            }
+        }
+        scene.setLines(lines);   // empty list = silent beat
+        saveAssemblyScenes(jobId, assembly);
+        unlockScene(jobId, seq);
+        log.info("Job {} scene {} dialogue edited (save-only, {} line(s), no API)", jobId, seq, lines.size());
+    }
+
+    /**
+     * One-click subtitle fix. Re-assembles the master from the CURRENT (corrected)
+     * scene narration/dialogue, REUSING the existing Veo clips (with their
+     * baked-in voice), the stored music, the brand intro/outro + transitions, the
+     * approved thumbnail and the locked metadata. The corrected narration is the
+     * only changed input, so only the SRT — and, when burn-subtitles is on, the
+     * burned-in caption — differs. No paid re-voice, re-clip, thumbnail or
+     * metadata work.
+     *
+     * <p>Use after {@link #editSceneDialogue} (which only stores text). The spoken
+     * audio is unchanged — it lives inside the Omni clip — so this fixes the
+     * on-screen caption only, exactly as the user asked ("zonder dure re-voice/clip").
+     *
+     * @return the refreshed videoPath/captionsPath and {@code alreadyPublished}:
+     *         when the job is already on YouTube the local master + caption file
+     *         are updated, but the live captions stay stale until re-uploaded.
+     */
+    public Map<String, Object> reburnSubtitles(UUID jobId) {
+        VideoJob job = load(jobId);
+        if (job.getVideoPath() == null || job.getVideoPath().isBlank()) {
+            throw new IllegalStateException("Job " + jobId + " has no assembled master yet — "
+                    + "nothing to re-burn subtitles onto.");
+        }
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        if (assembly.isEmpty()) {
+            throw new IllegalStateException("Job " + jobId + " has no assembled scenes.");
+        }
+        VideoFormat format = VideoFormat.parse(job.getFormat());
+        String title = job.getMetadataTitle();
+        if (title == null || title.isBlank()) title = job.getTopic();
+
+        // Reuse EVERYTHING: stored music (no Suno regen), the clips embedded in the
+        // scenes (no Veo regen), the brand bumpers + transitions, and the stored
+        // burn-subtitles flag. Only the SRT/burned caption reflects the new text.
+        JsonNode assembled = assemblyClient.assembleAsync(
+                jobId, job.getScriptId(), SceneDto.toMapList(assembly),
+                job.getBackgroundMusicPath(),
+                props.brand().introPath(), props.brand().outroPath(),
+                format.videoWidth, format.videoHeight,
+                Boolean.TRUE.equals(job.getBurnSubtitles()),
+                title,
+                job.getIntroTransitionType(), job.getIntroTransitionSeconds(),
+                job.getOutroTransitionType(), job.getOutroTransitionSeconds());
+
+        String videoPath = assembled.path("outputPath").asText();
+        String captionsPath = assembled.path("captionsPath").asText(null);
+        String shortPath = assembled.path("shortPath").asText(null);
+
+        // Refresh ONLY the changed artifacts — keep the approved thumbnail + metadata.
+        retryOnConflict(jobId, j -> {
+            if (videoPath != null && !videoPath.isBlank()) j.setVideoPath(videoPath);
+            if (captionsPath != null && !captionsPath.isBlank()) j.setCaptionsPath(captionsPath);
+            if (shortPath != null && !shortPath.isBlank()) j.setShortPath(shortPath);
+        });
+
+        boolean published = job.getStatus() == JobStatus.COMPLETED
+                || job.getStatus() == JobStatus.DISTRIBUTION_PENDING;
+        if (published) {
+            log.warn("Job {} subtitles re-burned AFTER publish — local master + captions "
+                    + "updated, but YouTube still shows the old captions until re-uploaded.", jobId);
+        } else {
+            log.info("Job {} subtitles re-burned (video + captions refreshed)", jobId);
+        }
+
+        Map<String, Object> out = new HashMap<>();
+        out.put("id", jobId.toString());
+        out.put("videoPath", videoPath == null ? "" : videoPath);
+        out.put("captionsPath", captionsPath == null ? "" : captionsPath);
+        out.put("alreadyPublished", published);
+        out.put("result", "SUBTITLES_REBURNED");
+        return out;
+    }
+
+    /**
+     * Save-and-reburn convenience: stores a scene's corrected dialogue
+     * ({@link #editSceneDialogue}) and immediately re-burns the subtitle
+     * ({@link #reburnSubtitles}) so a typo fix is one step. No paid re-voice/re-clip.
+     */
+    public Map<String, Object> editSceneDialogueAndReburn(UUID jobId, int seq, String dialogueText) {
+        editSceneDialogue(jobId, seq, dialogueText);
+        return reburnSubtitles(jobId);
     }
 
     /** Set (or clear) a scene's Veo camera override. When non-blank it REPLACES
@@ -947,11 +1068,10 @@ public class PipelineOrchestrator {
         return newPath;
     }
 
-    // editSceneDialogueAndRegenerate REMOVED: it re-voiced a scene via ElevenLabs.
-    // Voices now live inside the Omni clip itself, so spoken words can only be
-    // changed by re-making the Flow/Omni clip — editing "dialogue" here would only
-    // desync the subtitles from what the clip actually says. Re-import a corrected
-    // Flow clip instead.
+    // NB: de oude editSceneDialogueAndRegenerate (ElevenLabs re-voice) is weg.
+    // Dialoog bewerken gebeurt nu SAVE-ONLY via editSceneDialogue() hierboven:
+    // het slaat alleen de regels op (geen API). De stem komt uit de Omni-clip, dus
+    // om de nieuwe dialoog te HOREN maak je een nieuwe Flow-/Omni-clip uit de prompt.
 
     /**
      * Retry the upload stage on a FAILED (or stuck) job without re-running
@@ -2122,7 +2242,7 @@ public class PipelineOrchestrator {
             JsonNode thumb = thumbnailClient.generate(
                     jobId, job.getTopic(), meta.title(), scriptBody.path("hook").asText(), castStills,
                     performanceLoop.bestThumbnailLayout(),
-                    null, presentCast(assemblyScenes));
+                    null, presentCast(assemblyScenes), job.getThumbnailText());
             String thumbPath = thumb.path("thumbnailPath").asText();
             // Persist the winning layout so analytics can score layout styles.
             saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
@@ -4318,7 +4438,7 @@ public class PipelineOrchestrator {
                 jobId, job.getTopic(), title, hook,
                 pickCastStills(assembly),
                 performanceLoop.bestThumbnailLayout(),
-                hint, presentCast(assembly));
+                hint, presentCast(assembly), job.getThumbnailText());
         String thumbPath = thumb.path("thumbnailPath").asText();
         saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
         saveThumbnailPath(jobId, thumbPath);
@@ -4356,7 +4476,7 @@ public class PipelineOrchestrator {
                 jobId, topic, title, hook,
                 pickCastStills(assembly),
                 performanceLoop.bestThumbnailLayout(),
-                null, presentCast(assembly));
+                null, presentCast(assembly), job.getThumbnailText());
     }
 
     public void saveThumbnailPath(UUID id, String path) {
@@ -4622,7 +4742,8 @@ public class PipelineOrchestrator {
                 j.getVeoModel(),                        // keep the Veo model choice
                 null,                                   // plannedPublishAt
                 j.getSeriesId(), null,                  // episodeNumber (don't duplicate)
-                j.getRecurringMotif());
+                j.getRecurringMotif(),
+                j.getThumbnailText());                  // carry the custom thumbnail text
         return submit(req);
     }
 

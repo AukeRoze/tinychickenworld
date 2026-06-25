@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -58,12 +59,15 @@ public class TranslationService {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<String, JsonNode> cache = new ConcurrentHashMap<>();
 
-    public TranslationService(WebClient anthropicWebClient, OrchestratorProperties props) {
+    public TranslationService(WebClient anthropicWebClient, OrchestratorProperties props,
+                              AnthropicGate anthropicGate) {
         this.anthropicWebClient = anthropicWebClient;
         this.props = props;
+        this.anthropicGate = anthropicGate;
     }
 
     /**
@@ -74,6 +78,9 @@ public class TranslationService {
     public JsonNode translateScript(String cacheKey, JsonNode scriptBody) {
         if (scriptBody == null || scriptBody.isMissingNode() || scriptBody.isNull()) return null;
         if (cacheKey != null && cache.containsKey(cacheKey)) return cache.get(cacheKey);
+        // Kill-switch: the preview translation is optional — skip → reviewer sees
+        // English only.
+        if (anthropicGate.skip("Review translation")) return null;
 
         try {
             ObjectNode payload = mapper.createObjectNode();

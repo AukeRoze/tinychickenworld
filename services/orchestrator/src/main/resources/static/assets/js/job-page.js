@@ -121,7 +121,7 @@ const PROGRESS = {
   ASSETS_REVIEW_PENDING:    [45, 45,    0, "⏸ Wacht op jouw assets-review"],
   VEO_GENERATING:           [46, 73,  900, "Veo-clips renderen — minuten per scène…"],
   VEO_REVIEW_PENDING:       [73, 73,    0, "⏸ Wacht op jouw Veo-review"],
-  MONTAGE_REVIEW_PENDING:   [74, 74,    0, "⏸ Montage — volgorde, knippen/trimmen, overgangen en achtergrondmuziek"],
+  MONTAGE_REVIEW_PENDING:   [74, 74,    0, "⏸ Montage — volgorde, overgangen en achtergrondmuziek"],
   ASSEMBLING:               [75, 88,  300, "Assembleren: intro/outro, audio-mix, gates en audit…"],
   THUMBNAIL_REVIEW_PENDING: [88, 88,    0, "⏸ Kies en keur de thumbnail"],
   UPLOAD_REVIEW_PENDING:    [90, 90,    0, "⏸ Klaar voor publicatie — plan in of publiceer direct"],
@@ -365,8 +365,8 @@ function renderGate(job) {
   if (job.status === "MONTAGE_REVIEW_PENDING") {
     const hint = document.createElement("p");
     hint.className = "sub";
-    hint.textContent = "Montage-stap: zet de scènes op volgorde, knip/trim de in/uit-punten, "
-        + "kies de overgangen en de achtergrondmuziek in het scènes-paneel hieronder. "
+    hint.textContent = "Montage-stap: zet de scènes op volgorde, kies de overgangen "
+        + "en de achtergrondmuziek in het scènes-paneel hieronder. "
         + "Klaar? Klik ‘Assembleren’ om de master te bouwen.";
     card.appendChild(hint);
   }
@@ -1784,9 +1784,10 @@ function sceneActionsHelp() {
   const body = document.createElement("div");
   body.className = "scene-help-body sub small";
   const rows = [
+    ["📋 Prompt", "Kopieert de volledige gecompileerde Veo-prompt van déze scène naar het klembord, zodat je 'm los in Google Flow kunt plakken."],
     ["↻ Regen", "Maakt het startbeeld opnieuw uit de scripttekst. Je kunt een correctie meegeven (bv. “geen tweede kip”). Alleen een beeld — goedkoop."],
-    ["✎ Edit", "Pas de scène-omschrijving aan en genereer het beeld daaruit opnieuw."],
-    ["🔊 Re-voice", "Pas de dialoog aan en laat alleen deze scène opnieuw inspreken. Beeld blijft."],
+    ["✎ Edit", "Pas de scène-omschrijving/prompt aan en sla 'm op (geen beeldgeneratie — het beeld komt uit de clip)."],
+    ["💬 Edit dialoog", "Pas de dialoog aan en sla 'm op (geen API/inspreken — stem komt uit de clip). Maak daarna een nieuwe clip uit de prompt om het te horen."],
     ["🎬 Maak/Reroll clip", "Maakt de Veo-clip van deze scène (kost ±1 clip) en hermonteert. Kies links het model."],
     ["🔒 Lock / 🔓 Unlock", "DIT is de belangrijke: een Lock beschermt een scène tegen de AUTOMATISCHE systemen — de vision-QC en de Auto-Fix-lus laten een gelockte scène met rust en vervangen het beeld niet meer. Handig zodra een scène er precies goed uitziet. Jij kunt 'm met de knoppen hierboven nog wél handmatig aanpassen; de lock is een hek tegen de robot, niet tegen jou. Unlock geeft 'm weer vrij voor de automatische passes."],
   ];
@@ -2285,12 +2286,9 @@ function reelFrame(s) {
   cap.textContent = "scene-" + s.seq + (slug ? "-" + slug : "");
   cap.title = cap.textContent;
 
-  // Bij een clip: trim-handvatten op het beeld + readout/opslaan eronder.
-  if (s.hasClip) {
-    f.append(holder, cap, reelTrim(s, video, tBadge, holder));
-  } else {
-    f.append(holder, cap);
-  }
+  // Inkorten op scène-niveau is bewust verwijderd (gebruikerswens): geen
+  // trim-handvatten of "✓ Inkorten opslaan" meer in de filmrol.
+  f.append(holder, cap);
   return f;
 }
 
@@ -2644,7 +2642,7 @@ function playWholeFilm(scenes) {
     + '.note{color:#888}</style></head><body>'
     + '<div class="stage"><video id="v" controls autoplay playsinline></video><div id="fade"></div></div>'
     + '<div class="bar"><b id="lbl"></b>'
-    + '<span class="note">Preview — volgorde, inkortingen &amp; <i>gesimuleerde</i> overgangen; echte overgangen + muziek pas na assembleren.</span></div>'
+    + '<span class="note">Preview — volgorde &amp; <i>gesimuleerde</i> overgangen; echte overgangen + muziek pas na assembleren.</span></div>'
     + '<script>'
     + 'var PL=' + JSON.stringify(playlist) + ';'
     + 'var v=document.getElementById("v"),fade=document.getElementById("fade"),lbl=document.getElementById("lbl"),i=0;'
@@ -2679,7 +2677,7 @@ function filmReel(scenes) {
   playBtn.className = "btn sm";
   playBtn.style.cssText = "flex:0 0 auto;white-space:nowrap";
   playBtn.textContent = "▶ Speel hele film ⧉";
-  playBtn.title = "Speelt intro → alle scènes (met inkortingen) → outro achter elkaar af in een nieuw venster. Ruwe preview; overgangen en muziek komen er pas bij het assembleren in.";
+  playBtn.title = "Speelt intro → alle scènes → outro achter elkaar af in een nieuw venster. Ruwe preview; overgangen en muziek komen er pas bij het assembleren in.";
   playBtn.addEventListener("click", () => playWholeFilm(scenes));
   titleRow.append(title, playBtn);
   const reel = document.createElement("div");
@@ -2726,8 +2724,8 @@ function montagePanel() {
 
   const sub = document.createElement("div");
   sub.style.cssText = "font-size:12px;color:var(--muted,#888);margin-bottom:10px";
-  sub.textContent = "Zet de scènes op volgorde, knip/trim de in- en uitpunten en kies de "
-    + "overgangen (hieronder per scène). Kies hier de achtergrondmuziek en assembleer.";
+  sub.textContent = "Zet de scènes op volgorde en kies de overgangen (hieronder per "
+    + "scène). Kies hier de achtergrondmuziek en assembleer.";
   panel.appendChild(sub);
 
   // Achtergrondmuziek met preview — leest de job-scoped library (toont de
@@ -3007,6 +3005,22 @@ function renderScenes(scenes) {
     const P = (path, body) =>
       api.post(`/api/v1/videos/${id}/scenes/${seq}/${path}`, body, { key: `${path}-${seq}` });
 
+    acts.appendChild(sceneItem("📋 Prompt",
+      "Kopieer de volledige gecompileerde Veo-prompt van DEZE scène naar het klembord " +
+      "(om los in Google Flow te plakken). Valt terug op de image-prompt/omschrijving als de " +
+      "Veo-prompt er nog niet is.",
+      () => {
+        const txt = (s.veoPrompt && s.veoPrompt.trim())
+          || (s.imagePrompt && s.imagePrompt.trim())
+          || (s.visualDesc && s.visualDesc.trim())
+          || (s.narration && s.narration.trim())
+          || "";
+        if (!txt) {
+          toast(`Nog geen prompt voor scène ${seq} — verschijnt zodra de scène klaar is.`, "info");
+          return;
+        }
+        copyText(txt, `Prompt scène ${seq} gekopieerd ✓`);
+      }));
     acts.appendChild(sceneItem("↻ Regen",
       "Genereert het STARTBEELD van deze scène opnieuw uit de oorspronkelijke scripttekst. " +
       "Je kunt optioneel een correctie-aanwijzing meegeven (bv. \"geen tweede kip\", \"hoed iets kleiner\", " +
@@ -3038,7 +3052,7 @@ function renderScenes(scenes) {
         loadScenes();
       }));
     acts.appendChild(sceneItem("✎ Edit",
-      "Pas de omschrijving van deze scène aan en genereer het startbeeld daaruit opnieuw. Alleen het beeld — de video verandert pas na een re-roll/hermontage.",
+      "Pas de omschrijving/prompt van deze scène aan en sla 'm op. Er wordt GEEN nieuw beeld gegenereerd — het beeld komt uit de clip. Maak daarna een nieuwe Flow-/Veo-clip uit deze prompt en hermonteer om het in de video te zien.",
       () => {
         // Inline editor in the scene's text column — no prompt box.
         const editor = document.createElement("div");
@@ -3049,13 +3063,14 @@ function renderScenes(scenes) {
         editor.appendChild(ta);
         const row = document.createElement("div");
         row.className = "scene-acts";
-        const save = sceneBtn("Save + regen", "Sla de nieuwe omschrijving op en genereer het beeld opnieuw",
+        const save = sceneBtn("Save", "Sla de nieuwe omschrijving/prompt op (geen beeldgeneratie — het beeld komt uit de clip)",
           async () => {
             const vd = ta.value.trim();
             if (!vd) return;
-            setSceneBusy(startFrame, true, "Nieuw beeld genereren…");
+            setSceneBusy(startFrame, true, "Opslaan…");
             try { await P("edit", { visualDesc: vd }); }
             finally { setSceneBusy(startFrame, false); }
+            toast(`Scène ${seq} opgeslagen. Maak een nieuwe clip uit deze prompt om het in de video te zien.`, "info");
             loadScenes();
           });
         save.classList.add("approve");
@@ -3068,58 +3083,66 @@ function renderScenes(scenes) {
     // Eindbeeld-knop verwijderd (2026-06-14): eindframes zijn pipeline-breed uit
     // (zie PipelineOrchestrator.endFrameEnabled) omdat de start→eind-interpolatie
     // karaktermorphing veroorzaakte. Veo draait overal start-only.
-    acts.appendChild(sceneItem("🔊 Re-voice",
-      "Pas de dialoog aan en laat ALLEEN deze scène opnieuw inspreken (ElevenLabs). Beeld blijft ongewijzigd.",
-      async () => {
-        const dlg = prompt(`New dialogue for scene ${seq} (e.g. "pip: Hi!\\nmo: Look..."):`);
-        if (dlg == null || dlg.trim() === "") return;
-        await P("edit-dialogue", { dialogue: dlg.trim() });
+    acts.appendChild(sceneItem("💬 Edit dialoog",
+      "Pas de dialoog van deze scène aan en sla 'm op. GEEN API/inspreken — de stem komt uit de clip. De nieuwe regels gaan in de prompt mee; maak daarna een nieuwe clip uit deze prompt om het te horen. Leeg laten = stille beat.",
+      () => {
+        // Inline meerregelig tekstvak in de tekstkolom (geen prompt-popup, zodat
+        // je gewoon Enter kunt gebruiken voor meerdere dialoogregels).
+        const editor = document.createElement("div");
+        editor.className = "scene-edit";
+        const hint = document.createElement("div");
+        hint.className = "small muted";
+        hint.style.cssText = "margin-bottom:4px";
+        hint.textContent = "Eén \"spreker: tekst\" per regel. Druk Enter voor een nieuwe regel. Leeg laten = stille beat.";
+        const ta = document.createElement("textarea");
+        ta.rows = 5;
+        ta.placeholder = "pip: La la la la\npip: ...Hey what is this?";
+        // Pre-fill met de huidige lines ("spreker: tekst" per regel).
+        ta.value = (Array.isArray(s.lines) ? s.lines : [])
+          .map(l => (l && l.text ? ((l.speaker ? l.speaker + ": " : "") + l.text) : ""))
+          .filter(Boolean).join("\n");
+        editor.append(hint, ta);
+        const row = document.createElement("div");
+        row.className = "scene-acts";
+        const save = sceneBtn("Save dialoog", "Sla de dialoogregels op (geen API — stem komt uit de clip)",
+          async () => {
+            await P("edit-dialogue", { dialogue: ta.value.trim() });
+            toast(`Dialoog scène ${seq} opgeslagen. Maak een nieuwe clip uit deze prompt om het te horen.`, "info");
+            loadScenes();
+          });
+        save.classList.add("approve");
+        row.appendChild(save);
+        // Save + ondertitel bijwerken: slaat de tekst op én brandt de ondertitel
+        // meteen opnieuw in (re-assemble met hergebruik van clips/voice/muziek —
+        // GEEN dure re-voice/clip). Voor een typefout in de ondertitel.
+        row.appendChild(sceneBtn("Save + ondertitel bijwerken",
+          "Sla de dialoog op en werk de ondertitel meteen bij in de video " +
+          "(opnieuw inbranden, hergebruikt clips/stem/muziek — geen dure re-voice/clip). Duurt enkele minuten.",
+          async () => {
+            toast(`Ondertitel scène ${seq} bijwerken… (video opnieuw samenstellen, even geduld)`, "info");
+            const r = await P("fix-subtitle", { dialogue: ta.value.trim() });
+            if (r && r.alreadyPublished) {
+              toast("Ondertitel bijgewerkt in de master. Let op: video staat al op YouTube — " +
+                    "het ondertitelspoor moet opnieuw geüpload worden.", "warn");
+            } else {
+              toast(`Ondertitel scène ${seq} bijgewerkt in de video.`, "info");
+            }
+            loadScenes();
+          }));
+        row.appendChild(sceneBtn("Cancel", "Wijzigingen verwerpen", () => loadScenes()));
+        editor.appendChild(row);
+        left.replaceChildren(editor);
+        ta.focus();
       }));
     acts.appendChild(sceneItem(s.locked ? "🔓 Unlock" : "🔒 Lock",
       s.locked
         ? "Ontgrendel deze scène zodat QC / auto-fix 'm weer mag aanpassen."
         : "Vergrendel deze scène zodat QC / auto-fix 'm met rust laat.",
       async () => { await P(s.locked ? "unlock" : "lock"); loadScenes(); }));
-    // ✂️ Inkorten — kies een in- en uit-punt binnen de 10s-clip met twee schuifjes.
-    // "Toepassen" slaat op via /trim; zichtbaar in de film na Re-assemble.
-    {
-      const CLIP = 10;                       // Omni-clips zijn 10s
-      let inV = Math.min(CLIP - 2, Math.max(0, Math.round(s.trimStartSeconds || 0)));
-      let outV = Math.max(inV + 2, Math.min(CLIP, Math.round(s.trimEndSeconds || CLIP)));
-      const wrap = document.createElement("div");
-      wrap.className = "scene-trim small";
-      wrap.style.cssText = "display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px";
-      const lbl = document.createElement("span");
-      lbl.textContent = "✂️ Inkorten:";
-      const inR = document.createElement("input");
-      inR.type = "range"; inR.min = "0"; inR.max = String(CLIP); inR.step = "1";
-      inR.value = String(inV); inR.title = "in-punt"; inR.style.width = "90px";
-      const outR = document.createElement("input");
-      outR.type = "range"; outR.min = "0"; outR.max = String(CLIP); outR.step = "1";
-      outR.value = String(outV); outR.title = "uit-punt"; outR.style.width = "90px";
-      const read = document.createElement("span");
-      read.style.cssText = "min-width:150px;font-variant-numeric:tabular-nums";
-      const sync = () => { read.textContent = `in ${inV}s · uit ${outV}s · lengte ${outV - inV}s`; };
-      inR.addEventListener("input", () => {
-        inV = parseInt(inR.value, 10);
-        if (inV > outV - 2) { outV = Math.min(CLIP, inV + 2); outR.value = String(outV); }
-        sync();
-      });
-      outR.addEventListener("input", () => {
-        outV = parseInt(outR.value, 10);
-        if (outV < inV + 2) { inV = Math.max(0, outV - 2); inR.value = String(inV); }
-        sync();
-      });
-      sync();
-      const apply = sceneBtn("Toepassen", "Sla het in/uit-punt op (zichtbaar na Re-assemble)",
-        async () => {
-          await P("trim", { startSec: inV, endSec: outV });
-          toast(`Scène ${seq} ingekort naar ${inV}-${outV}s. Druk op Re-assemble om het toe te passen.`, "info");
-          loadScenes();
-        });
-      wrap.append(lbl, inR, read, outR, apply);
-      acts.appendChild(wrap);
-    }
+    // ✂️ Inkorten verwijderd uit de scène-acties (2026-06-25, Auke): inkorten
+    // gebeurt in de Montage-stap op de filmrol (zie renderMontageSection /
+    // filmReel), niet meer per scène. De /trim-endpoint blijft bestaan en wordt
+    // door de montage-filmrol gebruikt.
     {
       // Per-scène motion-model (dropdown) + clip maken/vernieuwen. Toont nu
       // óók bij scènes ZONDER clip — zo upgrade je een Ken Burns-fallback
@@ -3208,7 +3231,12 @@ function scenesSignature(scenes) {
   return st + "|" + (scenes || []).map(s => [
     s.seq, s.hasClip ? 1 : 0, s.imageVersion || "", s.locked ? 1 : 0,
     s.trimStartSeconds || 0, s.trimEndSeconds || "", s.transitionType || "",
-    s.transitionSeconds || "", s.hasRejectedClip ? 1 : 0, s.silentBeat ? 1 : 0
+    s.transitionSeconds || "", s.hasRejectedClip ? 1 : 0, s.silentBeat ? 1 : 0,
+    // Save-only edits veranderen geen imageVersion; neem tekst + dialoog mee in de
+    // signature zodat een ✎ Edit / 💬 Edit dialoog wél een re-render triggert.
+    (s.visualDesc || "").length + ":" + (s.visualDesc || ""),
+    (Array.isArray(s.lines) ? s.lines : [])
+      .map(l => (l && l.speaker ? l.speaker : "") + "=" + (l && l.text ? l.text : "")).join("¦")
   ].join(",")).join(";");
 }
 

@@ -142,8 +142,27 @@ public class AssemblyService {
         // duration so it lines up with the final video) — it's uploaded to
         // YouTube as a real, toggleable caption track, keeping the image clean.
         // Only BURN it into the pixels when explicitly requested.
+        //
+        // Caption timing is anchored to the REAL joined-video timeline (probed
+        // clip durations minus the crossfade overlap at each cut) + the
+        // fractional intro length, instead of summed nominal scene seconds —
+        // that old path ignored the xfade overlaps and rounded each scene to a
+        // whole second, so captions drifted progressively later in the episode
+        // (gebruikersfeedback 2026-06-25). sceneTimeline reuses the exact same
+        // math as the concat above; falls back to nominal timing if it can't be
+        // computed for any reason.
         int introOffset = introOffsetSeconds(req, ws);
-        subtitles.writeSrt(req.scenes(), ws.subs(), introOffset);
+        double introOffsetExact = introOffsetSecondsExact(req, ws);
+        double[] sceneStarts = null, sceneDurs = null;
+        try {
+            Concatenator.SceneTimeline tl = concatenator.sceneTimeline(clips, phases, ws.root());
+            sceneStarts = tl.startsSec();
+            sceneDurs = tl.dursSec();
+        } catch (Exception e) {
+            log.warn("Could not compute real caption timeline, falling back to nominal "
+                    + "seconds: {}", e.getMessage());
+        }
+        subtitles.writeSrt(req.scenes(), ws.subs(), introOffsetExact, sceneStarts, sceneDurs);
         Path captionsSrt = ws.subs();
         Path afterSubs = afterMusic;
         if (req.burnSubtitles()) {
@@ -302,6 +321,20 @@ public class AssemblyService {
         } catch (Exception e) {
             log.warn("Could not probe intro duration for caption offset: {}", e.getMessage());
             return 0;
+        }
+    }
+
+    /** Fractional intro length (seconds) for caption timing — same probe as
+     *  {@link #introOffsetSeconds} but WITHOUT rounding to a whole second, so a
+     *  ~5.4s intro shifts captions by 5.4s, not 5s (the rounding was a constant
+     *  sub-second skew on every cue). 0 when no intro is attached. */
+    private double introOffsetSecondsExact(AssemblyRequest req, Workspace ws) {
+        if (!existing(req.introPath())) return 0.0;
+        try {
+            return probe.probe(Paths.get(req.introPath()), ws.root()).durationSeconds();
+        } catch (Exception e) {
+            log.warn("Could not probe intro duration for caption offset: {}", e.getMessage());
+            return 0.0;
         }
     }
 

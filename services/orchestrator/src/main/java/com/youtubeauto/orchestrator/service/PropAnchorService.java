@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.youtubeauto.orchestrator.client.ImageServiceClient;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,7 @@ public class PropAnchorService {
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
     private final ImageServiceClient imageClient;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${app.props.anchors-enabled:false}")
@@ -84,6 +86,9 @@ public class PropAnchorService {
      */
     public List<Prop> buildAnchors(UUID jobId, List<String> visualDescs, String imageFormat) {
         if (!enabled || visualDescs == null || visualDescs.size() < 2) return List.of();
+        // Kill-switch: prop extraction is a paid call. Skip → scenes fall back to
+        // the text-only prop-continuity rules.
+        if (anthropicGate.skip("Prop anchors")) return List.of();
         try {
             List<Prop> extracted = extract(visualDescs);
             List<Prop> out = new ArrayList<>();

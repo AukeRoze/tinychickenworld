@@ -68,5 +68,9 @@ public record CreateVideoRequest(
          *  scene image prompt. Leave blank for no motif — the decorated eggs
          *  are no longer a channel-wide default, so set this when you actually
          *  want a recurring prop. */
-        String recurringMotif
+        String recurringMotif,
+        /** Optional per-episode thumbnail overlay text. When set it is drawn
+         *  VERBATIM (your exact words/casing) on ALL thumbnail variants,
+         *  overriding the auto-derived title headline. Blank → auto headline. */
+        String thumbnailText
 ) {}

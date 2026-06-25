@@ -30,5 +30,11 @@ public record GenerateThumbnailRequest(
          *  niemand bij naam noemt; the ids also drive WHICH characters are
          *  rendered (so an absent cast member never sneaks into the thumbnail).
          *  Null/empty → fall back to the name/group-cue text heuristics. */
-        List<String> castPresent
+        List<String> castPresent,
+        /** Optional user-supplied thumbnail overlay text, set per episode. When
+         *  present it is drawn VERBATIM (exact words, casing and punctuation —
+         *  only glyphs the font can't render are stripped) on ALL variants,
+         *  overriding the auto-derived title headline. Null/blank → the
+         *  auto-derived headline + the usual no-text control variant. */
+        String overlayText
 ) {}

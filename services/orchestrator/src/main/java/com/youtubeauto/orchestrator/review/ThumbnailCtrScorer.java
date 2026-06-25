@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,9 +69,14 @@ public class ThumbnailCtrScorer {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public Result evaluate(String thumbnailPath) {
+        // Kill-switch: skip the paid vision call and return the neutral score.
+        if (anthropicGate.skip("Thumbnail CTR scoring")) {
+            return new Result(NEUTRAL, List.of("Skipped — ANTHROPIC_ENABLED=false (neutral)"));
+        }
         if (thumbnailPath == null || thumbnailPath.isBlank()) {
             return new Result(NEUTRAL, List.of("No thumbnail to score (neutral)"));
         }

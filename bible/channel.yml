@@ -155,7 +155,7 @@ videoGen:
       - sceneType: outro
         model: veo3_1           # premium native 1080p (gebruikerswens 2026-06-14)
         quality: high
-        maxSeconds: 6
+        maxSeconds: 8           # max (Veo snapt naar 4/6/8); ruimte voor de unison-afscheidszin
       - sceneType: hero
         model: veo3_1           # premium native 1080p (gebruikerswens 2026-06-14)
         quality: high

@@ -311,7 +311,8 @@ class PipelineOrchestratorStateMachineTest {
                 null,                       // plannedPublishAt
                 null,                       // seriesId
                 null,                       // episodeNumber
-                null);                      // recurringMotif
+                null,                       // recurringMotif
+                null);                      // thumbnailText
     }
 
     /** Seeds a job row directly into the map-backed store (no save() call). */

@@ -88,9 +88,38 @@ public class ReviewController {
                 "imagePath", newPath, "result", "EDITED"));
     }
 
-    // edit-dialogue endpoint REMOVED: it re-voiced a scene via ElevenLabs. With
-    // Omni native audio the spoken words live in the clip; change them by
-    // re-making/re-importing the Flow clip, not by editing dialogue text here.
+    /** SAVE-ONLY dialogue edit (2026-06-25, Auke). Stores the per-scene dialogue
+     *  lines from a plain-text body and does NOT call any voice/API. With Omni
+     *  native audio the spoken words come from the clip; this just updates the
+     *  prompt/script so the NEXT clip you make speaks the new lines. Re-assemble /
+     *  re-make the clip to hear it. Body: {"dialogue": "pip: Hi!\nmo: Look..."};
+     *  one "speaker: text" per line, empty body clears the dialogue (silent beat). */
+    @PostMapping("/scenes/{seq}/edit-dialogue")
+    public ResponseEntity<Map<String, Object>> editDialogue(@PathVariable UUID id, @PathVariable int seq,
+                                                            @RequestBody(required = false) Map<String, String> body) {
+        orchestrator.editSceneDialogue(id, seq, body == null ? null : body.get("dialogue"));
+        return ResponseEntity.ok(Map.of("id", id.toString(), "seq", seq, "result", "DIALOGUE_SAVED"));
+    }
+
+    /** One-click subtitle fix: save the corrected dialogue for a scene AND re-burn
+     *  the subtitle so the fix is immediately visible in the master. Reuses the
+     *  existing clips/voice/music/thumbnail/metadata — no paid re-voice or
+     *  re-clip; only the on-screen caption changes. Synchronous (re-assembles,
+     *  minutes). Body: {"dialogue": "pip: Hi!\nmo: Look..."}. */
+    @PostMapping("/scenes/{seq}/fix-subtitle")
+    public ResponseEntity<Map<String, Object>> fixSubtitle(@PathVariable UUID id, @PathVariable int seq,
+                                                           @RequestBody(required = false) Map<String, String> body) {
+        return ResponseEntity.ok(orchestrator.editSceneDialogueAndReburn(
+                id, seq, body == null ? null : body.get("dialogue")));
+    }
+
+    /** Re-burn the subtitles for the whole job from the CURRENT scene narration
+     *  (after one or more save-only dialogue edits). Reuses everything — no paid
+     *  re-voice/re-clip/thumbnail. Synchronous (re-assembles, minutes). */
+    @PostMapping("/reburn-subtitles")
+    public ResponseEntity<Map<String, Object>> reburnSubtitles(@PathVariable UUID id) {
+        return ResponseEntity.ok(orchestrator.reburnSubtitles(id));
+    }
 
     /** Set (or clear) a per-scene Veo camera override. Body:
      *  {"veoCameraOverride": "low-angle, 35mm, slow drift"}; empty/absent clears

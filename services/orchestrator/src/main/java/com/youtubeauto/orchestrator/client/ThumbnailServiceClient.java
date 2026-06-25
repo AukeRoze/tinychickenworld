@@ -33,17 +33,26 @@ public class ThumbnailServiceClient {
                              List<String> baseImagePaths, String preferredLayout,
                              String customHint) {
         return generate(jobId, topic, title, hook, baseImagePaths, preferredLayout,
-                customHint, null);
+                customHint, null, null);
     }
 
-    /** Full form incl. an optional reviewer direction (dashboard "regenerate
-     *  with prompt", e.g. "exactly three chicks") and the ground-truth cast
-     *  ({@code castPresent}: bible ids die echt substantieel in de scènes
-     *  zitten — ≥2 ids laat de thumbnail-service een groeps-thumbnail kiezen,
-     *  ook als titel/topic niemand bij naam noemt). */
     public JsonNode generate(UUID jobId, String topic, String title, String hook,
                              List<String> baseImagePaths, String preferredLayout,
                              String customHint, List<String> castPresent) {
+        return generate(jobId, topic, title, hook, baseImagePaths, preferredLayout,
+                customHint, castPresent, null);
+    }
+
+    /** Full form incl. an optional reviewer direction (dashboard "regenerate
+     *  with prompt", e.g. "exactly three chicks"), the ground-truth cast
+     *  ({@code castPresent}: bible ids die echt substantieel in de scènes
+     *  zitten — ≥2 ids laat de thumbnail-service een groeps-thumbnail kiezen,
+     *  ook als titel/topic niemand bij naam noemt) and an optional
+     *  {@code overlayText}: per-episode thumbnail text drawn VERBATIM on every
+     *  variant, overriding the auto-derived headline. */
+    public JsonNode generate(UUID jobId, String topic, String title, String hook,
+                             List<String> baseImagePaths, String preferredLayout,
+                             String customHint, List<String> castPresent, String overlayText) {
         Map<String, Object> body = new HashMap<>();
         body.put("jobId", jobId);
         body.put("topic", topic);
@@ -56,6 +65,8 @@ public class ThumbnailServiceClient {
             body.put("customHint", customHint.trim());
         if (castPresent != null && !castPresent.isEmpty())
             body.put("castPresent", castPresent);
+        if (overlayText != null && !overlayText.isBlank())
+            body.put("overlayText", overlayText);
         // 3 variants × image gen — minutes, not seconds. Paid profile.
         return Resilience.paid(
                 client.post().uri("/api/v1/thumbnails/generate")
@@ -70,6 +81,13 @@ public class ThumbnailServiceClient {
     public JsonNode previewPrompt(UUID jobId, String topic, String title, String hook,
                                   List<String> baseImagePaths, String preferredLayout,
                                   String customHint, List<String> castPresent) {
+        return previewPrompt(jobId, topic, title, hook, baseImagePaths, preferredLayout,
+                customHint, castPresent, null);
+    }
+
+    public JsonNode previewPrompt(UUID jobId, String topic, String title, String hook,
+                                  List<String> baseImagePaths, String preferredLayout,
+                                  String customHint, List<String> castPresent, String overlayText) {
         Map<String, Object> body = new HashMap<>();
         body.put("jobId", jobId);
         body.put("topic", topic);
@@ -82,6 +100,8 @@ public class ThumbnailServiceClient {
             body.put("customHint", customHint.trim());
         if (castPresent != null && !castPresent.isEmpty())
             body.put("castPresent", castPresent);
+        if (overlayText != null && !overlayText.isBlank())
+            body.put("overlayText", overlayText);
         return Resilience.idempotent(
                 client.post().uri("/api/v1/thumbnails/preview-prompt")
                         .bodyValue(body)

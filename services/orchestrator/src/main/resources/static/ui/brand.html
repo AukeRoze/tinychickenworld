@@ -22,16 +22,17 @@
       <video id="intro-video" class="master-video" controls preload="metadata" src="/api/v1/intro/current.mp4"></video>
       <div class="filter-row" style="margin-top:10px">
         <select id="intro-model" class="btn" title="Motion-model voor de rebuild — de intro zit in élke video, premium loont hier">
+          <option value="googleflow_omni" selected>GoogleFlow Omni (Flow — handmatige clips)</option>
           <option value="">auto (bible-routing)</option>
           <option value="veo3_1_lite">Veo 3.1 Lite — ~€0,05/s</option>
           <option value="veo3_1_fast">Veo 3.1 Fast — ~€0,10/s</option>
-          <option value="veo3_1" selected>Veo 3.1 — ~€0,40/s · 1080p</option>
+          <option value="veo3_1">Veo 3.1 — ~€0,40/s · 1080p</option>
           <option value="seedance2_fast">Seedance 2.0 Fast (fal.ai) — ~€0,10/s</option>
           <option value="seedance2">Seedance 2.0 (fal.ai) — ~€0,25/s · 1080p</option>
         </select>
         <button class="btn" id="rebuild-intro">🎬 Rebuild intro</button>
         <button class="btn" id="recomposite-intro" title="Re-apply the title/SFX to the existing clip — no Veo cost">♻ Re-composite (no Veo)</button>
-        <button class="btn sm" id="copy-intro-prompt" title="Toon + kopieer de exacte Veo-prompt van de intro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Veo-prompt</button>
+        <button class="btn sm" id="copy-intro-prompt" title="Toon + kopieer de exacte prompt van de intro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Prompt</button>
         <span id="intro-status" class="small" style="color:var(--muted)"></span>
       </div>
       <textarea id="intro-prompt-text" class="small" readonly hidden rows="8"
@@ -42,16 +43,17 @@
       <video id="outro-video" class="master-video" controls preload="metadata" src="/api/v1/outro/current.mp4"></video>
       <div class="filter-row" style="margin-top:10px">
         <select id="outro-model" class="btn" title="Motion-model voor de rebuild — de outro zit in élke video, premium loont hier">
+          <option value="googleflow_omni" selected>GoogleFlow Omni (Flow — handmatige clips)</option>
           <option value="">auto (bible-routing)</option>
           <option value="veo3_1_lite">Veo 3.1 Lite — ~€0,05/s</option>
           <option value="veo3_1_fast">Veo 3.1 Fast — ~€0,10/s</option>
-          <option value="veo3_1" selected>Veo 3.1 — ~€0,40/s · 1080p</option>
+          <option value="veo3_1">Veo 3.1 — ~€0,40/s · 1080p</option>
           <option value="seedance2_fast">Seedance 2.0 Fast (fal.ai) — ~€0,10/s</option>
           <option value="seedance2">Seedance 2.0 (fal.ai) — ~€0,25/s · 1080p</option>
         </select>
         <button class="btn" id="rebuild-outro">👋 Rebuild outro</button>
         <button class="btn" id="recomposite-outro" title="Re-apply the CTA/credits/SFX to the existing clip — no Veo cost">♻ Re-composite (no Veo)</button>
-        <button class="btn sm" id="copy-outro-prompt" title="Toon + kopieer de exacte Veo-prompt van de outro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Veo-prompt</button>
+        <button class="btn sm" id="copy-outro-prompt" title="Toon + kopieer de exacte prompt van de outro (motion + still + negative), zodat je 'm net als de scène-prompts kunt toetsen">📋 Prompt</button>
         <span id="outro-status" class="small" style="color:var(--muted)"></span>
       </div>
       <textarea id="outro-prompt-text" class="small" readonly hidden rows="8"

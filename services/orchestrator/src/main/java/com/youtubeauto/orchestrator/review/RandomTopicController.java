@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,11 +52,23 @@ public class RandomTopicController {
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
     private final com.youtubeauto.orchestrator.service.InsightsAggregator insights;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
     private final YAMLMapper yaml = new YAMLMapper();
 
+    /** 503 + a clear message when the Anthropic kill-switch is on, so the UI can
+     *  show "AI is off" instead of a generic 500. */
+    private ResponseEntity<JsonNode> disabledResponse(String feature) {
+        ObjectNode err = mapper.createObjectNode();
+        err.put("error", "anthropic_disabled");
+        err.put("message", feature + " is unavailable: ANTHROPIC_ENABLED=false. "
+                + "Set ANTHROPIC_ENABLED=true to re-enable.");
+        return ResponseEntity.status(503).body(err);
+    }
+
     @GetMapping(value = "/api/v1/random-idea", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<JsonNode> randomIdea() {
+        if (anthropicGate.skip("Random idea")) return disabledResponse("Random idea");
         try {
             String biblePath = props.bible().path();
             JsonNode bible = Files.exists(Paths.get(biblePath))
@@ -206,6 +219,7 @@ public class RandomTopicController {
      */
     @PostMapping(value = "/api/v1/improve-brief", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<JsonNode> improveBrief(@RequestBody(required = false) java.util.Map<String, String> in) {
+        if (anthropicGate.skip("Improve brief")) return disabledResponse("Improve brief");
         try {
             java.util.Map<String, String> u = in == null ? java.util.Map.of() : in;
             String topic  = u.getOrDefault("topic", "").trim();

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +92,7 @@ public class ClipQc {
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
     private final CharacterRefStills refStills;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record Result(boolean ok, List<String> issues) {
@@ -112,6 +114,9 @@ public class ClipQc {
      *  are shown to the checker FIRST, so drift is judged against the actual
      *  canonical pixels (the same refs Veo receives as asset references). */
     public Result check(Path clip, List<String> expectedChars, List<String> charIds) {
+        // Kill-switch: QC is fail-safe (PASS) so skipping the paid call just lets
+        // the clip through to the human review gate.
+        if (anthropicGate.skip("Clip QC")) return Result.pass();
         try {
             if (clip == null || clip.getParent() == null) return Result.pass();
             List<Path> frames = new ArrayList<>();

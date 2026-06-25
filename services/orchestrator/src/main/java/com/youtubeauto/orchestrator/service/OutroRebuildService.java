@@ -70,7 +70,7 @@ public class OutroRebuildService {
             + "the picture — in warm golden-hour light. "
             + "All three chicks look toward the camera with a shared, warm, giggling energy, "
             + "leaning slightly into each other happily. While beaming warmly at the camera, "
-            + "Pip clearly opens and closes her beak to say cheerfully: '" + outroLine + "'. "
+            + "all three chickens speak TOGETHER in cheerful unison — every beak clearly opening and closing in sync at the same moment — saying in one warm voice: '" + outroLine + "'. "
             + "The UPPER TWO THIRDS of the frame stay deliberately CALM, uncluttered and EMPTY "
             + "the whole clip as clean cinematic NEGATIVE SPACE — just a smooth, soft warm "
             + "evening-sky gradient and gently blurred farm bokeh, with NOTHING appearing there "
@@ -83,10 +83,10 @@ public class OutroRebuildService {
             // separate ElevenLabs track, so don't articulate the exact words. But Pip's beak
             // must still CLEARLY move while her line plays, or the audio reads as unsynced.
             + "BEAK / MOUTH: the spoken farewell is dubbed in separately, so do NOT lip-sync "
-            + "or mouth the exact words and do NOT hold a wide gaping beak. BUT while Pip "
-            + "says her line her beak MUST clearly open and close a few times — a simple, "
-            + "visible 'talking' motion so it's obvious she is speaking — while Mo and Bo "
-            + "only giggle softly with closed or barely-open beaks. Gentle rounded "
+            + "or mouth the exact words and do NOT hold a wide gaping beak. BUT while the farewell line plays "
+            + "ALL THREE beaks MUST clearly open and close TOGETHER in sync a few times — a simple, "
+            + "visible synchronized 'talking' motion so it's obvious all three are speaking as ONE. "
+            + "Gentle rounded "
             + "open-close, never a wide gape, never word-shaped phonemes. "
             + IntroRebuildService.IDENTITY_LOCK;
     }
@@ -101,15 +101,15 @@ public class OutroRebuildService {
      *  via {@code app.brand.outro-line} (or env OUTRO_LINE); read via @Value,
      *  NOT via OrchestratorProperties (the record binds positionally — see the
      *  app.seo note in application.yml). Channel language is English. */
-    @Value("${app.brand.outro-line:See you in the next adventure!}")
+    @Value("${app.brand.outro-line:Thanks for watching! Did you love our adventure? Will we see you next time in Tiny Chicken World?}")
     private String outroLine;
 
     /** The farewell as voice-service lines — built from {@link #outroLine} so
      *  the synthesized words ALWAYS match {@link #motionDesc()} verbatim.
-     *  One line only since the end-screen redesign (the old three-voice
-     *  Pip/Mo/Bo goodbye made the end screen too busy). */
+     *  Unison farewell (gebruikerswens 24 jun 2026): alle drie spreken samen.
+     *  (Legacy/ongebruikt: stem komt nu uit de native Veo-audio, voiceLines=List.of().) */
     private List<Map<String, String>> outroLines() {
-        return List.of(Map.of("speaker", "pip", "text", outroLine, "emotion", "warm"));
+        return List.of(Map.of("speaker", "all", "text", outroLine, "emotion", "warm"));
     }
 
     private final ImageServiceClient imageClient;

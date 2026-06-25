@@ -147,9 +147,12 @@ public class ThumbnailGenerator {
             // met de grote rainbow-hook (TOP + BOTTOM = A/B-plaatsing voor Test &
             // Compare), één zónder tekst als controle — zo meet je of de tekst
             // echt CTR-lift geeft. preferredLayout (analytics) kan v2 nog sturen.
-            String headline = hookHeadline(req);
+            String headline = overlayHeadline(req);
             LayoutTemplate layout = layoutForVariant(req, v);
             String overlayText = layout == LayoutTemplate.NO_TEXT ? "" : headline;
+            // User-supplied text is drawn verbatim (exact casing/words); the
+            // auto-derived headline keeps the ALL-CAPS rainbow styling.
+            boolean verbatim = req.overlayText() != null && !req.overlayText().isBlank();
             String[] moods = castMode ? CAST_VARIANT_MOODS : VARIANT_MOODS;
             String moodVariation = moods[(v - 1) % moods.length];
 
@@ -188,7 +191,7 @@ public class ThumbnailGenerator {
             // bases skipped punchify entirely until now).
             base = punchify(base);
 
-            BufferedImage composed = overlayer.apply(base, layout, overlayText);
+            BufferedImage composed = overlayer.apply(base, layout, overlayText, verbatim);
             Path variantPath = dir.resolve("thumbnail-" + v + ".png");
             try {
                 ImageIO.write(composed, "png", variantPath.toFile());
@@ -277,6 +280,13 @@ public class ThumbnailGenerator {
      *  no-text control on 3, with the analytics-preferred layout overriding
      *  variant 2 when supplied. */
     private LayoutTemplate layoutForVariant(GenerateThumbnailRequest req, int v) {
+        // User set explicit per-episode thumbnail text → put it on ALL variants
+        // (no no-text control), alternating placement for a bit of variety.
+        // The analytics preferredLayout is intentionally ignored here so it can
+        // never downgrade a variant back to NO_TEXT and drop the user's text.
+        if (req.overlayText() != null && !req.overlayText().isBlank()) {
+            return v == 2 ? LayoutTemplate.HOOK_RAINBOW_BOTTOM : LayoutTemplate.HOOK_RAINBOW_TOP;
+        }
         LayoutTemplate layout = switch (v) {
             case 1 -> LayoutTemplate.HOOK_RAINBOW_TOP;
             case 2 -> LayoutTemplate.HOOK_RAINBOW_BOTTOM;
@@ -352,7 +362,7 @@ public class ThumbnailGenerator {
         for (int v = 1; v <= VARIANTS; v++) {
             LayoutTemplate layout = layoutForVariant(req, v);
             String mood = moods[(v - 1) % moods.length];
-            String overlay = layout == LayoutTemplate.NO_TEXT ? "" : hookHeadline(req);
+            String overlay = layout == LayoutTemplate.NO_TEXT ? "" : overlayHeadline(req);
             vs.add(new com.youtubeauto.thumbnail.api.dto.ThumbnailPromptPreview.Variant(
                     v, layout.name(), mood, framing, overlay,
                     buildAnchorDescription(req, mood),
@@ -401,6 +411,16 @@ public class ThumbnailGenerator {
      *  "WHAT'S INSIDE?" example. Keeps a trailing "?" when the title is a
      *  question, else adds "!". Falls back to the topic. The renderer wraps to
      *  at most two lines. */
+    /** The overlay text to draw: the user's per-episode {@code overlayText}
+     *  VERBATIM when set (exact words/casing), else the auto-derived
+     *  {@link #hookHeadline}. */
+    private String overlayHeadline(GenerateThumbnailRequest req) {
+        if (req.overlayText() != null && !req.overlayText().isBlank()) {
+            return req.overlayText().trim();
+        }
+        return hookHeadline(req);
+    }
+
     private String hookHeadline(GenerateThumbnailRequest req) {
         String t = (req.title() == null || req.title().isBlank()) ? req.topic() : req.title();
         if (t == null) return "";

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,11 +74,15 @@ public class LyricsGenerator {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record SongLyrics(String title, String style, String lyrics, String chorus) {}
 
     public SongLyrics generate(String topic, String lesson, String mood) {
+        // Kill-switch (ANTHROPIC_ENABLED=false): Song Mode is optional, so skip
+        // the paid call and return null — callers treat null as "no lyrics, no song".
+        if (anthropicGate.skip("Lyrics generation")) return null;
         ObjectNode body = mapper.createObjectNode();
         body.put("model", props.anthropic().model());
         body.put("max_tokens", 2000);

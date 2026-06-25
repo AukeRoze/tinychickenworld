@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.youtubeauto.orchestrator.config.AnthropicGate;
 import com.youtubeauto.orchestrator.config.OrchestratorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,7 @@ public class LocalizationService {
 
     private final WebClient anthropicWebClient;
     private final OrchestratorProperties props;
+    private final AnthropicGate anthropicGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JsonNode translate(JsonNode scriptEN, String targetLang) {
@@ -76,6 +78,9 @@ public class LocalizationService {
         if (langName == null) {
             throw new IllegalArgumentException("Unsupported language: " + targetLang);
         }
+        // Kill-switch (ANTHROPIC_ENABLED=false): localisation is optional, so skip
+        // the paid call and return null — callers treat null as "not translated".
+        if (anthropicGate.skip(targetLang + " translation")) return null;
 
         ObjectNode body = mapper.createObjectNode();
         body.put("model", props.anthropic().model());

@@ -391,6 +391,38 @@ public class Concatenator {
         return (phases != null && i >= 0 && i < phases.size()) ? phases.get(i) : null;
     }
 
+    /** Real per-scene timeline of the JOINED video (before intro/outro), in
+     *  seconds: {@code startsSec[i]} is where scene i actually begins in the
+     *  output and {@code dursSec[i]} is its real (probed) clip length.
+     *  <p>Computed with the EXACT same probed durations + xfade-overlap math as
+     *  {@link #concat} so captions can be timed against the real picture instead
+     *  of summed nominal scene seconds (which ignored the crossfade overlap and
+     *  drifted progressively — gebruikersfeedback 2026-06-25). */
+    public record SceneTimeline(double[] startsSec, double[] dursSec) {}
+
+    public SceneTimeline sceneTimeline(List<Path> clips, List<String> phases, Path workdir) {
+        int n = clips == null ? 0 : clips.size();
+        double[] starts = new double[n];
+        double[] durs = new double[n];
+        if (n == 0) return new SceneTimeline(starts, durs);
+        for (int i = 0; i < n; i++) durs[i] = probeDuration(clips.get(i), workdir);
+        starts[0] = 0.0;
+        double cumDur = durs[0];
+        for (int i = 1; i < n; i++) {
+            // Mirror concat(): the incoming scene's phase picks the transition,
+            // clamped to half the shorter clip, and the xfade overlaps the two
+            // clips so the timeline is SHORTER than the naive sum.
+            Transition tr = transitionFor(phaseAt(phases, i));
+            double xf = tr.duration();
+            double maxXf = Math.min(durs[i], durs[i - 1]) * 0.5;
+            if (xf > maxXf) xf = maxXf;
+            if (xf < 0.05) xf = 0.05;
+            starts[i] = cumDur - xf;
+            cumDur += durs[i] - xf;
+        }
+        return new SceneTimeline(starts, durs);
+    }
+
     public Path concat(List<Path> clips, List<String> phases, Path concatList, Path output,
                        Path workdir, String title) {
         return concat(clips, phases, concatList, output, workdir, title, null);
