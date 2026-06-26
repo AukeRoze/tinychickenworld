@@ -14,6 +14,8 @@ public enum JobStatus {
     ASSETS_REVIEW_PENDING,
     VEO_GENERATING,
     VEO_REVIEW_PENDING,
+    MUSIC_REVIEW_PENDING,       // clips ready — human picks the background music
+                                // (its own step, before the montage)
     MONTAGE_REVIEW_PENDING,     // clips ready — human edits the montage (volgorde,
                                 // knippen/trimmen, overgangen, achtergrondmuziek)
                                 // before the pipeline assembles the master
@@ -30,6 +32,7 @@ public enum JobStatus {
                 || this == ASSETS_REVIEW_PENDING
                 || this == IMAGES_REVIEW_PENDING
                 || this == VEO_REVIEW_PENDING
+                || this == MUSIC_REVIEW_PENDING
                 || this == MONTAGE_REVIEW_PENDING
                 || this == THUMBNAIL_REVIEW_PENDING
                 || this == UPLOAD_REVIEW_PENDING

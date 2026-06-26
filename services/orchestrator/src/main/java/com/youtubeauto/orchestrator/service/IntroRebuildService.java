@@ -338,6 +338,62 @@ public class IntroRebuildService {
         }
     }
 
+    /**
+     * Build the branded intro.mp4 (logo fly-in/out + sparkle) straight from a
+     * Google Flow / Omni intro clip. Auke maakt de intro HANDMATIG in Flow; die
+     * rauwe clip mist het invliegende logo, want het logo zit in deze
+     * composietstap (IntroBuilder), niet in de Flow-clip zelf. Wie zo'n clip
+     * direct als intro.mp4 neerzet, slaat het logo dus over. Dit haalt de clip
+     * alsnog door de composiet.
+     *
+     * <p>Standaard is de bron het huidige intro-output-pad zelf — dus "neem mijn
+     * bestaande Flow-intro.mp4 en bak het logo erin". Omdat ffmpeg dan hetzelfde
+     * bestand zou lezen én schrijven, kopiëren we de bron eerst naar een temp in
+     * hetzelfde /bible-volume en compositen we daarvandaan.
+     *
+     * @param clipPath pad naar de Flow-intro-clip (op het gedeelde /bible-volume).
+     */
+    @Async("pipelineExecutor")
+    public void importFlowIntro(String clipPath) {
+        if (running) { log.info("Intro busy — ignoring Flow import"); return; }
+        if (clipPath == null || clipPath.isBlank()) {
+            status = "error — geen Flow-clip-pad opgegeven"; return;
+        }
+        running = true;
+        try {
+            java.nio.file.Path src = java.nio.file.Paths.get(clipPath);
+            if (!java.nio.file.Files.isReadable(src)) {
+                status = "error — Flow-intro-clip niet leesbaar: " + clipPath;
+                log.warn("Intro Flow import: clip not readable {}", clipPath);
+                return;
+            }
+            // Voorkom ffmpeg read==write-corruptie als de Flow-clip al op het
+            // intro-output-pad staat: composit vanaf een temp-kopie.
+            String sourceForBuild = clipPath;
+            java.nio.file.Path out = java.nio.file.Paths.get(props.brand().introPath());
+            if (java.nio.file.Files.exists(out) && java.nio.file.Files.isSameFile(src, out)) {
+                java.nio.file.Path tmp = out.resolveSibling("intro-flow-src.mp4");
+                java.nio.file.Files.copy(src, tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                sourceForBuild = tmp.toString();
+                log.info("Intro Flow import: bron == output, composit vanaf temp {}", tmp);
+            }
+            rememberClip(sourceForBuild);   // zodat een gratis recomposite later kan herdraaien
+            UUID job = UUID.randomUUID();
+            status = "logo over Flow-intro compositen…";
+            log.info("Intro Flow import {}: logo composite over {}", job, sourceForBuild);
+            // Flow/Omni-clip draagt z'n eigen audio → lege voice-lijst, assembly
+            // behoudt de clip-audio (zelfde als recomposite()).
+            assemblyClient.buildIntro(sourceForBuild, List.of());
+            status = "klaar — intro.mp4 uit Flow-clip gebouwd om " + LocalTime.now().withNano(0);
+            log.info("Intro Flow import {} done", job);
+        } catch (Exception e) {
+            status = "error — " + e.getMessage();
+            log.warn("Intro Flow import failed: {}", e.toString());
+        } finally {
+            running = false;
+        }
+    }
+
     // synthVoiceLines REMOVED — intro/outro voices came from ElevenLabs; the Omni
     // clip now carries its own native audio, so callers pass an empty list and the
     // assembly keeps the clip's audio.

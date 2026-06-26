@@ -148,6 +148,36 @@ zetten en het oude directe gedrag te bevestigen.
 
 ---
 
+## D. Split-scène op punt — mid-clip cut (increment 4) — VOORGESTELD (nog te bouwen)
+
+> Wens (Auke, 2026-06-26): een stukje uit het **midden** van een scène wegknippen.
+> Increment 1 (in/uit-trim) houdt altijd één aaneengesloten stuk over — een "gat"
+> in het midden kan dus niet. Oplossing: de scène op een tijdstip **splitsen** in
+> twee scène-records, daarna één deel weggooien of het tussenstuk eruit laten en de
+> twee delen via het +-overgangmenu (increment 2) weer koppelen. Geen Veo/regen-kosten.
+
+**Idee — bouwt voort op increment 1 + 2:**
+- **Endpoint:** `POST /api/v1/videos/{id}/scenes/{seq}/split` body `{ "atSec": 4.0 }`
+  → maakt scène N′ (kopie van N: zelfde `clipPath`) ingevoegd direct ná N; N krijgt
+  uit-punt = `atSec`, N′ krijgt in-punt = `atSec`. Beide erven de bestaande
+  `trimStartSeconds`-rekenwijze (in/uit → start + lengte).
+- **Datamodel:** geen nieuw veld nodig — twee `SceneDto`'s met elk hun eigen
+  `trimStartSeconds`/`durationSeconds` op dezelfde bronclip. Seq-hernummering zoals
+  bij invoegen/verwijderen elders.
+- **Mid-cut workflow:** splits op begin én eind van het ongewenste stuk (twee splits)
+  → verwijder de middelste scène → de buren staan al naast elkaar; overgang via +-menu.
+- **ffmpeg:** niets nieuws — `SceneClipBuilder.buildFromClip` doet al `-ss`+`-t` op de
+  clip, dus elk deel rendert gewoon zijn eigen in/uit-bereik.
+- **Frontend:** in de scène-rij een **"✂ Splitsen"**-knop die om een tijdstip vraagt
+  (of een markertje op de bestaande dual-slider); na splitsen verschijnen twee rijen.
+- **Validatie:** `0 < atSec < scènelengte`; min 1s per deel (zoals de trim-min).
+
+**Te verifiëren (na bouw):** splits een scène op 4s, verwijder het middendeel,
+Re-assemble, controleer dat de twee delen correct aaneengeknipt zijn met de gekozen
+overgang. `mvn test` (orchestrator + video-assembly-service) + één render.
+
+---
+
 ## Volgorde & verificatie
 
 1. **Increment 1 (trim):** SceneDto-velden + `/trim`-endpoint + SceneInput-veld +

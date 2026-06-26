@@ -34,16 +34,27 @@ public class IntroBuilder {
     private String logo;
     @Value("${app.brand.title-sparkle:/bible/sfx/intro/title_sparkle.mp3}")
     private String sparkle;
+    /** Minimum intro length (s). 0 = keep the clip's NATURAL length, no boomerang
+     *  padding. See the MIN-DURATION note above. */
+    @Value("${app.brand.intro-min-seconds:0}")
+    private double minDur;
     @Value("${app.ffmpeg-bin:ffmpeg}")
     private String ffmpeg;
     @Value("${app.ffprobe-bin:ffprobe}")
     private String ffprobe;
 
     // The clip stays LIVE under the logo (no freeze); the logo swoops in early,
-    // one greeting per chick. Vaste minimumduur 12s (gebruikerswens 2026-06-12,
-    // matcht de outro): de Veo-clip is ~8s, dus het slotframe wordt met tpad
-    // vastgehouden tot 12s — zelfde hold-onder-de-staart als de outro.
-    private static final double MIN_DUR    = 12.0;  // vaste minimum-introlengte (s)
+    // one greeting per chick.
+    //
+    // MIN-DURATION (was a hard 12.0): de oude 12s-vloer padde de korte ~8s
+    // Veo-intro met boomerang/tpad omhoog om de outro te matchen. Auke's intro
+    // komt nu uit Google Flow/Omni en is al ~10s — die wil hij op zijn EIGEN
+    // lengte houden, geen 2s boomerang erachter (wens 2026-06-26). Daarom is de
+    // minimumlengte nu configureerbaar en standaard 0 = natuurlijke cliplengte
+    // (geen padding). Wil je tóch de oude 12s-vloer terug, zet dan env
+    // app.brand.intro-min-seconds=12. De voice-staart (2.2s, alleen relevant bij
+    // losse ElevenLabs-stemmen — Flow draagt z'n eigen audio) blijft sowieso
+    // leidend als die langer is.
     private static final double LOGO_AT    = 1.0;   // logo starts its fly-in
     private static final double FLY_DUR    = 0.7;   // swoop duration (ease-out)
     private static final double HOLD_AFTER = 1.4;   // beat after the logo lands
@@ -155,9 +166,14 @@ public class IntroBuilder {
         // clears the 2.0s dissolve; if DISSOLVE_INTRO is raised further, raise
         // this too. (History: 1.9s cleared the old 1.6s dissolve; 0.6s ate her
         // line entirely.)
-        // Vaste minimumduur 12s, maar nooit korter dan wat de stemmen nodig
-        // hebben (de voice-staart van 2.2s blijft leidend als die langer is).
-        double totalDur = Math.max(MIN_DUR, Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 2.2));
+        // Totale introduur. KRITIEK: nooit korter dan de clip zelf, anders kapt
+        // de '-t totalDur' aan het eind de clip af. We nemen daarom clipDur mee in
+        // de max, plus de configureerbare minDur (default 0 = natuurlijke lengte),
+        // de logo-beat en de voice-staart (2.2s, alleen relevant bij losse
+        // stemmen). Bij een 10s Flow-clip + minDur=0 wint clipDur → intro blijft
+        // 10s, holdPad=0, dus geen boomerang.
+        double totalDur = Math.max(clipDur,
+                Math.max(minDur, Math.max(logoLanded + HOLD_AFTER, lastVoiceEnd + 2.2)));
 
         // BLINK-BACKOFF: when the clip is held to fill the intro, freeze a frame
         // a touch BEFORE the true end so the held frame can't land on a terminal

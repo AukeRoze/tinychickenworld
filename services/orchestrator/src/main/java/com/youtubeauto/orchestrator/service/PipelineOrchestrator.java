@@ -87,6 +87,17 @@ public class PipelineOrchestrator {
     @org.springframework.beans.factory.annotation.Value("${pipeline.thumbnail-gate.enabled:true}")
     private boolean thumbnailGateEnabled;
 
+    /** Hergebruik bestaande thumbnails bij een re-run (gebruikerswens 2026-06-26).
+     *  Aan (default) → als een job al gerenderde thumbnail-varianten op schijf
+     *  heeft én een gezet thumbnailPath, slaat de assemblage-stap de (betaalde,
+     *  minuten-durende) thumbnail-regeneratie over en behoudt de bestaande set,
+     *  zodat de reviewer de eerder gemaakte thumbnails kan blijven kiezen. Een
+     *  cast-re-render (rerenderVisuals) wist thumbnailPath bewust → dan tóch
+     *  vers; en de handmatige "regenerate thumbnail"-knop forceert altijd nieuw.
+     *  Uit → oude gedrag (elke re-run regenereert). */
+    @org.springframework.beans.factory.annotation.Value("${pipeline.thumbnail.reuse-existing:true}")
+    private boolean thumbnailReuseEnabled;
+
     /** Generate an original Suno instrumental per normal episode (needs a
      *  SUNO_API_KEY in the assembly-service). Off (default) → use the bible/music
      *  royalty-free library. Flip on (env PIPELINE_SUNO_INSTRUMENTAL=true) once a
@@ -245,13 +256,14 @@ public class PipelineOrchestrator {
                 // montage-stap (volgorde, knippen/trimmen, overgangen, muziek),
                 // NIET rechtstreeks assembleren.
                 if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
-                else                              enterMontageGate(jobId);
+                else                              enterMusicGate(jobId);
             }
             case ASSETS_REVIEW_PENDING -> {
                 if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
-                else                              enterMontageGate(jobId);
+                else                              enterMusicGate(jobId);
             }
             case VEO_REVIEW_PENDING    -> self.runVeoStage(jobId);
+            case MUSIC_REVIEW_PENDING  -> enterMontageGate(jobId);
             case MONTAGE_REVIEW_PENDING -> self.runAssemblyStage(jobId);
             case THUMBNAIL_REVIEW_PENDING -> self.runUploadGate(jobId);
             case UPLOAD_REVIEW_PENDING -> self.runUploadStage(jobId);
@@ -307,7 +319,7 @@ public class PipelineOrchestrator {
                 if (assetsComplete(loadAssemblyScenes(job))) {
                     log.info("Job {} crash-recovery: stills al compleet — sla ASSETS_GENERATING over, door naar de volgende stap.", jobId);
                     if (usesVeo(job.getMotionMode())) self.runVeoStage(jobId);
-                    else                              enterMontageGate(jobId);
+                    else                              enterMusicGate(jobId);
                 } else {
                     self.runAssetsStage(jobId);   // vult alleen de ontbrekende stills
                 }
@@ -790,7 +802,8 @@ public class PipelineOrchestrator {
         // states have no editable scene yet.
         java.util.EnumSet<JobStatus> editable = java.util.EnumSet.of(
                 JobStatus.IMAGES_REVIEW_PENDING, JobStatus.ASSETS_REVIEW_PENDING,
-                JobStatus.VEO_REVIEW_PENDING, JobStatus.MONTAGE_REVIEW_PENDING,
+                JobStatus.VEO_REVIEW_PENDING, JobStatus.MUSIC_REVIEW_PENDING,
+                JobStatus.MONTAGE_REVIEW_PENDING,
                 JobStatus.THUMBNAIL_REVIEW_PENDING, JobStatus.UPLOAD_REVIEW_PENDING,
                 JobStatus.DISTRIBUTION_PENDING, JobStatus.COMPLETED);
         if (!editable.contains(job.getStatus())) {
@@ -1243,6 +1256,39 @@ public class PipelineOrchestrator {
      * (mood-auto-pick) als er nog geen gekozen is, zodat het montage-paneel met een
      * zinnige selectie opent die de gebruiker kan wijzigen.
      */
+    /**
+     * Music gate (Auke): muziekkeuze is een eigen stap VÓÓR de montage. Zodra de
+     * clips klaar zijn pauzeert de pipeline hier zodat de mens de
+     * achtergrondmuziek uit de bibliotheek kiest; daarna gaat 'ie via de
+     * montage-gate naar assembly. Eigen status ({@link JobStatus#MUSIC_REVIEW_PENDING}).
+     *
+     * Gestuurd door de bible-vlag {@code review.beforeMusic} (default aan). Staat
+     * de gate uit, dan loopt de flow direct door naar de montage-gate. Idempotent:
+     * pre-selecteert één keer een default-track (mood-auto-pick) zodat het paneel
+     * met een zinnige keuze opent die de gebruiker kan wijzigen.
+     */
+    private void enterMusicGate(UUID jobId) {
+        if (!reviewConfig.getReview().beforeMusic()) {
+            enterMontageGate(jobId);
+            return;
+        }
+        try {
+            VideoJob job = load(jobId);
+            if (job.getBackgroundMusicPath() == null || job.getBackgroundMusicPath().isBlank()) {
+                String pick = autoPickMusic(job.getMood());
+                if (pick != null) {
+                    saveBackgroundMusicPath(jobId, pick);
+                    log.info("Job {} music-gate: default-muziek voorgeselecteerd → {}", jobId, pick);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Job {} music-gate muziek-voorselectie faalde (niet-fataal): {}",
+                    jobId, e.getMessage());
+        }
+        pauseForReview(jobId, JobStatus.MUSIC_REVIEW_PENDING,
+                "muziek kiezen (achtergrondmuziek uit de bibliotheek)");
+    }
+
     private void enterMontageGate(UUID jobId) {
         if (!reviewConfig.getReview().beforeMontage()) {
             self.runAssemblyStage(jobId);
@@ -1736,7 +1782,7 @@ public class PipelineOrchestrator {
                 return;
             }
             if (veo) self.runVeoStage(jobId);
-            else     enterMontageGate(jobId);   // clips ready (Ken Burns) → montage gate
+            else     enterMusicGate(jobId);   // clips ready (Ken Burns) → montage gate
         } catch (Exception e) {
             log.error("Job {} assets stage FAILED", jobId, e);
             fail(jobId, e.getMessage());
@@ -1809,7 +1855,7 @@ public class PipelineOrchestrator {
         if (!veoEnabled) {
             log.info("Job {} Veo stage requested but Veo is DISABLED (app.veo.enabled=false) — "
                     + "skipping straight to the montage gate.", jobId);
-            enterMontageGate(jobId);
+            enterMusicGate(jobId);
             return;
         }
         try {
@@ -1847,7 +1893,7 @@ public class PipelineOrchestrator {
             }
             if (veoCandidates.isEmpty()) {
                 log.info("Job {} no scenes to Veo-ify, skipping to the montage gate", jobId);
-                enterMontageGate(jobId);
+                enterMusicGate(jobId);
                 return;
             }
             // Generate end-pose stills (best-effort) so Veo interpolates a
@@ -1922,7 +1968,7 @@ public class PipelineOrchestrator {
 
             // Clips klaar → montage gate (volgorde, trim, overgangen, muziek),
             // daarna pas assembly. Gate uit = direct door naar assembly.
-            enterMontageGate(jobId);
+            enterMusicGate(jobId);
         } catch (Exception e) {
             log.error("Job {} veo stage FAILED", jobId, e);
             fail(jobId, e.getMessage());
@@ -2238,19 +2284,40 @@ public class PipelineOrchestrator {
             }
             // Use real cast scene stills as the thumbnail base so the thumbnail
             // characters EXACTLY match the film (scenes are Gemini-consistent).
-            List<String> castStills = pickCastStills(assemblyScenes);
-            JsonNode thumb = thumbnailClient.generate(
-                    jobId, job.getTopic(), meta.title(), scriptBody.path("hook").asText(), castStills,
-                    performanceLoop.bestThumbnailLayout(),
-                    null, presentCast(assemblyScenes), job.getThumbnailText());
-            String thumbPath = thumb.path("thumbnailPath").asText();
-            // Persist the winning layout so analytics can score layout styles.
-            saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
-            // Squint-test scorer (audit #11): rank the variants as a scrolling
-            // phone viewer sees them and PRESELECT the winner as the default —
-            // the human gate still decides, but starts from the strongest CTR
-            // candidate instead of from variant 0. Best-effort.
-            preselectBestThumbnail(jobId, meta.title());
+            //
+            // THUMBNAIL-HERGEBRUIK (gebruikerswens 2026-06-26): een gewone re-run
+            // (re-assemblage na een montage-/outro-/caption-wijziging) mocht niet
+            // stilletjes opnieuw geld uitgeven aan een verse thumbnail én de
+            // variant die de reviewer al koos weggooien. Dus als deze job al
+            // thumbnail-varianten op schijf heeft ÉN thumbnailPath nog gezet is,
+            // hergebruiken we de bestaande set ongewijzigd; de thumbnail-review-
+            // gate hieronder laat de reviewer gewoon uit die eerdere varianten
+            // kiezen. Een cast-re-render (rerenderVisuals) wist thumbnailPath
+            // bewust → val door naar regeneratie; de handmatige "regenerate
+            // thumbnail"-knop forceert sowieso een verse set.
+            String thumbPath;
+            boolean reuseThumb = thumbnailReuseEnabled
+                    && job.getThumbnailPath() != null && !job.getThumbnailPath().isBlank()
+                    && hasExistingThumbnails(jobId);
+            if (reuseThumb) {
+                thumbPath = job.getThumbnailPath();
+                log.info("Job {} thumbnail HERGEBRUIKT — bestaande varianten behouden, geen regen "
+                        + "(keuze reviewer blijft staan): {}", jobId, thumbPath);
+            } else {
+                List<String> castStills = pickCastStills(assemblyScenes);
+                JsonNode thumb = thumbnailClient.generate(
+                        jobId, job.getTopic(), meta.title(), scriptBody.path("hook").asText(), castStills,
+                        performanceLoop.bestThumbnailLayout(),
+                        null, presentCast(assemblyScenes), job.getThumbnailText());
+                thumbPath = thumb.path("thumbnailPath").asText();
+                // Persist the winning layout so analytics can score layout styles.
+                saveThumbnailLayout(jobId, thumb.path("layout").asText(null));
+                // Squint-test scorer (audit #11): rank the variants as a scrolling
+                // phone viewer sees them and PRESELECT the winner as the default —
+                // the human gate still decides, but starts from the strongest CTR
+                // candidate instead of from variant 0. Best-effort.
+                preselectBestThumbnail(jobId, meta.title());
+            }
 
             saveAssemblyResults(jobId, videoPath, thumbPath, meta, captionsPath, shortPath);
 
@@ -4489,6 +4556,14 @@ public class PipelineOrchestrator {
         retryOnConflict(id, j -> j.setThumbnailLayout(layout));
     }
 
+    /** Set or clear the per-episode custom thumbnail text. Blank → cleared (the
+     *  generator then falls back to the auto-derived title headline). Takes
+     *  effect on the next thumbnail (re)generation. */
+    public void saveThumbnailText(UUID id, String text) {
+        String v = (text == null || text.isBlank()) ? null : text.trim();
+        retryOnConflict(id, j -> j.setThumbnailText(v));
+    }
+
     public void saveScriptJobId(UUID id, UUID sjId) {
         retryOnConflict(id, j -> j.setScriptJobId(sjId));
     }
@@ -4516,6 +4591,18 @@ public class PipelineOrchestrator {
             j.setCaptionsPath(captionsPath);
             if (shortPath != null && !shortPath.isBlank()) j.setShortPath(shortPath);
         });
+    }
+
+    /** True zodra deze job al minstens één gerenderde thumbnail-variant op schijf
+     *  heeft (/workdir/&lt;job&gt;/thumbnail/thumbnail-&lt;v&gt;.png). Laat een re-run de
+     *  bestaande thumbnails hergebruiken i.p.v. (betaald) opnieuw genereren —
+     *  zelfde variant-detectie als VideoController. */
+    private boolean hasExistingThumbnails(UUID jobId) {
+        java.nio.file.Path dir = java.nio.file.Paths.get("/workdir", jobId.toString(), "thumbnail");
+        for (int v = 0; v < 8; v++) {
+            if (java.nio.file.Files.exists(dir.resolve("thumbnail-" + v + ".png"))) return true;
+        }
+        return false;
     }
 
     /** Squint-test preselect: vision-rank the thumbnail variants and copy the
@@ -4751,6 +4838,7 @@ public class PipelineOrchestrator {
         return new VideoJobResponse(j.getId(), j.getTopic(), j.getStatus(), j.getStep(),
                 j.getError(), j.getVideoPath(), j.getYoutubeVideoId(), j.getYoutubeUrl(),
                 j.getFacebookVideoId(), j.getFacebookUrl(),
-                j.getTiktokPublishId(), j.getInstagramMediaId(), j.getInstagramUrl());
+                j.getTiktokPublishId(), j.getInstagramMediaId(), j.getInstagramUrl(),
+                j.getThumbnailText());
     }
 }

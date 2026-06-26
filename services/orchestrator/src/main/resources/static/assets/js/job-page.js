@@ -96,17 +96,19 @@ function statusKind(status) {
 
 // Pipeline stepper — mirrors the classic dashboard's phase model so you can see
 // exactly which production stage a job is in.
-const PHASES = ["Script", "Scenes", "Montage", "Assembly",
+const PHASES = ["Script", "Scenes", "Muziek", "Montage", "Assembly",
                 "Thumbnail", "Planning", "Upload", "Distribution"];
 const PHASE_OF = {
   PENDING: [0, "queued"], SCRIPT_GENERATING: [0, "active"], SCRIPT_REVIEW_PENDING: [0, "review"],
   ASSETS_GENERATING: [1, "active"], IMAGES_REVIEW_PENDING: [1, "review"], ASSETS_REVIEW_PENDING: [1, "review"],
+  // Muziekkeuze is een eigen stap vóór de montage.
+  MUSIC_REVIEW_PENDING: [2, "review"],
   // Veo wordt niet gebruikt (clips komen uit Google Flow/Omni); mocht een
   // Veo-status toch voorkomen, dan valt 'ie onder de Montage-stap.
-  VEO_GENERATING: [2, "active"], VEO_REVIEW_PENDING: [2, "review"],
-  MONTAGE_REVIEW_PENDING: [2, "review"], ASSEMBLING: [3, "active"],
-  THUMBNAIL_REVIEW_PENDING: [4, "review"], UPLOAD_REVIEW_PENDING: [5, "review"], UPLOADING: [6, "active"],
-  DISTRIBUTION_PENDING: [7, "review"], COMPLETED: [7, "done"], FAILED: [-1, "failed"],
+  VEO_GENERATING: [3, "active"], VEO_REVIEW_PENDING: [3, "review"],
+  MONTAGE_REVIEW_PENDING: [3, "review"], ASSEMBLING: [4, "active"],
+  THUMBNAIL_REVIEW_PENDING: [5, "review"], UPLOAD_REVIEW_PENDING: [6, "review"], UPLOADING: [7, "active"],
+  DISTRIBUTION_PENDING: [8, "review"], COMPLETED: [8, "done"], FAILED: [-1, "failed"],
 };
 
 // ── Voortgangsmodel: status → [van%, tot%, typische duur (s), standaardtekst].
@@ -120,7 +122,8 @@ const PROGRESS = {
   IMAGES_REVIEW_PENDING:    [45, 45,    0, "⏸ Wacht op jouw beeld-review"],
   ASSETS_REVIEW_PENDING:    [45, 45,    0, "⏸ Wacht op jouw assets-review"],
   VEO_GENERATING:           [46, 73,  900, "Veo-clips renderen — minuten per scène…"],
-  VEO_REVIEW_PENDING:       [73, 73,    0, "⏸ Wacht op jouw Veo-review"],
+  VEO_REVIEW_PENDING:       [72, 72,    0, "⏸ Wacht op jouw Veo-review"],
+  MUSIC_REVIEW_PENDING:     [73, 73,    0, "⏸ Kies de achtergrondmuziek"],
   MONTAGE_REVIEW_PENDING:   [74, 74,    0, "⏸ Montage — volgorde, overgangen en achtergrondmuziek"],
   ASSEMBLING:               [75, 88,  300, "Assembleren: intro/outro, audio-mix, gates en audit…"],
   THUMBNAIL_REVIEW_PENDING: [88, 88,    0, "⏸ Kies en keur de thumbnail"],
@@ -360,6 +363,18 @@ function renderGate(job) {
     card.appendChild(thumbRegenRow(id, card));
   }
 
+  // Muziek-gate: eigen stap vóór de montage — kies de achtergrondmuziek uit de
+  // bibliotheek (met preview). Approve gaat door naar de montage-stap.
+  if (job.status === "MUSIC_REVIEW_PENDING") {
+    const hint = document.createElement("p");
+    hint.className = "sub";
+    hint.textContent = "Muziek-stap: kies de achtergrondmuziek uit de bibliotheek "
+        + "(luister vooraf met ▶ Preview en klik ‘Toepassen’). Klaar? Klik ‘Approve’ "
+        + "om door te gaan naar de montage.";
+    card.appendChild(hint);
+    card.appendChild(musicPickerRow(id));
+  }
+
   // Montage-gate: korte uitleg dat de montage-controls (volgorde, knippen/trimmen,
   // overgangen en muziek) in het scènes-paneel staan; deze knop bouwt de master.
   if (job.status === "MONTAGE_REVIEW_PENDING") {
@@ -522,24 +537,42 @@ function renderJob(job) {
 function thumbRegenRow(id, root) {
   const row = document.createElement("div");
   row.style.cssText = "display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap";
+  const inpStyle = "flex:1;min-width:240px;padding:8px 10px;border:1px solid " +
+      "var(--border,#ccc);border-radius:8px;background:var(--bg,#fff);color:inherit;font:inherit";
+
+  // Thumbnail-tekst: exacte tekst op de thumbnail (op alle 3 varianten).
+  // Leeg laten = automatisch uit de titel. Prefill met de huidige waarde.
+  const txt = document.createElement("input");
+  txt.type = "text";
+  txt.placeholder = "Thumbnail-tekst (leeg = automatisch uit de titel)";
+  txt.style.cssText = inpStyle;
+  txt.title = "Exacte tekst op de thumbnail — zoals getypt, op alle 3 varianten. " +
+      "Leeg laten = automatisch uit de titel.";
+  api.get(`/api/v1/videos/${id}`, { key: "job-thumbtext-" + id })
+    .then(j => { if (j && typeof j.thumbnailText === "string") txt.value = j.thumbnailText; })
+    .catch(() => { /* prefill is best-effort */ });
+
   const inp = document.createElement("input");
   inp.type = "text";
-  inp.placeholder = "Aanwijzing, bv. 'precies drie kuikens, geen extra kippen'";
-  inp.style.cssText = "flex:1;min-width:240px;padding:8px 10px;border:1px solid " +
-      "var(--border,#ccc);border-radius:8px;background:var(--bg,#fff);color:inherit;font:inherit";
-  inp.title = "Stuur de regeneratie met een vrije aanwijzing — wordt als verplichte " +
-      "instructie aan de prompt van alle 3 varianten toegevoegd";
+  inp.placeholder = "Aanwijzing (optioneel), bv. 'precies drie kuikens'";
+  inp.style.cssText = inpStyle;
+  inp.title = "Optionele vrije aanwijzing voor de beeldgeneratie — wordt als " +
+      "verplichte instructie aan de prompt van alle 3 varianten toegevoegd";
+
   const btn = document.createElement("button");
   btn.className = "btn sm";
   btn.textContent = "🔁 Regenereer thumbnails";
   btn.addEventListener("click", async () => {
     const hint = inp.value.trim();
-    if (!hint) { toast("Typ eerst een aanwijzing (wat moet er anders?)", "error"); return; }
+    // thumbnailText wordt ALTIJD meegestuurd (veld is geprefilld), zodat een
+    // wijziging — inclusief leegmaken — opslaat. hint is optioneel.
+    const body = { thumbnailText: txt.value.trim() };
+    if (hint) body.hint = hint;
     btn.disabled = true;
     const old = btn.textContent;
     btn.textContent = "⏳ Genereren… (duurt enkele minuten)";
     try {
-      await api.post(`/api/v1/videos/${id}/thumbnail/regenerate`, { hint }, { key: "thumb-regen" });
+      await api.post(`/api/v1/videos/${id}/thumbnail/regenerate`, body, { key: "thumb-regen" });
       // Verse PNG's afdwingen voor alle varianten in deze kaart.
       (root || document).querySelectorAll(".thumb-pick img").forEach(img => {
         img.src = img.src.split("?")[0] + "?t=" + Date.now();
@@ -548,8 +581,56 @@ function thumbRegenRow(id, root) {
     } catch (e) { /* api.js toasted */ }
     finally { btn.disabled = false; btn.textContent = old; }
   });
+  row.appendChild(txt);
   row.appendChild(inp);
   row.appendChild(btn);
+  return row;
+}
+
+/** Achtergrondmuziek-picker (bibliotheek + preview). Leest /music, speelt een
+ *  fragment af en slaat de keuze op. Gebruikt in de muziek-gate. */
+function musicPickerRow(id) {
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap";
+  const lbl = document.createElement("span");
+  lbl.style.cssText = "font-size:13px";
+  lbl.textContent = "🎵 Achtergrondmuziek:";
+  const sel = document.createElement("select");
+  sel.className = "btn";
+  const audio = new Audio();
+  let playing = false;
+  const preview = document.createElement("button");
+  preview.className = "btn sm";
+  preview.textContent = "▶ Preview";
+  preview.title = "Speel een fragment van de gekozen track";
+  preview.addEventListener("click", () => {
+    if (!sel.value) { toast("Kies eerst een track", "error"); return; }
+    if (playing) { audio.pause(); audio.currentTime = 0; playing = false; preview.textContent = "▶ Preview"; return; }
+    audio.src = `/dashboard/music/${encodeURIComponent(sel.value)}.mp3`;
+    audio.play().then(() => { playing = true; preview.textContent = "⏹ Stop"; }).catch(() => {});
+  });
+  audio.addEventListener("ended", () => { playing = false; preview.textContent = "▶ Preview"; });
+  const apply = document.createElement("button");
+  apply.className = "btn sm approve";
+  apply.textContent = "Toepassen";
+  apply.addEventListener("click", async () => {
+    if (!sel.value) { toast("Kies eerst een track", "error"); return; }
+    apply.disabled = true;
+    try {
+      await api.post(`/api/v1/videos/${id}/music`, { trackId: sel.value }, { key: "gate-music" });
+      toast(`Muziek → ${sel.value} ✓`, "info");
+    } catch (e) { /* api.js toasted */ }
+    finally { apply.disabled = false; }
+  });
+  api.get(`/api/v1/videos/${id}/music`, { key: "gate-music-list" }).then(data => {
+    sel.replaceChildren(new Option("— kies een track —", ""));
+    for (const t of (data.tracks || [])) {
+      const o = new Option(`${t.name} · ${t.mood}`, t.id);
+      if (t.selected) o.selected = true;
+      sel.appendChild(o);
+    }
+  }).catch(() => {});
+  row.append(lbl, sel, preview, apply);
   return row;
 }
 

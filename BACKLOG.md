@@ -93,6 +93,9 @@ Panelen (backend bestaat, UI ontbreekt):
 - [x] **Metadata regenerate/edit — GEBOUWD (2026-06-12)**: gevalideerde `POST /api/v1/videos/{id}/metadata` (limieten + status-guard: niet na upload) + `POST .../metadata/regenerate` (MetadataGenerator + MetadataPolicy) + ✎/🔄 in de job-UI met 🔒 bij bevroren jobs. Open restje: de legacy ongeguarde `PATCH /metadata` bestaat nog (pipeline-intern gebruikt) — t.z.t. dichtzetten.
 - [x] **Job search + filters + bulk — GEBOUWD (2026-06-12)**: zoekveld, multi-status-pills, formaat-filter (JobSummary kreeg `format`), checkbox-selectie + bulk retry/approve via bestaande POSTs, filterstand in localStorage.
 
+Montage-editor:
+- [ ] **Split-scène op punt (mid-clip cut).** Montage-trim is nu alleen in/uit-punten (één aaneengesloten stuk uit de bronclip) → een stukje uit het **midden** wegknippen kan niet. Wens (Auke, 2026-06-26): knop "✂ Splitsen op X" in de scène-rij die de scène op een tijdstip in tweeën deelt (twee scène-records uit dezelfde clip, elk eigen `trimStartSeconds`/lengte), zodat je het tussenstuk kunt verwijderen en de twee delen via het bestaande +-overgangmenu weer aan elkaar zet. Bouwt voort op increment 1 (trim) + 2 (overgangen) uit `montage-editor-ontwerp.md` (zie nieuwe increment D). Geen Veo/regen-kosten — puur ffmpeg-trim van de bestaande clip.
+
 Refactor-schuld:
 - [ ] `baseCss()` → `static/assets/css/`; inline scripts → `api.js`; gerichte DOM-updates i.p.v. `location.reload()`; client-side escaping niet-optioneel (XSS); `DashboardController` opsplitsen; `components.css`; theme-bootstrap → `theme.js`; hash-router.
 

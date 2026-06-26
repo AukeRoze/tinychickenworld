@@ -226,11 +226,17 @@ public class ReviewController {
 
     /** Regenerate the thumbnail (3 fresh variants) steered by a free-text
      *  reviewer direction, e.g. {"hint": "exactly three chicks, no extra
-     *  chickens in the background"}. Synchronous (minutes); 1 thumbnail cost.
-     *  The variant images refresh in place — re-fetch the PNGs afterwards. */
+     *  chickens in the background"}. Optionally also set the per-episode
+     *  thumbnail overlay text in the same call: {"thumbnailText": "Waar is het
+     *  ei?!"} — drawn verbatim on every variant; an empty string clears it back
+     *  to the auto headline. Synchronous (minutes); 1 thumbnail cost. The
+     *  variant images refresh in place — re-fetch the PNGs afterwards. */
     @PostMapping("/thumbnail/regenerate")
     public ResponseEntity<Map<String, Object>> regenerateThumbnail(@PathVariable UUID id,
                                                                    @RequestBody(required = false) Map<String, String> body) {
+        if (body != null && body.containsKey("thumbnailText")) {
+            orchestrator.saveThumbnailText(id, body.get("thumbnailText"));
+        }
         return ResponseEntity.ok(orchestrator.regenerateThumbnail(id,
                 body == null ? null : body.get("hint")));
     }

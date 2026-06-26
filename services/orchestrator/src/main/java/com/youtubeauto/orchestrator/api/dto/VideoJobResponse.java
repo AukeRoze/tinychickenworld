@@ -13,5 +13,8 @@ public record VideoJobResponse(
         String tiktokPublishId, String instagramMediaId,
         // Instagram permalink (V25, additive): best-effort lookup after the
         // Reels publish; null when the lookup failed or the job predates V25.
-        String instagramUrl
+        String instagramUrl,
+        // Per-episode custom thumbnail text (verbatim overlay). Null/blank when
+        // unset → the generator derives the headline from the title.
+        String thumbnailText
 ) {}

@@ -85,7 +85,7 @@ class PipelineOrchestratorStateMachineTest {
 
     /** All bible review gates off — the job flows start to finish. */
     private static final ReviewProperties GATES_OFF = new ReviewProperties(
-            false, false, false, false, false, false,
+            false, false, false, false, false, false, false,
             new ReviewProperties.Mail("", "noreply@test", "http://localhost:8080"));
 
     // ── mocked collaborators (constructor order of PipelineOrchestrator) ──

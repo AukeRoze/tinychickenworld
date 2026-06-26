@@ -59,6 +59,29 @@ public class IntroController {
         return ResponseEntity.accepted().body(Map.of("status", "recompositing", "running", true));
     }
 
+    /**
+     * Build intro.mp4 from a HANDMATIG in Google Flow / Omni gemaakte intro-clip
+     * by running it through the logo composite (fly-in/out + sparkle). Zonder
+     * {@code ?clip=} is de bron de huidige intro.mp4 zelf — handig wanneer een
+     * rauwe Flow-clip direct als intro is neergezet en het invliegende logo mist;
+     * één druk bakt het logo er alsnog in. Geef {@code ?clip=/bible/...mp4} op om
+     * een ander bestand te gebruiken.
+     */
+    @PostMapping("/import-flow")
+    public ResponseEntity<?> importFlow(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String clip) {
+        if (service.running()) {
+            return ResponseEntity.ok(Map.of("status", service.status(), "running", true));
+        }
+        String path = (clip == null || clip.isBlank()) ? props.brand().introPath() : clip;
+        if (!Files.exists(Paths.get(path))) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Flow intro clip not found: " + path));
+        }
+        service.importFlowIntro(path);
+        return ResponseEntity.accepted().body(Map.of("status", "importing", "running", true));
+    }
+
     /** Streams the current intro clip for in-UI preview. */
     @GetMapping(value = "/current.mp4", produces = "video/mp4")
     public void current(@RequestHeader HttpHeaders headers, HttpServletResponse response) throws IOException {
