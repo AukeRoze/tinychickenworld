@@ -3268,54 +3268,11 @@ function renderScenes(scenes) {
     // gebeurt in de Montage-stap op de filmrol (zie renderMontageSection /
     // filmReel), niet meer per scène. De /trim-endpoint blijft bestaan en wordt
     // door de montage-filmrol gebruikt.
-    {
-      // Per-scène motion-model (dropdown) + clip maken/vernieuwen. Toont nu
-      // óók bij scènes ZONDER clip — zo upgrade je een Ken Burns-fallback
-      // (bijv. na een cost-cap-afkapping) alsnog naar een echte clip.
-      const modelSel = document.createElement("select");
-      modelSel.className = "scene-model-sel";
-      modelSel.title = "Model voor deze re-roll";
-      [["googleflow_omni", "Model: GoogleFlow Omni (Flow — handmatige clips)"],
-       ["", "Model: Veo Fast (720p, ~€0,10/s)"],
-       ["veo3_1_lite", "Model: Veo Lite (720p, ~€0,05/s)"],
-       ["veo3_1", "Model: Veo Premium (1080p, ~€0,40/s)"],
-       ["seedance2_fast", "Model: Seedance Fast (fal.ai, ~€0,10/s)"],
-       ["seedance2", "Model: Seedance 2.0 (fal.ai, 1080p, ~€0,25/s)"]].forEach(([v, l]) => {
-        const o = document.createElement("option");
-        o.value = v; o.textContent = l;
-        modelSel.appendChild(o);
-      });
-      // GoogleFlow Omni is de default-keuze (zelfde als het create-formulier) —
-      // direct geselecteerd zodat reroll/maak-clip standaard de Flow-workflow volgt.
-      modelSel.value = "googleflow_omni";
-      acts.appendChild(modelSel);
-
-      acts.appendChild(sceneItem(s.hasClip ? "🎬 Reroll clip" : "🎬 Maak clip",
-        s.hasClip
-          ? "Maakt ALLEEN de clip van deze scène opnieuw (≈1 clip-kost) vanaf het HUIDIGE startbeeld. Hermonteert NIET automatisch — druk daarna zelf op Re-assemble (zo kun je eerst meerdere clips maken). Kies links het model — Veo (Lite/Fast/Premium) of Seedance 2.0 via fal.ai. Ideaal om providers per scène te A/B'en."
-          : "Deze scène heeft nog GEEN clip (Ken Burns-fallback, bijv. door de cost-cap). Genereert er alsnog één (≈1 clip-kost, ~€0,60 op Fast) vanaf het huidige startbeeld. Hermonteert NIET automatisch — druk daarna zelf op Re-assemble.",
-        async () => {
-          const m = modelSel.value;
-          await api.post(
-            `/api/v1/videos/${id}/scenes/${seq}/reroll-veo${m ? "?model=" + encodeURIComponent(m) : ""}`,
-            undefined, { key: `reroll-veo-${seq}` });
-          loadScenes();
-          toast("Clip gemaakt — de video is NIET hermonteerd. Druk op Re-assemble als je klaar bent met clips maken.", "info");
-        }));
-      acts.appendChild(sceneItem("🆕 Nieuw beeld + clip",
-        "Genereert een NIEUW startbeeld voor deze scène ÉN maakt daarvan een nieuwe Veo-clip (≈1 Veo-kost, model via de dropdown), en hermonteert de video (alle andere scènes blijven hergebruikt). Gebruik dit als het PLAATJE zelf matig is.",
-        async () => {
-          const m = modelSel.value;
-          if (!confirm(
-            "Nieuw startbeeld + nieuwe Veo-clip voor deze scène?\n\n" +
-            "Model: " + (m === "veo3_1" ? "Premium 1080p (~€0,40/s)" : "Fast (720p)") + ".\n" +
-            "Genereert een vers beeld, maakt daar een nieuwe Veo-clip van en hermonteert de video. " +
-            "Alle andere scènes blijven ongewijzigd.\n\nDoorgaan?")) return;
-          await P("regen-clip", { model: m });
-          loadScenes();
-          toast("Nieuw beeld gemaakt; de Veo-clip wordt opnieuw gerenderd + de video hermonteerd (even geduld).", "info");
-        }, "approve"));
-    }
+    // Per-scène model-dropdown + "Maak clip" + "Nieuw beeld + clip" verwijderd
+    // (Auke 2026-06-27): clips worden handmatig in Google Flow gemaakt en via
+    // "Flow-clips importeren" ingeladen; per-scène model-keuze en losse
+    // clip-/beeld-generatie zijn hier niet meer gewenst. De onderliggende
+    // endpoints (reroll-veo / regen-clip) blijven bestaan.
     right.appendChild(acts);
 
     row.appendChild(left);

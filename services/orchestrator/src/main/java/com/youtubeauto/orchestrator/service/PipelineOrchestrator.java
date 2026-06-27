@@ -442,6 +442,16 @@ public class PipelineOrchestrator {
         log.info("Job {} imported {} external clip(s) from {} (missing seqs: {})",
                 jobId, imported.size(), srcDir, missing);
 
+        // Muziekstap vóór assemblage (Auke 2026-06-27): zodra ELKE scène een clip
+        // heeft, NIET direct assembleren maar de muziek-gate in — de gebruiker
+        // kiest eerst de achtergrondmuziek; daarna loopt het via de montage-gate
+        // naar de assemblage. Bij ontbrekende clips blijft de job staan zodat je
+        // eerst de naam corrigeert en opnieuw importeert.
+        boolean complete = missing.isEmpty() && !imported.isEmpty();
+        if (complete) {
+            enterMusicGate(jobId);
+        }
+
         Map<String, Object> out = new java.util.LinkedHashMap<>();
         out.put("jobId", jobId.toString());
         out.put("episode", ep);
@@ -449,7 +459,9 @@ public class PipelineOrchestrator {
         out.put("importedSeqs", imported);
         out.put("missingSeqs", missing);
         out.put("totalScenes", scenes.size());
-        out.put("note", "run Reassemble to build the master with these clips");
+        out.put("note", complete
+                ? "alle clips geïmporteerd → kies nu muziek (muziek-gate), daarna montage + assemblage"
+                : "ontbrekende clips: " + missing + " — corrigeer de naam en importeer opnieuw");
         return out;
     }
 
