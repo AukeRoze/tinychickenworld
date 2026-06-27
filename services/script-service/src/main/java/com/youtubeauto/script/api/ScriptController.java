@@ -25,6 +25,18 @@ public class ScriptController {
         return ResponseEntity.created(URI.create("/api/v1/scripts/" + job.jobId())).body(job);
     }
 
+    /**
+     * Import a ready-made script as a COMPLETED job — no Anthropic call. Lets the
+     * orchestrator feed a hand-authored / externally generated script into the
+     * pipeline (e.g. when the ANTHROPIC_ENABLED kill-switch is on). The body
+     * carries the emit_script-shaped {@code script} plus topic/audience metadata.
+     */
+    @PostMapping("/import")
+    public ResponseEntity<ScriptJobResponse> importScript(@Valid @RequestBody ImportScriptRequest req) {
+        ScriptJobResponse job = orchestrator.importScript(req);
+        return ResponseEntity.created(URI.create("/api/v1/scripts/" + job.jobId())).body(job);
+    }
+
     /** Story-treatment preview (front-end review stage #1) — synchronous, no job
      *  created; the user edits the result and only then submits the episode. */
     @PostMapping("/treatment")

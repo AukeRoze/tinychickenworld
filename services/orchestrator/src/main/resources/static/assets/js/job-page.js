@@ -715,6 +715,26 @@ function renderActions(job) {
         toast(`${imported.length} clip(s) geïmporteerd — hermonteren…`, "info");
         return api.post(`/api/v1/videos/${id}/reassemble`, undefined, { key: "import-reassemble" });
       }));
+    // 💬 Ondertitels opnieuw branden: brandt ALLE ondertitels opnieuw uit de
+    // huidige scène-dialoog in de master. Voor wanneer de dialoog al klopt maar
+    // de ingebrande ondertitel nog oud is (of na save-only dialoog-edits).
+    // Hergebruikt alles — geen dure re-voice/clip/thumbnail; alleen de captions.
+    items.push(actionItem("💬 Ondertitels opnieuw branden", "",
+      "Brandt alle ondertitels opnieuw uit de huidige dialoog in de video — voor als de " +
+      "tekst al klopt maar de ondertitel in beeld nog oud is. Hergebruikt alle clips, stemmen, " +
+      "muziek en thumbnail (geen kosten). Stelt de video opnieuw samen, even geduld.",
+      async () => {
+        toast("Ondertitels opnieuw branden… (video opnieuw samenstellen, even geduld)", "info");
+        const r = await api.post(`/api/v1/videos/${id}/reburn-subtitles`, undefined,
+            { key: "reburn-subtitles" });
+        if (r && r.alreadyPublished) {
+          toast("Ondertitels bijgewerkt in de master. Let op: video staat al op YouTube — " +
+                "het ondertitelspoor moet opnieuw geüpload worden.", "warn", 9000);
+        } else {
+          toast("Ondertitels opnieuw ingebrand in de video.", "info");
+        }
+        return r;
+      }));
   }
   // 🔁 Re-render beelden (nieuwe cast): na een character-redesign alle visuals
   // vers genereren op de huidige refs — script en stemmen blijven staan.
@@ -2460,7 +2480,31 @@ function reelTrim(s, video, tBadge, holder) {
     loadScenes();
   });
   apply.style.cssText += ";margin-top:2px";
-  box.append(read, apply);
+
+  // ✂️ Splitsen: hak deze scène in tweeën op de huidige afspeelpositie. Beide
+  // helften hergebruiken dezelfde clip (harde snit ertussen); elk deel ≥2s, dus
+  // de scène moet ≥4s zijn. Zichtbaar na Re-assemble. Het splitspunt is de
+  // playhead (scrub de video), in hetzelfde clip-referentiekader als in/uit.
+  const SPLIT_MIN = 2;   // backend-vloer per helft (2s), strenger dan REEL_MINLEN
+  const splitBtn = sceneBtn("✂️ Splitsen hier",
+    "Splits deze scène in tweeën op de huidige afspeelpositie (scrub de video naar het punt). Elk deel ≥2s. Zichtbaar na Re-assemble.",
+    async () => {
+      const inAbs = +(s.trimStartSeconds || 0);
+      const outAbs = +(s.trimEndSeconds || CLIP);
+      if (outAbs - inAbs < 2 * SPLIT_MIN) {
+        toast(`Scène ${s.seq} is te kort om te splitsen (minimaal ${2 * SPLIT_MIN}s nodig).`, "warn");
+        return;
+      }
+      let at = video ? +(video.currentTime || 0) : (inAbs + outAbs) / 2;
+      at = +Math.max(inAbs + SPLIT_MIN, Math.min(outAbs - SPLIT_MIN, at)).toFixed(1);
+      await api.post(`/api/v1/videos/${id}/scenes/${s.seq}/split`,
+        { atSec: at }, { key: `split-${s.seq}` });
+      toast(`Scène ${s.seq} gesplitst op ${at}s. Druk op Re-assemble om het toe te passen.`, "info");
+      loadScenes();
+    });
+  splitBtn.style.cssText += ";margin-top:2px";
+
+  box.append(read, apply, splitBtn);
   return box;
 }
 

@@ -553,6 +553,31 @@ public class VideoController {
     }
 
     /**
+     * Inject a hand-authored / externally generated script (emit_script JSON) and
+     * run the pipeline with it — NO paid Anthropic call. Body is either the script
+     * object directly, or {@code {"script": {...}}}. Use to resume a job that
+     * FAILED at the script stage while the Anthropic kill-switch is on.
+     */
+    @PostMapping("/{id}/import-script")
+    public ResponseEntity<?> importScript(@PathVariable UUID id, @RequestBody JsonNode body) {
+        if (jobRepo.findById(id).isEmpty()) return ResponseEntity.notFound().build();
+        JsonNode script = (body != null && body.has("script")) ? body.get("script") : body;
+        if (script == null || !script.has("scenes")) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "body must be the emit_script object (with a 'scenes' array), "
+                            + "or {\"script\": {...}}"));
+        }
+        String scriptJson;
+        try {
+            scriptJson = mapper.writeValueAsString(script);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid script JSON: " + e.getMessage()));
+        }
+        orchestrator.importScript(id, scriptJson);
+        return ResponseEntity.ok(orchestrator.get(id));
+    }
+
+    /**
      * Re-assemble the video from the SAME script, images and voice — nothing is
      * regenerated. Use to apply assembly/outro/thumbnail changes to an existing
      * video at no content-generation cost.

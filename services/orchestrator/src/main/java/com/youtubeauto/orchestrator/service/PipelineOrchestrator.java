@@ -76,6 +76,12 @@ public class PipelineOrchestrator {
     private final ReviewConfigLoader reviewConfig;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** jobId -> hand-authored script JSON awaiting the next runScriptStage, set by
+     *  {@link #importScript}. Consumed (removed) when the script stage picks it up,
+     *  so that stage imports the script instead of calling the paid generator. */
+    private final java.util.Map<UUID, String> pendingImportedScripts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /** QA Board publish gate. When enabled, a master scoring below the gate (or
      *  flagged unsafe) is held for human review instead of auto-uploaded. */
     @org.springframework.beans.factory.annotation.Value("${qa.gate.enabled:true}")
@@ -280,6 +286,22 @@ public class PipelineOrchestrator {
      * again for script/image generation when the failure was a downstream
      * (e.g. assembly) bug.
      */
+    /**
+     * Inject a hand-authored script (emit_script JSON) and run the script stage
+     * with it instead of calling the paid generator. The script is consumed by
+     * the next {@link #runScriptStage} for this job. Works on a fresh job or to
+     * resume one that FAILED at the script stage (e.g. Anthropic kill-switch on).
+     */
+    public void importScript(UUID jobId, String scriptJson) {
+        if (scriptJson == null || scriptJson.isBlank()) {
+            throw new IllegalArgumentException("importScript: empty script");
+        }
+        load(jobId); // throws / 404 if the job is unknown
+        pendingImportedScripts.put(jobId, scriptJson);
+        clearError(jobId);
+        self.runScriptStage(jobId);
+    }
+
     public void retry(UUID jobId) {
         VideoJob job = load(jobId);
         if (job.getStatus() != JobStatus.FAILED) {
@@ -835,9 +857,22 @@ public class PipelineOrchestrator {
             }
         }
         scene.setLines(lines);   // empty list = silent beat
+        // KRITIEK (bug 2026-06-26): de SubtitleBurner brandt de ondertitel uit
+        // `narration` (of lineTimings) — NIET uit `lines`. Werkten we alleen
+        // `lines` bij, dan bleef de oude `narration` als ondertitel staan (Auke
+        // zag "Oh! Oh oh oh!" terwijl de dialoog al "La la la… Hey what is this?"
+        // was). Synchroniseer narration dus mee met de bewerkte regels, zodat de
+        // gebrande caption de dialoog-edit volgt. Lege dialoog → narration leeg
+        // (geen caption, stille beat).
+        String joinedNarration = lines.stream()
+                .map(m -> String.valueOf(m.getOrDefault("text", "")).trim())
+                .filter(t -> !t.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
+        scene.setNarration(joinedNarration.isBlank() ? null : joinedNarration);
         saveAssemblyScenes(jobId, assembly);
         unlockScene(jobId, seq);
-        log.info("Job {} scene {} dialogue edited (save-only, {} line(s), no API)", jobId, seq, lines.size());
+        log.info("Job {} scene {} dialogue edited (save-only, {} line(s), narration synced, no API)",
+                jobId, seq, lines.size());
     }
 
     /**
@@ -965,6 +1000,121 @@ public class PipelineOrchestrator {
         scene.setDurationSeconds(length);
         saveAssemblyScenes(jobId, assembly);
         log.info("Job {} scene {} trimmed to [{}s, {}s] (length {}s)", jobId, seq, start, end, length);
+    }
+
+    /**
+     * Split ÉÉN scène op een punt in twee losse tijdlijn-scènes. Beide helften
+     * hergebruiken DEZELFDE bronclip — deel A speelt [in, at], deel B speelt
+     * [at, uit] van de Flow/Omni-clip, met een harde snit ertussen (geen xfade
+     * over identiek beeld). Daarna hernummeren we de hele tijdlijn (seq 1..n) en
+     * remappen we de scène-locks. Takes effect on the next Re-assemble.
+     *
+     * @param atSec splitspunt in seconden binnen de BRONCLIP — hetzelfde
+     *   referentiekader als {@link #setSceneTrim} (de in/uit-punten) en de
+     *   playhead in de UI. Moet minstens 2s van beide scènegrenzen liggen, zodat
+     *   elke helft de assembly-vloer van 2s haalt.
+     */
+    public Map<String, Object> splitScene(UUID jobId, int seq, double atSec) {
+        VideoJob job = load(jobId);
+        List<SceneDto> assembly = loadAssemblyScenes(job);
+        int idx = -1;
+        for (int i = 0; i < assembly.size(); i++) {
+            if (assembly.get(i).effectiveSeq() == seq) { idx = i; break; }
+        }
+        if (idx < 0) throw new IllegalArgumentException("Unknown scene seq " + seq);
+        SceneDto a = assembly.get(idx);
+
+        Number durNum = a.getDurationSeconds();
+        int d = durNum == null ? 0 : durNum.intValue();
+        double in = a.getTrimStartSeconds() == null ? 0.0 : a.getTrimStartSeconds();
+        double end = in + d;
+        if (d < 4) {
+            throw new IllegalArgumentException(
+                    "Scène " + seq + " is " + d + "s — minimaal 4s nodig om te splitsen (elke helft ≥2s).");
+        }
+        if (atSec < in + 2.0 || atSec > end - 2.0) {
+            throw new IllegalArgumentException(
+                    "Splitspunt moet tussen " + (in + 2.0) + "s en " + (end - 2.0) + "s liggen (kreeg "
+                    + atSec + "s).");
+        }
+        int firstLen = (int) Math.round(atSec - in);
+        int secondLen = d - firstLen;
+        if (firstLen < 2 || secondLen < 2) {
+            throw new IllegalArgumentException(
+                    "Beide helften moeten ≥2s zijn (kreeg " + firstLen + "s + " + secondLen + "s).");
+        }
+
+        // Deel B = diepe kopie van A (via map round-trip → behoudt ook extras).
+        SceneDto b = SceneDto.fromMap(a.toMap());
+        // A wordt de eerste helft: zelfde in-punt, kortere lengte.
+        a.setDurationSeconds(firstLen);
+        // B is de tweede helft van DEZELFDE bronclip.
+        b.setTrimStartSeconds(in + firstLen);
+        b.setDurationSeconds(secondLen);
+        // Naadloze voortzetting: harde snit B in, geen xfade over identiek beeld.
+        b.setTransitionType("cut");
+        b.setTransitionSeconds(null);
+        // Ondertitels: verdeel de regels op het splitspunt zodat ze niet dubbel
+        // verschijnen over de twee helften.
+        splitSceneLines(a, b, firstLen);
+
+        assembly.add(idx + 1, b);
+
+        // Hernummer seq 1..n op positie; remap de scène-locks per identiteit (de
+        // gesplitste scène geeft z'n lock door aan BEIDE helften).
+        Set<Integer> oldLocked = parseLocked(job.getLockedSceneSeqs());
+        List<Boolean> wasLocked = new ArrayList<>(assembly.size());
+        for (SceneDto s : assembly) {
+            int sourceSeq = (s == b) ? seq : s.effectiveSeq();
+            wasLocked.add(oldLocked.contains(sourceSeq));
+        }
+        Set<Integer> newLocked = new TreeSet<>();
+        for (int i = 0; i < assembly.size(); i++) {
+            assembly.get(i).setSeq(i + 1);
+            if (wasLocked.get(i)) newLocked.add(i + 1);
+        }
+
+        saveAssemblyScenes(jobId, assembly);
+        saveLocked(jobId, newLocked);
+        log.info("Job {} scene {} split at {}s → {}s + {}s (now {} scenes)",
+                jobId, seq, atSec, firstLen, secondLen, assembly.size());
+        return Map.of("id", jobId.toString(), "splitSeq", seq, "atSec", atSec,
+                "firstLen", firstLen, "secondLen", secondLen,
+                "scenes", assembly.size(), "result", "SPLIT");
+    }
+
+    /** Verdeel de dialoog-/timing-regels van A over A en B op het splitspunt
+     *  ({@code cutSec} = seconden vanaf scènestart). Met betrouwbare per-regel
+     *  timing gaan regels vóór de snit naar A en de rest naar B (rebased zodat
+     *  B's startMs weer relatief aan B's start staat). Zonder timing houden we
+     *  alle regels op A en wissen we B's regels — geen dubbele ondertitels. */
+    private void splitSceneLines(SceneDto a, SceneDto b, int cutSec) {
+        List<Map<String, Object>> lines = a.getLines();
+        if (lines == null || lines.isEmpty()) return;   // niets te verdelen
+        List<Map<String, Object>> timings = a.getLineTimings();
+        long cutMs = cutSec * 1000L;
+        if (timings == null || timings.size() != lines.size()) {
+            b.setLines(null);
+            b.setLineTimings(null);
+            return;
+        }
+        List<Map<String, Object>> aLines = new ArrayList<>(), bLines = new ArrayList<>();
+        List<Map<String, Object>> aT = new ArrayList<>(), bT = new ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            Map<String, Object> t = timings.get(i);
+            long start = (t != null && t.get("startMs") instanceof Number n) ? n.longValue() : 0;
+            if (start < cutMs) {
+                aLines.add(lines.get(i)); aT.add(t);
+            } else {
+                Map<String, Object> nt = new java.util.LinkedHashMap<>(t);
+                nt.put("startMs", start - cutMs);   // rebase naar B's start
+                bLines.add(lines.get(i)); bT.add(nt);
+            }
+        }
+        a.setLines(aLines.isEmpty() ? null : aLines);
+        a.setLineTimings(aT.isEmpty() ? null : aT);
+        b.setLines(bLines.isEmpty() ? null : bLines);
+        b.setLineTimings(bT.isEmpty() ? null : bT);
     }
 
     /** Set (or clear) the transition INTO a scene (the boundary before it). {@code type}
@@ -1436,10 +1586,21 @@ public class PipelineOrchestrator {
             // Performance-weighted arc selection (epsilon-greedy; cold-start =
             // uniform random, same as legacy).
             String preferredArc = performanceLoop.pickArc();
-            UUID scriptJobId = scriptClient.submit(
-                    job.getTopic(), job.getAudience(), targetSeconds,
-                    brief, job.getLesson(), job.getMood(), job.getAngle(),
-                    job.getHook(), performanceHint, preferredArc);
+            // AI-free path: if a hand-authored script was injected for this job
+            // (importScript), import it as a COMPLETED script job instead of
+            // calling the paid generator. Everything after this point — polling,
+            // assembly-scene build, the after-script review gate — is identical.
+            String importedScript = pendingImportedScripts.remove(jobId);
+            UUID scriptJobId = (importedScript != null && !importedScript.isBlank())
+                    ? scriptClient.importScript(
+                            job.getTopic(), job.getAudience(), targetSeconds, importedScript)
+                    : scriptClient.submit(
+                            job.getTopic(), job.getAudience(), targetSeconds,
+                            brief, job.getLesson(), job.getMood(), job.getAngle(),
+                            job.getHook(), performanceHint, preferredArc);
+            if (importedScript != null && !importedScript.isBlank()) {
+                log.info("Job {} script stage: using IMPORTED script (no paid generation)", jobId);
+            }
             saveScriptJobId(jobId, scriptJobId);
 
             JsonNode scriptResp = pollScript(scriptJobId);

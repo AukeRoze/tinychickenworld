@@ -1,0 +1,280 @@
+{
+  "title": "The Littlest Light",
+  "hook": "EXTREME CLOSE-UP on a single fading golden spark flickering under a sunflower leaf at dusk — then it goes dark.",
+  "cta": "Until next time, friends!",
+  "scenes": [
+    {
+      "seq": 1,
+      "phase": "hook",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip"],
+      "goal": "A tiny light is going out and Pip is the only one who notices.",
+      "emotion": "wonder (4/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Extreme close-up: a tiny golden firefly spark flickers weakly under the curl of a sunflower leaf, then dims to almost nothing. Pip leans into frame at the edge, huge eyes catching the last glow, beak parting in a soft gasp.",
+      "endPose": "leaning in, beak open mid-gasp, one wingtip lifted toward the dim spark",
+      "motionDesc": "Camera holds tight as the spark pulses once and fades; Pip drifts into the edge of frame and freezes, eyes widening at the dying light.",
+      "lines": [
+        { "speaker": "pip", "text": "Oh! The little light... it's going out!" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 2,
+      "phase": "hook",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip"],
+      "goal": "Pull back to reveal the lost, shivering firefly among the sunflower stalks.",
+      "emotion": "tender curiosity (4/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Medium shot pulling back: Pip crouches low between two tall sunflower stalks, looking down at a tiny dim firefly trembling on a leaf, its glow the size of a seed.",
+      "endPose": "crouched low, head tilted gently over the tiny firefly",
+      "motionDesc": "Camera eases back from the close-up to show Pip and the little firefly together; Pip lowers herself slowly, careful not to startle it.",
+      "lines": [
+        { "speaker": "pip", "text": "Hello, little one. Why is your light so small?" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 3,
+      "phase": "setup",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip"],
+      "goal": "Establish the firefly is different — it hums 'kwak', not a peep — and Pip is gentle with it.",
+      "emotion": "gentle wonder (3/5)",
+      "motionSpeed": "natural",
+      "visualDesc": "Close two-shot of Pip and the firefly on its leaf; Pip dips her head closer, listening, as the firefly gives a tiny shivering hum instead of a chirp.",
+      "endPose": "ear turned to the firefly, a soft delighted smile",
+      "motionDesc": "Pip tilts her head to listen; the firefly's wings buzz a faint, wobbly hum and its glow flutters once.",
+      "lines": [
+        { "speaker": "pip", "text": "You don't peep like me. You go... kw-kwak! That's okay. Stay right there." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 4,
+      "phase": "setup",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo"],
+      "goal": "Mo arrives, eager to help and fix it fast.",
+      "emotion": "warm determination (3/5)",
+      "motionSpeed": "natural",
+      "visualDesc": "Two-shot: Mo steps in beside Pip with his planted sturdy stance, leaning over the dim firefly with a concerned, ready-to-help look.",
+      "endPose": "leaning forward, both feet planted, studying the firefly",
+      "motionDesc": "Mo waddles in from the side and plants himself, bending down to peer at the tiny light, giving his scarf a quick tug.",
+      "lines": [
+        { "speaker": "mo", "text": "Hmm. It's cold and its light is nearly gone. Let's help it shine again." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 5,
+      "phase": "setup",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "bo"],
+      "goal": "Bo arrives wary of the strange humming visitor.",
+      "emotion": "comic suspicion (3/5)",
+      "motionSpeed": "natural",
+      "visualDesc": "Two-shot: Bo pokes her head up beside Pip, eyeing the firefly sideways through her round glasses, leaning back a little, unsure of the odd little stranger.",
+      "endPose": "leaning back, one wingtip on her glasses, eyeing the firefly",
+      "motionDesc": "Bo pops up, pushes her glasses up her beak, and leans away with a wary squint at the humming light.",
+      "lines": [
+        { "speaker": "bo", "text": "It goes kwak? A bug that goes kwak? I do not trust the kwak." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 6,
+      "phase": "humor",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["mo", "bo"],
+      "goal": "The dedicated funny beat — Mo fans the firefly 'awake' and the gust tumbles everyone.",
+      "emotion": "silly panic (4/5)",
+      "motionSpeed": "quick",
+      "visualDesc": "Wide shot: Mo flaps both wings hard to fan the firefly 'awake'; the gust bowls Bo over backward in a tumble of feathers while the firefly's glow shrinks even smaller.",
+      "endPose": "Bo flat on her back with feet up, Mo frozen mid-flap looking sheepish",
+      "motionDesc": "Mo flaps furiously; the wind blasts Bo head-over-tail with a soft tumble, leaves swirl up, and the firefly's light flickers down nearly to dark.",
+      "lines": [
+        { "speaker": "mo", "text": "Wake up, little light! More air!" },
+        { "speaker": "bo", "text": "Whoaa— too much air! Not the kwak's friend, the WIND!" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 7,
+      "phase": "development",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "bo"],
+      "goal": "They try louder cheering; the light only dims more.",
+      "emotion": "worried effort (3/5)",
+      "motionSpeed": "natural",
+      "visualDesc": "Two-shot: Pip and Bo lean right over the firefly, beaks wide, cheering loudly; the firefly curls in on itself and its glow dips lower with every shout.",
+      "endPose": "both mid-cheer, then faltering as the light shrinks",
+      "motionDesc": "Pip and Bo bounce and call out loudly; with each shout the firefly shrinks smaller and its light fades, until they slowly stop, confused.",
+      "lines": [
+        { "speaker": "pip", "text": "Shine, little light, shine!" },
+        { "speaker": "bo", "text": "Louder! ...Why is it getting darker?" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 8,
+      "phase": "development",
+      "timeOfDay": "dusk",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo"],
+      "goal": "Mo's quiet realisation — pushing and noise make it worse.",
+      "emotion": "dawning calm (3/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Close two-shot: Mo gently lowers Pip's wing with his own and hushes her; both go still and small over the faint firefly, voices dropping to a whisper.",
+      "endPose": "Mo's wing softly over Pip's, both quiet and still",
+      "motionDesc": "Mo settles his wing over Pip's to calm her, lowers his head, and softens his whole body; Pip stills too as they realise to stop pushing.",
+      "lines": [
+        { "speaker": "mo", "text": "Maybe... it doesn't need more. Maybe it needs less. Quiet. Warm." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 9,
+      "phase": "development",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip"],
+      "goal": "Night falls and cold sets in; the firefly's light is almost out.",
+      "emotion": "soft worry (4/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Close-up: the firefly shivers on the cold leaf, its glow down to a single trembling pinprick; Pip's face hovers close, breath gentle, eyes shining with worry.",
+      "endPose": "Pip very close, watching the tiny pinprick of light, holding still",
+      "motionDesc": "The firefly trembles and its light shrinks to a single faint point; Pip leans in slowly and goes completely still, watching, careful.",
+      "lines": [
+        { "speaker": "pip", "text": "It's so cold now. Hold on, little one. We're here." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 10,
+      "phase": "emotion",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["bo", "pip"],
+      "goal": "The tender beat — wary Bo is the first to offer warmth to the stranger.",
+      "emotion": "tender warmth (5/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Close two-shot: Bo, glasses catching the starlight, gently cups her soft wing around the firefly to shelter it; Pip watches with a held, grateful look.",
+      "endPose": "Bo's wing curled softly around the firefly, a tender held look between her and Pip",
+      "motionDesc": "Bo slowly, carefully curls her wing around the tiny light to shield it from the cold; she and Pip share a long, soft look as the glow steadies a little.",
+      "lines": [
+        { "speaker": "bo", "text": "Okay, little kwak. I've got you. You can stay close to me." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 11,
+      "phase": "climax",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo", "bo"],
+      "goal": "The three huddle quietly together around the firefly.",
+      "emotion": "hushed togetherness (4/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Wide shot: the three chicks press gently together into one soft fluffy huddle around the cupped firefly, wings overlapping, all perfectly still and quiet.",
+      "endPose": "three chicks nestled in a single warm huddle, the firefly cradled at the centre",
+      "motionDesc": "Pip, Mo and Bo settle in close, tucking their wings together into one warm dome around the firefly, breathing slow, holding the stillness.",
+      "lines": [
+        { "speaker": "mo", "text": "Shh. Together now. Warm and still." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 12,
+      "phase": "climax",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo", "bo"],
+      "goal": "THE key moment — the glow slowly returns and lights up all three faces.",
+      "emotion": "glowing wonder (5/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Wide shot pushing in slowly: at the centre of the huddle the firefly's glow swells from a pinprick to a warm golden light, brighter and brighter, washing all three little faces in gold.",
+      "endPose": "three faces lit gold, eyes huge with wonder, the firefly blazing softly between them",
+      "motionDesc": "The light grows steadily from a tiny point into a full warm glow; the camera pushes in gently as golden light blooms across the three awed faces.",
+      "lines": [
+        { "speaker": "pip", "text": "Look... look! It's shining again!" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 13,
+      "phase": "climax",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo", "bo"],
+      "goal": "Payoff — the firefly rises bright and the sleeping sunflowers turn toward it.",
+      "emotion": "shared joy (5/5)",
+      "motionSpeed": "natural",
+      "visualDesc": "Wide low shot: the firefly lifts up out of the huddle glowing strong, and the tall sunflowers behind gently turn and open their faces toward its little light; the three chicks look up together.",
+      "endPose": "all three gazing up at the rising glow, sunflowers leaning toward it",
+      "motionDesc": "The firefly drifts upward, bright and steady; the sunflowers slowly turn to follow it as the three chicks tip their heads back and beam.",
+      "lines": [
+        { "speaker": "bo", "text": "The flowers woke up too! Hooray for the little kwak!" }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 14,
+      "phase": "resolution",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip", "mo"],
+      "goal": "Pip restates the lesson in her own kid-words; warmth all round.",
+      "emotion": "settled warmth (3/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Close two-shot: Pip turns to Mo, the firefly's soft glow on her cheeks, a content little smile; Mo nods warmly back.",
+      "endPose": "Pip smiling softly at Mo, both lit by the gentle firefly glow",
+      "motionDesc": "Pip turns to Mo with a sleepy happy smile; Mo nods slowly, and the firefly's glow drifts warm over them both.",
+      "lines": [
+        { "speaker": "pip", "text": "Little things don't need loud. They need warm, and quiet, and time." },
+        { "speaker": "mo", "text": "And a friend who is different is a friend all the same." }
+      ],
+      "durationSeconds": 10
+    },
+    {
+      "seq": 15,
+      "phase": "closer",
+      "timeOfDay": "night",
+      "weather": "sunny",
+      "locationId": "garden",
+      "characters": ["pip"],
+      "goal": "Pip's closer line to camera, teasing the next adventure.",
+      "emotion": "cozy contentment (3/5)",
+      "motionSpeed": "slow",
+      "visualDesc": "Close-up: Pip looks right into camera with the firefly glowing softly on her hat brim, giving her bright double-wink, warm and sleepy.",
+      "endPose": "looking into camera, mid double-wink, firefly glowing on her hat brim",
+      "motionDesc": "Pip beams into the lens, gives two quick winks with the same eye, and the firefly settles glowing on the brim of her straw hat.",
+      "lines": [
+        { "speaker": "pip", "text": "Goodnight, little light. Until next time, friends!" }
+      ],
+      "durationSeconds": 10
+    }
+  ]
+}

@@ -57,6 +57,35 @@ public class ScriptServiceClient {
         return UUID.fromString(resp.get("jobId").asText());
     }
 
+    /**
+     * Import a ready-made script as a COMPLETED script job — no Anthropic call.
+     * The AI-free counterpart to {@link #submit}: feeds a hand-authored script
+     * (emit_script JSON) into script-service, which persists it verbatim and
+     * returns a jobId that {@link #get} then polls as COMPLETED. Used when the
+     * Anthropic kill-switch is on. Connect-refused retries only (like submit) so
+     * a transient hiccup never spawns a duplicate orphan job.
+     */
+    public UUID importScript(String topic, String audience, int targetSeconds, String scriptJson) {
+        JsonNode scriptNode;
+        try {
+            scriptNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(scriptJson);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("import-script: invalid script JSON: " + e.getMessage(), e);
+        }
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("topic", topic);
+        body.put("audience", audience);
+        body.put("targetSeconds", targetSeconds);
+        body.put("script", scriptNode);
+        JsonNode resp = Resilience.paid(
+                client.post()
+                        .uri("/api/v1/scripts/import")
+                        .bodyValue(body)
+                        .retrieve().bodyToMono(JsonNode.class),
+                java.time.Duration.ofSeconds(60), "script-service import");
+        return UUID.fromString(resp.get("jobId").asText());
+    }
+
     public JsonNode get(UUID jobId) {
         // Status poll — fully idempotent, retry freely on any transient error.
         return Resilience.idempotent(

@@ -148,6 +148,18 @@ public class ReviewController {
                 "startSec", start, "endSec", end, "result", "TRIMMED"));
     }
 
+    /** Split a scene into two at a point within its window. Body: {"atSec": 5.0}
+     *  (seconds within the source clip — same frame as the trim in/out points and
+     *  the UI playhead). Both halves reuse the same source clip with a hard cut
+     *  between them; each half must be ≥2s (so the scene must be ≥4s). Renumbers
+     *  the timeline and remaps scene locks. Takes effect on the next Re-assemble. */
+    @PostMapping("/scenes/{seq}/split")
+    public ResponseEntity<Map<String, Object>> splitScene(@PathVariable UUID id, @PathVariable int seq,
+                                                          @RequestBody Map<String, Number> body) {
+        double atSec = body == null || body.get("atSec") == null ? 0.0 : body.get("atSec").doubleValue();
+        return ResponseEntity.ok(orchestrator.splitScene(id, seq, atSec));
+    }
+
     /** Set (or clear) the transition INTO this scene (the boundary before it).
      *  Body: {"type": "wipeleft", "seconds": 0.4}; type "cut" = hard cut, blank/absent
      *  clears it to the phase-default. Takes effect on the next Re-assemble. */

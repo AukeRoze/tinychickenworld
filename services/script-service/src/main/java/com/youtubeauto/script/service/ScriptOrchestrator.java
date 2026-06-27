@@ -63,6 +63,55 @@ public class ScriptOrchestrator {
         return new ScriptJobResponse(job.getId(), job.getStatus());
     }
 
+    /**
+     * Import a ready-made script as a COMPLETED job — the AI-free counterpart to
+     * {@link #submit}. No Anthropic call, no dedupe/critic gates: the supplied
+     * script is persisted verbatim so the orchestrator can poll it like any other
+     * completed script job. Used when the Anthropic kill-switch is on and a
+     * hand-authored script is fed in instead.
+     */
+    @Transactional
+    public ScriptJobResponse importScript(ImportScriptRequest req) {
+        GeneratedScript script = req.script();
+        if (script == null || script.scenes() == null || script.scenes().isEmpty()) {
+            throw new IllegalArgumentException("import: script has no scenes");
+        }
+        // Scene seq must be 1..N in order — the orchestrator and assembly rely on it.
+        for (int i = 0; i < script.scenes().size(); i++) {
+            if (script.scenes().get(i).seq() != i + 1) {
+                throw new IllegalArgumentException(
+                        "import: scene seq out of order at index " + i
+                        + " (expected " + (i + 1) + ", got " + script.scenes().get(i).seq() + ")");
+            }
+        }
+
+        ScriptJob job = ScriptJob.builder()
+                .topic(req.topic())
+                .audience(req.audience() != null && !req.audience().isBlank()
+                        ? req.audience() : "kids_3_6")
+                .targetSeconds(req.targetSeconds() != null ? req.targetSeconds() : 180)
+                .status(JobStatus.COMPLETED)
+                .build();
+        job = jobRepo.save(job);
+
+        String rawJson;
+        try {
+            rawJson = mapper.writeValueAsString(script);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("import: cannot serialise script", e);
+        }
+        ScriptFingerprint.Fingerprint fp = ScriptFingerprint.of(script);
+        // Reuse the canonical persist path: builds the Script + ScriptScene rows
+        // exactly like a generated job. Model tag "imported" marks the provenance;
+        // token counts are null (no paid call), structure score a clean 100.
+        VariationProfile profile = variationSelector.next();
+        Result r = new Result(script, rawJson, "imported", null, null, profile, null);
+        persist(job.getId(), r, fp, 0, 100, null, null, null, null);
+        log.info("Job {} IMPORTED ({} scenes, no Anthropic call)",
+                job.getId(), script.scenes().size());
+        return new ScriptJobResponse(job.getId(), job.getStatus());
+    }
+
     @Transactional
     public ScriptJob saveNewJob(GenerateScriptRequest req) {
         ScriptJob job = ScriptJob.builder()
