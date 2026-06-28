@@ -89,29 +89,36 @@ public class IntroRebuildService {
             "Open on all THREE little cartoon chickens ALREADY standing together in the lower "
             + "centre of the sunny meadow, fully visible from the very first frame. NONE of them "
             + "appears, pops up, rises, walks in, hatches or fades in — all three are present and "
-            + "in frame the ENTIRE time. They greet the viewer ONE BY ONE in a BRISK, warm "
-            + "rhythm — three quick greeting turns packed into the FIRST FOUR SECONDS, each turn "
-            + "about ONE second, immediately one after another with NO long pauses between them "
-            + "(the dubbed voices follow this exact timing). As EACH chicken greets it clearly "
+            + "in frame the ENTIRE time. They introduce themselves to the viewer ONE BY ONE, in "
+            + "a calm, warm rhythm with a SHORT, clear PAUSE between each one — about half a "
+            + "second of friendly stillness where nobody speaks — so each introduction lands on "
+            + "its own. As EACH chicken takes its turn it SPEAKS its line ALOUD in clear, "
+            + "cheerful, child-friendly ENGLISH, its beak lip-syncing its OWN words, and clearly "
             + "performs its OWN signature quirk so the viewer instantly learns who is who: "
-            + "seconds 0.5-1.6 Pip gives a little wing-wave and her signature DOUBLE WINK — two "
-            + "quick winks in a row with the SAME right eye — her beak clearly opening and "
-            + "closing during HER second only; seconds 1.7-2.8 Mo does his signature move — a "
-            + "quick tug to snug his RED knitted scarf at the neck with one wing-tip (the scarf "
-            + "stays firmly on, never removed) — with a small nod, HIS beak moving during his "
-            + "second only; seconds 2.9-4.0 Bo does her signature move — pushing her ROUND "
-            + "glasses up the beak with a wing-tip — and a cheerful little bob, HER beak moving "
-            + "during her second only. Then, from seconds 4.0 to 5.6, ALL THREE chickens speak TOGETHER in cheerful unison — every beak clearly opening and closing in sync at the same moment — saying the SAME short line in one bright voice: 'Welcome to Tiny Chicken World!' — warm and happy. "
-            + "From second 5.6 onward all three SETTLE, sit still together in the lower centre and "
+            + "seconds 0.4-1.4 Pip gives a little wing-wave and her signature DOUBLE WINK — two "
+            + "quick winks in a row with the SAME right eye — and says 'Hello! I'm Pip!', her "
+            + "beak moving as she speaks during HER turn only; then a short pause. "
+            + "Seconds 1.9-2.9 Mo does his signature move — a quick tug to snug his RED knitted "
+            + "scarf at the neck with one wing-tip (the scarf stays firmly on, never removed) — "
+            + "with a small nod, and says 'Hi, I'm Mo.', his beak moving as he speaks during HIS "
+            + "turn only; then a short pause. "
+            + "Seconds 3.4-4.4 Bo does her signature move — pushing her ROUND glasses up the beak "
+            + "with a wing-tip — and a cheerful little bob, and says 'And I'm Bo!', her beak "
+            + "moving as she speaks during HER turn only; then a short pause. "
+            + "Finally, from seconds 4.9 to 6.4, PIP ALONE speaks warmly straight to the camera — "
+            + "only Pip's beak opens and closes, lip-syncing her words — saying in one bright, "
+            + "happy voice: 'Welcome to Tiny Chicken World!' — while Mo and Bo smile at the "
+            + "camera with their beaks CLOSED and still. "
+            + "From second 6.4 onward all three SETTLE, sit still together in the lower centre and "
             + "smile warmly at the camera with beaks CLOSED, leaving calm open space above them. "
             // The assembly HOLDS the final Veo frame while the title appears, so the
             // clip must END on an open-eyed pose — a closed/mid-blink last frame
             // freezes shut eyes under the title and looks bad.
-            + "From second 5.6 until the very final frame, freeze all blinking: ALL THREE "
+            + "From second 6.4 until the very final frame, freeze all blinking: ALL THREE "
             + "chickens' EYES MUST BE WIDE OPEN, bright and looking warmly at the camera, smiling "
             + "— the FINAL frame must have every chicken's eyes FULLY OPEN, never closed, never "
-            + "mid-blink, never half-closed. (This eyes-open rule applies ONLY from second 5.6 on "
-            + "— Pip's double-wink in her 0.5-1.6s greeting is intended and MUST still happen.) "
+            + "mid-blink, never half-closed. (This eyes-open rule applies ONLY from second 6.4 on "
+            + "— Pip's double-wink in her 0.4-1.4s greeting is intended and MUST still happen.) "
             + "NO signboard, "
             + "no sign, no banner and NO text anywhere in the scene. STABILITY: Pip's straw hat "
             + "stays FIRMLY on her head the entire time — it never flies off, lifts or falls. "
@@ -120,26 +127,28 @@ public class IntroRebuildService {
             + "another. Calm, gentle, unhurried and warm "
             + "— NOT busy, NOT high-energy, NO laughing. Only a soft breeze, a couple of "
             + "drifting petals and 1-2 butterflies far in the background. "
-            // P5 (intro) — dub-friendly mouth motion: the names are dubbed in later as a
-            // separate ElevenLabs track, so don't articulate the exact words. But the beak
-            // must still CLEARLY move on the chicken whose turn it is, or the audio reads as
-            // unsynced (sound with a closed beak). Visible open-close on the speaker, closed
-            // on the others.
-            + "BEAK / MOUTH: the names are dubbed in separately, so do NOT lip-sync or mouth the "
-            + "exact words and do NOT hold a wide gaping beak. BUT on its OWN greeting turn the "
-            + "speaking chicken MUST clearly open and close its beak a few times — a simple, "
-            + "visible 'talking' motion so it's obvious which chicken is speaking — while the "
-            + "other two keep their beaks CLOSED and still. Gentle rounded open-close, never a "
-            + "wide gape, never word-shaped phonemes. " + IDENTITY_LOCK;
+            // Native audio (ElevenLabs removed): the Omni clip's OWN soundtrack IS the final
+            // intro audio, so each chicken must actually SPEAK its line in the clip — real
+            // lip-synced English on the speaker, beaks closed on the others, one voice at a time.
+            + "SPEECH / BEAK: each chicken SPEAKS its own line ALOUD in clear, natural, "
+            + "child-friendly ENGLISH with accurate, gentle lip-sync — its beak opens and closes "
+            + "on its OWN words and ONLY during its OWN turn, while the other chickens keep their "
+            + "beaks CLOSED and still until it is their turn. PIP ALONE speaks the final "
+            + "'Welcome to Tiny Chicken World!' line; Mo and Bo stay silent with closed beaks "
+            + "during it. Every spoken word is ENGLISH, warm and friendly; only ONE chicken "
+            + "speaks at a time, never overlapping, no singing. Gentle rounded open-close on the "
+            + "speaker, never a wide gape. " + IDENTITY_LOCK;
 
-    /** The chickens' self-introduction lines — MUST match the words in
-     *  {@link #MOTION_DESC} so the spoken ElevenLabs voices line up with what the
-     *  Veo clip shows them saying. Order = Pip, Mo, Bo, then all three together. */
+    /** The chickens' self-introduction lines — MUST match the words spoken in
+     *  {@link #MOTION_DESC} so the native Omni clip audio (and any subtitles) line up
+     *  with what the Veo clip shows them saying. Order = Pip, Mo, Bo introduce
+     *  themselves ONE BY ONE (a short pause between each), then PIP ALONE closes with
+     *  the welcome line. */
     static final List<Map<String, String>> INTRO_LINES = List.of(
             Map.of("speaker", "pip", "text", "Hello! I'm Pip!",  "emotion", "excited"),
             Map.of("speaker", "mo",  "text", "Hi, I'm Mo.",      "emotion", "warm"),
             Map.of("speaker", "bo",  "text", "And I'm Bo!",      "emotion", "happy"),
-            Map.of("speaker", "all", "text", "Welcome to Tiny Chicken World!", "emotion", "cheerful"));
+            Map.of("speaker", "pip", "text", "Welcome to Tiny Chicken World!", "emotion", "cheerful"));
 
     private final ImageServiceClient imageClient;
     private final VideoGenerationServiceClient videoGenClient;

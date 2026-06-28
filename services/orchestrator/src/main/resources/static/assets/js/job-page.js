@@ -2397,9 +2397,13 @@ function reelFrame(s) {
   cap.textContent = "scene-" + s.seq + (slug ? "-" + slug : "");
   cap.title = cap.textContent;
 
-  // Inkorten op scène-niveau is bewust verwijderd (gebruikerswens): geen
-  // trim-handvatten of "✓ Inkorten opslaan" meer in de filmrol.
+  // Inkorten + splitsen per scène (Auke 28 jun 2026 — teruggezet): de in/uit-
+  // trim-handvatten + "✓ Inkorten opslaan" / "✂️ Splitsen hier" verschijnen weer op
+  // de filmcel zodra de scène een clip heeft. reelTrim legt de handvatten ÓP het
+  // beeld (holder) en geeft de readout + knoppen-box terug die hier eronder komt.
+  // Toepassen gebeurt op de volgende Re-assemble (backend /scenes/{seq}/trim).
   f.append(holder, cap);
+  if (s.hasClip && video) f.append(reelTrim(s, video, tBadge, holder));
   return f;
 }
 
