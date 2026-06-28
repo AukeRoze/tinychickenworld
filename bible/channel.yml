@@ -318,6 +318,24 @@ cameraBible:
   resolution:  { angle: "eye-level", lens: "50mm", movement: "very slow, calm drift", focus: "soft focus on the flock together", depthOfField: "medium-shallow, warm soft background" }
   closer:      { angle: "eye-level", lens: "85mm", movement: "very slow, warm push-in", focus: "lock focus on the main character, world melting soft behind", depthOfField: "shallow, dreamy soft background" }
 
+# ── Scene-transitions (Auke 2026-06-27) ─────────────────────────────────
+# FFmpeg xfade-overgangen per fase, gekozen voor kinderfilms: standaard een
+# zachte, korte cross-dissolve (fade); alleen op de sleutelmomenten iets extra.
+# `default` geldt voor ELKE overgang die niet apart genoemd is. Wordt binnen
+# ~1 min opnieuw ingelezen (geen rebuild nodig); onbekende types vallen terug
+# op de ingebouwde defaults. Duur wordt geklemd op 0,05–1,50s.
+assembly:
+  transitions:
+    default:     { type: fade,        seconds: 0.25 }   # standaard voor elke overgang
+    hook:        { type: fade,        seconds: 0.12 }   # kort — retentie eerst
+    setup:       { type: fade,        seconds: 0.25 }
+    humor:       { type: fade,        seconds: 0.25 }
+    development: { type: fade,        seconds: 0.25 }
+    emotion:     { type: fade,        seconds: 0.30 }   # tedere beat — net iets zachter
+    climax:      { type: fadewhite,   seconds: 0.32 }   # magisch "ta-da"-flitsje
+    resolution:  { type: fade,        seconds: 0.30 }
+    closer:      { type: circleclose, seconds: 0.40 }   # klassieke iris-out
+
 episodeStructure:
   totalSecondsTarget: 180
   phases:

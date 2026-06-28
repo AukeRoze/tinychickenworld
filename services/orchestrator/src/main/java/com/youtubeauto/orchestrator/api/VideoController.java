@@ -323,6 +323,18 @@ public class VideoController {
                             s.path("veoCameraOverride").asText(""),
                             job.getMood(), sceneLines, propStates);
                 } catch (Exception ignore) { /* prompt preview is best-effort */ }
+                // Standalone "Omgeving"-zin (dezelfde Setting-opbouw als in de Veo-
+                // prompt) voor de Omgeving-categorie in de "Alle prompts"-modal.
+                // Best-effort: faalt 'ie, dan blijft het veld leeg.
+                String environmentPrompt = null;
+                try {
+                    String env = veoPromptCompiler.compileSetting(
+                            s.path("locationId").asText(""),
+                            s.path("timeOfDay").asText(""),
+                            s.path("weather").asText(""),
+                            phase);
+                    if (env != null && !env.isBlank()) environmentPrompt = env;
+                } catch (Exception ignore) { /* setting preview is best-effort */ }
                 prevPhase = phase;
                 out.add(new SceneSummary(
                         seq,
@@ -349,7 +361,8 @@ public class VideoController {
                         s.hasNonNull("trimStartSeconds") ? s.path("trimStartSeconds").asDouble() : null,
                         trimEndSeconds(s),
                         s.hasNonNull("transitionType") ? s.path("transitionType").asText("") : null,
-                        s.hasNonNull("transitionSeconds") ? s.path("transitionSeconds").asDouble() : null));
+                        s.hasNonNull("transitionSeconds") ? s.path("transitionSeconds").asDouble() : null,
+                        environmentPrompt));
             }
         } catch (Exception e) {
             return List.of();

@@ -1906,8 +1906,9 @@ function sceneActionsHelp() {
 }
 
 /** Eén scène → leesbaar promptblok. `which`: "desc" (omschrijving + dialoog),
- *  "veo" (gecompileerde Veo-videoprompt), "image" (gecomponeerde image/still-
- *  prompt) of "both" (alles wat beschikbaar is). */
+ *  "env" (gecompileerde Omgeving/Setting-zin), "veo" (gecompileerde Veo-video-
+ *  prompt), "image" (gecomponeerde image/still-prompt) of "both" (alles wat
+ *  beschikbaar is). */
 function scenePromptBlock(s, which) {
   const head = `=== Scene ${s.seq}` +
       (s.phase ? ` · ${s.phase}` : "") +
@@ -1919,6 +1920,9 @@ function scenePromptBlock(s, which) {
     const lines = (s.lines || [])
         .map(l => `${l.speaker || "?"}: ${l.text || ""}`).join("\n");
     if (lines) parts.push("[Dialogue]\n" + lines);
+  }
+  if ((which === "env" || which === "both") && s.environmentPrompt) {
+    parts.push((which === "both" ? "[Omgeving]\n" : "") + s.environmentPrompt);
   }
   if ((which === "image" || which === "both") && s.imagePrompt) {
     parts.push((which === "both" ? "[AI Image Prompt]\n" : "") + s.imagePrompt);
@@ -1982,6 +1986,7 @@ function openPromptsModal(scenes) {
 
   const haveVeo = scenes.some(s => s.veoPrompt);
   const haveImage = scenes.some(s => s.imagePrompt);
+  const haveEnv = scenes.some(s => s.environmentPrompt);
 
   // Het tekstgebied dat de modal toont — wisselt met de weergavekeuze.
   const ta = document.createElement("textarea");
@@ -1990,7 +1995,7 @@ function openPromptsModal(scenes) {
       "flex:1;width:100%;border:0;resize:none;padding:14px 16px;font:12px/1.5 " +
       "ui-monospace,Menlo,Consolas,monospace;background:transparent;color:inherit;outline:none";
 
-  let mode = (haveVeo || haveImage) ? "both" : "desc";
+  let mode = (haveVeo || haveImage || haveEnv) ? "both" : "desc";
   const render = () => { ta.value = buildPromptText(scenes, mode); };
 
   const mkToggle = (label, m, help) => {
@@ -2010,6 +2015,11 @@ function openPromptsModal(scenes) {
   };
   head.appendChild(mkToggle("Omschrijvingen", "desc",
       "Toon per scène alleen de korte omschrijving + dialoog."));
+  if (haveEnv) {
+    head.appendChild(mkToggle("Omgeving", "env",
+        "Toon per scène alleen de gecompileerde omgevings-/setting-zin (bible-locatie + " +
+        "tijd-van-dag-licht + weer + colour mood) — cast- en actie-neutraal."));
+  }
   if (haveImage) {
     head.appendChild(mkToggle("Image-prompts", "image",
         "Toon per scène alleen de gecomponeerde image/still-prompt (om in je beeld-tool te plakken)."));
@@ -2018,9 +2028,9 @@ function openPromptsModal(scenes) {
     head.appendChild(mkToggle("Veo-prompts", "veo",
         "Toon per scène alleen de volledige gecompileerde Veo-videoprompt."));
   }
-  if (haveVeo || haveImage) {
+  if (haveVeo || haveImage || haveEnv) {
     head.appendChild(mkToggle("Alles", "both",
-        "Toon per scène de omschrijving + image-prompt + Veo-videoprompt."));
+        "Toon per scène de omschrijving + omgeving + image-prompt + Veo-videoprompt."));
   }
 
   const copyBtn = document.createElement("button");

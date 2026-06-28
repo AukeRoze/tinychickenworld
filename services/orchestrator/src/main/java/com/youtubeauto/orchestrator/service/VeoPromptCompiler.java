@@ -1733,6 +1733,34 @@ public class VeoPromptCompiler {
         };
     }
 
+    /** Standalone "Omgeving"-regel: dezelfde gecompileerde Setting-zin (bible-
+     *  locatie + tijd-van-dag-licht + weer + colour mood) die {@link #directorBrief}
+     *  in de "- Setting:"-regel zet, maar los opvraagbaar voor de dashboard-modal
+     *  ("Alle prompts" → Omgeving). Cast- en actie-neutraal: puur de setting.
+     *  Bewust ZONDER de close-up-bokeh-variant — de omgeving beschrijft altijd de
+     *  echte locatie, los van shot-framing. Houd dit in sync met de inline-opbouw
+     *  in {@link #directorBrief} (de Veo-prompt zelf blijft de bron van waarheid). */
+    public String compileSetting(String locationId, String timeOfDay, String weather, String phase) {
+        StringBuilder p = new StringBuilder();
+        String loc = locationId == null ? "" : locations().getOrDefault(locationId.toLowerCase(), "");
+        if (!loc.isBlank()) {
+            loc = loc.replaceAll("[\\s.,;]+$", "");
+            if (!loc.isBlank()) p.append(loc).append(", ");
+        }
+        p.append(lightPhrase(timeOfDay));
+        String wx = weatherPhrase(weather);
+        if (!wx.isBlank()) p.append(", ").append(wx);
+        String colour = colorScriptPhrase(phase);
+        // Zelfde dusk/night-guard als directorBrief: assert geen daglicht-mood op
+        // een donker tijdstip (de scene-20 "dusk sky + warm daylight"-bug).
+        if (isDarkTime(timeOfDay) && (colour.isBlank() || mentionsDaylight(colour))) {
+            colour = "rich saturated warm dusk light with deep purple-amber tones";
+        }
+        if (!colour.isBlank()) p.append(". Colour mood: ").append(colour);
+        p.append(".");
+        return p.toString();
+    }
+
     /** Builds the structured "director's brief" prompt format Auke standardised on:
      *  labelled sections — DIRECTOR'S BRIEF & ENVIRONMENT, CHARACTER ROSTER,
      *  CHRONOLOGICAL ACTION & CAMERA MOVEMENT, AUDIO, ENVIRONMENTAL MOTION &

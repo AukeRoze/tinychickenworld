@@ -61,7 +61,12 @@ public record SceneSummary(
          *  phase-default. Voedt het label van het +-icoon vóór deze scène. */
         String transitionType,
         /** Duur van {@link #transitionType} in seconden; null = default. */
-        Double transitionSeconds
+        Double transitionSeconds,
+        /** De gecompileerde "Omgeving"-/Setting-zin van deze scène (bible-locatie +
+         *  tijd-van-dag-licht + weer + colour mood), zoals VeoPromptCompiler 'm in
+         *  de "- Setting:"-regel zet. Voor de "Omgeving"-categorie in de "Alle
+         *  prompts"-modal. Leeg/null als er geen locatie/setting is. */
+        String environmentPrompt
 ) {
     /** One spoken line in a scene. */
     public record Line(String speaker, String text) {}
