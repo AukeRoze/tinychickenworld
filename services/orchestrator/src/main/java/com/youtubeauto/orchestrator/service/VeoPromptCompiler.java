@@ -47,6 +47,9 @@ public class VeoPromptCompiler {
     public void clearCaches() {
         cameraBibleCache = null;
         locationCache = null;
+        locationNameCache = null;
+        timeOfDayDescCache = null;
+        weatherDescCache = null;
         surfaceCache = null;
         ticClauseCache = null;
         dnaIdentityCache = null;
@@ -349,6 +352,133 @@ public class VeoPromptCompiler {
         return out;
     }
 
+    // ---- Image-pariteit: omgeving (locatie + licht + weer) -----------------------
+    // De Veo-"Setting" putte vroeger uit hand-gecodeerde phrases (lightPhrase /
+    // weatherPhrase) en alléén de locatie-description. De image-prompt
+    // (PromptComposer.composeReference) gebruikt de VOLLEDIGE bible-velden:
+    // location.name + description, timeOfDay.description (default goldenHour) en
+    // weather.description. Hieronder lezen we exact dezelfde velden uit dezelfde
+    // channel.yml, zodat de geanimeerde scène dezelfde wereld toont als de still.
+
+    private volatile Map<String, String> locationNameCache;  // id -> name
+
+    /** Bible location.name voor een id (leeg als onbekend). */
+    private String locationName(String id) {
+        if (id == null || id.isBlank()) return "";
+        Map<String, String> c = locationNameCache;
+        if (c == null) {
+            c = new HashMap<>();
+            try {
+                for (JsonNode l : readBible().path("locations")) {
+                    String lid = l.path("id").asText("").toLowerCase();
+                    String nm = l.path("name").asText("").trim();
+                    if (!lid.isBlank()) c.put(lid, nm);
+                }
+            } catch (Exception e) {
+                log.warn("Could not load location names: {}", e.getMessage());
+            }
+            locationNameCache = c;
+        }
+        return c.getOrDefault(id.toLowerCase(), "");
+    }
+
+    /** Bible location.description (trailing leestekens gestript) voor een id. */
+    private String locationDescription(String id) {
+        if (id == null || id.isBlank()) return "";
+        String d = locations().getOrDefault(id.toLowerCase(), "");
+        return d == null ? "" : d.replaceAll("[\\s.,;]+$", "");
+    }
+
+    /** "name, description" precies zoals de image-prompt het decor benoemt
+     *  (PromptComposer.composeReference → "In {name}, {description}."). Leeg als
+     *  er geen locatie is. */
+    private String locationPlace(String id) {
+        String name = locationName(id);
+        String desc = locationDescription(id);
+        if (name.isBlank() && desc.isBlank()) return "";
+        if (!name.isBlank() && !desc.isBlank()) return name + ", " + desc;
+        return name.isBlank() ? desc : name;
+    }
+
+    private volatile Map<String, String> timeOfDayDescCache;  // id(lower) -> description
+
+    /** Bible timeOfDay.description — dezelfde bron als de image-LIGHTING-regel.
+     *  Leeg/onbekend → default goldenHour (net als PromptComposer); ontbreekt de
+     *  timeOfDay-sectie helemaal, dan de signature golden-hour-zin als vangnet. */
+    private String timeOfDayDescription(String timeOfDay) {
+        Map<String, String> c = timeOfDayDescCache;
+        if (c == null) {
+            c = new HashMap<>();
+            try {
+                for (JsonNode t : readBible().path("timeOfDay")) {
+                    String tid = t.path("id").asText("").toLowerCase();
+                    String d = t.path("description").asText("").trim().replaceAll("[\\s.,;]+$", "");
+                    if (!tid.isBlank()) c.put(tid, d);
+                }
+            } catch (Exception e) {
+                log.warn("Could not load timeOfDay: {}", e.getMessage());
+            }
+            timeOfDayDescCache = c;
+        }
+        String id = (timeOfDay == null || timeOfDay.isBlank()) ? "goldenhour" : timeOfDay.trim().toLowerCase();
+        String d = c.get(id);
+        if (d == null || d.isBlank()) d = c.getOrDefault("goldenhour", "");
+        if (d == null || d.isBlank()) d = "warm golden-hour light";  // signature vangnet
+        return d;
+    }
+
+    private volatile Map<String, String> weatherDescCache;   // id(lower) -> description
+
+    /** Bible weather.description — dezelfde bron als de image-WEATHER-regel. Leeg
+     *  als er geen weer is opgegeven of het id onbekend is (net als de image-kant,
+     *  die het weer dan ook weglaat). */
+    private String weatherDescription(String weather) {
+        if (weather == null || weather.isBlank()) return "";
+        Map<String, String> c = weatherDescCache;
+        if (c == null) {
+            c = new HashMap<>();
+            try {
+                for (JsonNode w : readBible().path("weather")) {
+                    String wid = w.path("id").asText("").toLowerCase();
+                    String d = w.path("description").asText("").trim().replaceAll("[\\s.,;]+$", "");
+                    if (!wid.isBlank()) c.put(wid, d);
+                }
+            } catch (Exception e) {
+                log.warn("Could not load weather: {}", e.getMessage());
+            }
+            weatherDescCache = c;
+        }
+        return c.getOrDefault(weather.trim().toLowerCase(), "");
+    }
+
+    /** Gedeelde omgevings-body voor élke "Setting:"-regel: {place}, {bible-licht},
+     *  {bible-weer}[. Colour mood: {x}]. {@code place} is de locatie (locationPlace)
+     *  of de close-up bokeh-zin. Licht/weer komen 1-op-1 uit dezelfde bible-velden
+     *  als de image-prompt, zodat de Veo-scène dezelfde omgeving krijgt. Colour mood
+     *  is de Veo-only extra (zit niet in de image) en behoudt de dusk/night-fix. */
+    private String settingBody(String place, String timeOfDay, String weather,
+                               String phase, boolean colourMood) {
+        StringBuilder p = new StringBuilder();
+        if (place != null && !place.isBlank()) p.append(place).append(", ");
+        p.append(timeOfDayDescription(timeOfDay));
+        String wx = weatherDescription(weather);
+        if (!wx.isBlank()) p.append(", ").append(wx);
+        if (colourMood) {
+            String colour = colorScriptPhrase(phase);
+            // Geen daglicht-mood op een donker tijdstip (scene-20 dusk-fix).
+            if (isDarkTime(timeOfDay) && (colour.isBlank() || mentionsDaylight(colour))) {
+                colour = "rich saturated warm dusk light with deep purple-amber tones";
+            }
+            if (!colour.isBlank()) p.append(". Colour mood: ").append(colour);
+        }
+        return p.toString();
+    }
+
+    /** Close-up vervangt de locatie door zachte bokeh (de still draagt de
+     *  locatie-identiteit al; volledige decor-tekst zou Veo doen uitzoomen). */
+    private static final String CLOSEUP_PLACE =
+            "the subject in sharp focus, the background melted into soft, unreadable creamy bokeh";
+
     private volatile Map<String, String> surfaceCache;       // location id -> surface
 
     /** Contact/impact verbs that warrant a ground-physics cue. Plain walking or
@@ -446,7 +576,10 @@ public class VeoPromptCompiler {
         return 3;
     }
 
-    /** Maps a bible timeOfDay id to a Veo lighting phrase (golden-hour default). */
+    /** @deprecated SUPERSEDED door {@link #timeOfDayDescription} — de Setting leest
+     *  nu de bible-{@code timeOfDay.description} (image-pariteit) i.p.v. deze hand-
+     *  gecodeerde zin. Bewaard als referentie/vangnet; niet meer aangeroepen. */
+    @Deprecated
     private String lightPhrase(String timeOfDay) {
         String t = timeOfDay == null ? "" : timeOfDay.trim().toLowerCase();
         return switch (t) {
@@ -467,7 +600,10 @@ public class VeoPromptCompiler {
         };
     }
 
-    /** Maps a bible weather id to a Veo phrase. Blank = nothing extra. */
+    /** @deprecated SUPERSEDED door {@link #weatherDescription} — de Setting leest nu
+     *  de bible-{@code weather.description} (image-pariteit) i.p.v. deze hand-
+     *  gecodeerde zin. Bewaard als referentie; niet meer aangeroepen. */
+    @Deprecated
     private String weatherPhrase(String weather) {
         String w = weather == null ? "" : weather.trim().toLowerCase();
         return switch (w) {
@@ -1741,24 +1877,7 @@ public class VeoPromptCompiler {
      *  echte locatie, los van shot-framing. Houd dit in sync met de inline-opbouw
      *  in {@link #directorBrief} (de Veo-prompt zelf blijft de bron van waarheid). */
     public String compileSetting(String locationId, String timeOfDay, String weather, String phase) {
-        StringBuilder p = new StringBuilder();
-        String loc = locationId == null ? "" : locations().getOrDefault(locationId.toLowerCase(), "");
-        if (!loc.isBlank()) {
-            loc = loc.replaceAll("[\\s.,;]+$", "");
-            if (!loc.isBlank()) p.append(loc).append(", ");
-        }
-        p.append(lightPhrase(timeOfDay));
-        String wx = weatherPhrase(weather);
-        if (!wx.isBlank()) p.append(", ").append(wx);
-        String colour = colorScriptPhrase(phase);
-        // Zelfde dusk/night-guard als directorBrief: assert geen daglicht-mood op
-        // een donker tijdstip (de scene-20 "dusk sky + warm daylight"-bug).
-        if (isDarkTime(timeOfDay) && (colour.isBlank() || mentionsDaylight(colour))) {
-            colour = "rich saturated warm dusk light with deep purple-amber tones";
-        }
-        if (!colour.isBlank()) p.append(". Colour mood: ").append(colour);
-        p.append(".");
-        return p.toString();
+        return settingBody(locationPlace(locationId), timeOfDay, weather, phase, true) + ".";
     }
 
     /** Builds the structured "director's brief" prompt format Auke standardised on:
@@ -1817,26 +1936,14 @@ public class VeoPromptCompiler {
         p.append(".\n");
         p.append("- Shot Type: single, unbroken continuous shot - no cuts, no scene changes.\n");
         p.append("- Aspect ratio / quality: 16:9 landscape, 1080p, 24fps, fluid animation.\n");
-        String loc = locationId == null ? "" : locations().getOrDefault(locationId.toLowerCase(), "");
-        p.append("- Setting: ");
-        if (closeUp) {
-            p.append("the subject in sharp focus, the background melted into soft, unreadable creamy bokeh, ");
-        } else if (!loc.isBlank()) {
-            loc = loc.replaceAll("[\\s.,;]+$", "");
-            if (!loc.isBlank()) p.append(loc).append(", ");
-        }
-        p.append(lightPhrase(timeOfDay));
-        String wx = weatherPhrase(weather);
-        if (!wx.isBlank()) p.append(", ").append(wx);
-        String colour = colorScriptPhrase(phase);
-        // Don't assert a daytime colour mood at a dark time of day — that fought
-        // the dusk/night Setting light and flickered (the scene-20 "dusk sky +
-        // warm natural daylight" defect). Lock a consistent warm-dusk mood instead.
-        if (isDarkTime(timeOfDay) && (colour.isBlank() || mentionsDaylight(colour))) {
-            colour = "rich saturated warm dusk light with deep purple-amber tones";
-        }
-        if (!colour.isBlank()) p.append(". Colour mood: ").append(colour);
-        p.append(".\n\n");
+        // Setting = EXACT dezelfde omgevingsbron als de image-prompt (locatie-naam +
+        // bible-description + bible-licht + bible-weer), zodat de geanimeerde scène
+        // dezelfde wereld toont als de gegenereerde still. Close-up → bokeh i.p.v.
+        // de locatie (de still draagt de locatie-identiteit al).
+        String place = closeUp ? CLOSEUP_PLACE : locationPlace(locationId);
+        p.append("- Setting: ")
+         .append(settingBody(place, timeOfDay, weather, phase, true))
+         .append(".\n\n");
 
         // 2) CHARACTER ROSTER
         List<String> ids = new ArrayList<>();
@@ -2229,33 +2336,15 @@ public class VeoPromptCompiler {
                 p.append(' ');
             }
         }
-        // World context (so the animation keeps the still's setting + light)
-        String loc = locationId == null ? "" : locations().getOrDefault(locationId.toLowerCase(), "");
-        p.append("Setting: ");
-        if (closeUp) {
-            // Shot-aware setting: a close-up / macro background is all soft bokeh, so
-            // dumping the full wide-shot location detail (wheelbarrow, fence, distant
-            // hills) over-stuffs the prompt and pushes Veo to widen out to fit it all
-            // (the scene-1 macro defect). The START STILL already carries the location
-            // identity; here we just keep the foreground sharp and the rest unreadable.
-            p.append("the subject in sharp focus, the background melted into soft, "
-                   + "unreadable creamy bokeh, ");
-        } else if (!loc.isBlank()) {
-            // Strip trailing sentence punctuation so a description that ends in a
-            // period doesn't produce "...world., warm light." — the location reads
-            // as one clause that flows into the light phrase. Generic: works for
-            // every location no matter how the bible text happens to be punctuated.
-            loc = loc.replaceAll("[\\s.,;]+$", "");
-            if (!loc.isBlank()) p.append(loc).append(", ");
-        }
-        p.append(lightPhrase(timeOfDay));
-        String wx = weatherPhrase(weather);
-        if (!wx.isBlank()) p.append(", ").append(wx);
-        p.append(". ");
-        // Story D — emotional colour-script for this phase (Pixar-style), so the
-        // palette supports the beat's feeling instead of being uniformly bright.
-        String colour = colorScriptPhrase(phase);
-        if (!colour.isBlank()) p.append("Colour mood: ").append(colour).append(". ");
+        // World context (so the animation keeps the still's setting + light) —
+        // EXACT dezelfde omgevingsbron als de image-prompt (locatie-naam +
+        // bible-description + bible-licht + bible-weer). Close-up → bokeh i.p.v. de
+        // volledige decor-tekst (de still draagt de locatie-identiteit al; volledige
+        // wide-shot details deden Veo uitzoomen — de scene-1 macro-defect).
+        String place = closeUp ? CLOSEUP_PLACE : locationPlace(locationId);
+        p.append("Setting: ")
+         .append(settingBody(place, timeOfDay, weather, phase, true))
+         .append(". ");
         // Shot-DNA: beat goal + emotion drive the performance.
         if (goal != null && !goal.isBlank()) p.append("Beat goal: ").append(goal.trim()).append(". ");
         if (emotion != null && !emotion.isBlank()) {

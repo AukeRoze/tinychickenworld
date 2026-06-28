@@ -935,15 +935,13 @@ timeOfDay:
     label: "Afternoon"
     description: >
       Soft warm afternoon light, long gentle golden shadows, a cosy
-      filtered glow as the day eases down — the bridge between midday and
-      the golden hour, so the day's light progresses smoothly toward dusk.
+      filtered glow as the day eases down.
   - id: goldenHour
     label: "Golden Hour"
     description: >
       Warm orange-amber late afternoon light, long shadows reaching east,
       everything glowing with honey warmth, sky soft peach above and pink
-      below, a feeling of cozy magic and quiet wonder. CHANNEL'S SIGNATURE
-      MOOD — use this for emotional climaxes and resolution beats.
+      below, a feeling of cozy magic and quiet wonder.
   - id: dusk
     label: "Dusk"
     description: >
@@ -1021,7 +1019,7 @@ locations:
       cream-coloured wooden walls weathered by sun, a tiny shelf with
       acorn-cup decorations, a wooden ladder leaning against the wall,
       framed leaf-paintings hanging crooked, a basket of feathers in
-      the corner. Cozy and intimate, the smallest scale in the world.
+      the corner. Cozy and intimate.
 
   - id: kitchen
     name: "The Coop Kitchen"
@@ -1080,7 +1078,7 @@ locations:
       footbridge with rope railing arching over one corner, smooth grey
       pebbles, friendly frogs on lily pads, dragonflies skimming the
       surface, the reflection of clouds (or stars at night) wavering on
-      the water. Timmy the Frog sometimes sits on the bridge.
+      the water.
 
   - id: willowGrove
     name: "The Willow Grove"
