@@ -24,7 +24,7 @@ const out = process.argv[3] || `scenes-${id}.json`;
 if (!id) { console.error('Usage: node build-scenes.mjs <jobId> [out.json]'); process.exit(1); }
 
 const STYLE = 'Soft clean stylized 3D cartoon look, matte';
-const TAIL  = 'One lively 10-second beat, lip-synced clear English, natural motion, no morphing or flicker, no on-screen text';
+const TAIL  = 'One lively 10-second beat, lip-synced clear English, natural motion, no morphing or flicker, no on-screen text, only the listed characters in frame, never add any extra chickens, chicks or birds';
 
 const clean   = (s) => (s || '').replace(/\s+/g, ' ').trim();
 const stripEnd = (p) => p.replace(/[.\s]+$/, '');
@@ -69,7 +69,9 @@ if (!Array.isArray(scenes) || !scenes.length) {
 // altijd elk kenmerk over). Worden alleen toegevoegd als het personage in de
 // scène zit. Houd ze KORT — de prompt moet compact blijven.
 const HINTS = {
-  Bo: 'Bo has a distinctly LONG upright neck (a tall exclamation-mark silhouette), never a short round neckless body',
+  Pip: 'Pip is a pure white chick with a straw hat and a red bandana',
+  Mo:  'Mo is a blue chick with a BRIGHT RED COMB on top of his head and a RED scarf (both always visible)',
+  Bo:  'Bo is a tan chick with round glasses, a GREEN scarf, and a distinctly LONG upright neck (a tall exclamation-mark silhouette), never a short round neckless body',
 };
 
 const arr = scenes.map((s, i) => {
