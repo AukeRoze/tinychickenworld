@@ -3218,6 +3218,28 @@ function renderScenes(scenes) {
         }
         copyText(txt, `Prompt scène ${seq} gekopieerd ✓`);
       }));
+    // ▶ Flow: genereert ALLEEN deze scène in Google Flow via de lokale Flow-agent
+    // (server.mjs op poort 9223 → build-scenes + generate-clips <seq>). Stuurt
+    // Flow aan via je eigen ingelogde Chrome. Geen Claude-/Veo-kosten via de
+    // pipeline; alleen je Flow-credits. Rauwe fetch (andere origin :9223; de agent
+    // staat CORS voor localhost:8080 toe).
+    acts.appendChild(sceneItem("▶ Flow",
+      "Genereert ALLEEN deze scène in Google Flow via de lokale Flow-agent. " +
+      "Vereist: 'node server.mjs' draait op poort 9223 én Chrome staat aan met " +
+      "remote-debugging, ingelogd in Flow. Kost je Flow-credits, geen Claude-credits.",
+      async () => {
+        const AGENT = "http://localhost:9223";
+        let r;
+        try {
+          r = await fetch(`${AGENT}/generate/${id}/${seq}`, { method: "POST" });
+        } catch (e) {
+          toast(`Flow-agent niet bereikbaar op ${AGENT} — draait 'node server.mjs'?`, "error");
+          return;
+        }
+        if (r.status === 409) { toast("Flow-agent is al bezig met een scène/aflevering.", "warn"); return; }
+        if (!r.ok) { toast(`Flow-agent gaf status ${r.status}.`, "error"); return; }
+        toast(`Scène ${seq} wordt in Flow gegenereerd — volg de voortgang in Google Flow.`, "info", 7000);
+      }));
     acts.appendChild(sceneItem("↻ Regen",
       "Genereert het STARTBEELD van deze scène opnieuw uit de oorspronkelijke scripttekst. " +
       "Je kunt optioneel een correctie-aanwijzing meegeven (bv. \"geen tweede kip\", \"hoed iets kleiner\", " +

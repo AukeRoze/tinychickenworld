@@ -81,25 +81,54 @@ async function lockCharacter(name) {
   await page.keyboard.type('@' + name, { delay: 30 });   // real keystrokes trigger the picker
   await sleep(PICKER_WAIT);
 
-  // Click the CHARACTER result — NOT an image (e.g. "pip.png") and not a big
-  // container. We find the small picker row whose text holds the exact name AND
-  // the word "Character", and click it in-page (most reliable across UI tweaks).
-  const ok = await page.evaluate((nm) => {
-    const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
-    const rows = [...document.querySelectorAll('div,li,button,[role="option"]')];
-    const row = rows.find((e) => {
-      const t = norm(e.textContent);
-      return t.length < 45
-        && /\bCharacter\b/.test(t)                                  // it's a character ref
-        && new RegExp('(^|[^a-zA-Z])' + nm + '([^a-zA-Z]|$)').test(t) // exact name (not pip.png)
-        && e.querySelectorAll('*').length < 14;                     // a row, not a container
-    });
-    if (row) { row.click(); return true; }
-    return false;
-  }, name);
-  if (!ok) throw new Error(`@-picker: kon de Character-rij voor "${name}" niet vinden`);
+  // Helper: vind het element via een betrouwbare in-page-query (op tekst) en klik
+  // er met een ECHTE muisklik op het midden (page.mouse). Zo combineren we
+  // betrouwbaar vinden mét echte mouse-events — nodig omdat deze
+  // styled-components hun selectie/handlers pas op echte events triggeren, en
+  // omdat Playwright's eigen locator de geconcateneerde "PipCharacter"-tekst
+  // soms niet als "visible" ziet.
+  const realClick = async (sel, { includes, startsWith } = {}) => {
+    const box = await page.evaluate((a) => {
+      const norm = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const el = [...document.querySelectorAll(a.sel)].find((e) => {
+        const t = norm(e.textContent);
+        if (a.includes && !t.includes(a.includes)) return false;
+        if (a.startsWith && !t.startsWith(a.startsWith)) return false;
+        return true;
+      });
+      if (!el) return null;
+      el.scrollIntoView({ block: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+    }, { sel, includes: (includes || '').toLowerCase(), startsWith: (startsWith || '').toLowerCase() });
+    if (!box || box.w === 0) return false;
+    await page.mouse.click(box.x, box.y);
+    return true;
+  };
+
+  // 1) Characters-tabblad.
+  await realClick('[role="tab"]', { includes: 'characters' });
+  await sleep(700);
+
+  // 2) Character-optie. Op het Characters-tabblad heet de optie simpelweg de naam
+  //    (bv. "Pip") — geen "Character"-subtitle (die staat alleen in de All-weergave).
+  //    Er staan hier alleen characters, dus matchen op de naam is genoeg.
+  const okOpt = await realClick('[role="option"]', { startsWith: name });
+  if (!okOpt) {
+    const opts = await page.locator('[role="option"]').evaluateAll((es) =>
+      es.map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim()).slice(0, 30));
+    const pickerOpen = await page.locator('#add-menu-input').count();
+    const tabs = await page.locator('[role="tab"]').evaluateAll((es) =>
+      es.map((e) => `${(e.textContent || '').replace(/\s+/g, ' ').trim()}${e.getAttribute('aria-selected') === 'true' ? '*' : ''}`));
+    console.log(`   [diag ${name}] picker-open=${pickerOpen} tabs=${JSON.stringify(tabs)} opties=${JSON.stringify(opts)}`);
+    throw new Error(`@-picker: character-optie voor "${name}" niet gevonden`);
+  }
   await sleep(STEP_WAIT);
-  await page.locator(SEL.addToPrompt).first().click();
+
+  // 3) Onder het Characters-tabblad voegt de klik op de optie de chip al direct
+  //    toe (de picker sluit meteen). Mocht er in een andere weergave toch nog een
+  //    "Add to Prompt"-knop staan, klik 'm; zo niet, gewoon doorgaan (geen fout).
+  await realClick('button', { includes: 'add to prompt' });
   await sleep(STEP_WAIT);
 }
 
@@ -108,7 +137,21 @@ async function clickGenerate() {
     const btn = page.locator(sel).last();
     if (await btn.count()) { await btn.click({ timeout: 3000 }).catch(() => {}); return true; }
   }
-  // last resort: many chat inputs submit on Ctrl+Enter (harmless if it just adds a newline)
+  // In-page: zoek de genereer-knop. Eerst op aria-label (generate/create/submit),
+  // anders op een pijl/verzend-icoon. Let op: NIET op play_arrow (= "Play audio"
+  // in de @-picker) of arrow_drop_down (= dropdowns).
+  const clicked = await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('button')].filter((b) => !b.disabled);
+    let btn = btns.find((b) => /generate|create|submit/i.test(b.getAttribute('aria-label') || ''));
+    if (!btn) {
+      const ico = /\b(arrow_forward|send|arrow_upward)\b/;
+      btn = btns.filter((b) => { const i = b.querySelector('i'); return i && ico.test(i.textContent || ''); }).pop();
+    }
+    if (btn) { btn.click(); return true; }
+    return false;
+  });
+  if (clicked) return true;
+  // laatste redmiddel: veel chat-inputs versturen op Ctrl+Enter
   await page.locator(SEL.promptEditor).last().press('Control+Enter').catch(() => {});
   return false;
 }
