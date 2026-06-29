@@ -679,6 +679,29 @@ function renderActions(job) {
       "Retry just the YouTube upload step, skipping all earlier stages. Use when only the upload failed.",
       () => api.post(`/api/v1/videos/${id}/retry-upload`)));
   }
+  // ▶ Genereer in Flow: triggert de LOKALE Flow-agent (server.mjs op poort 9223,
+  // in flow-automation/) die build-scenes + generate-clips draait voor deze job.
+  // De agent stuurt Google Flow aan via je eigen ingelogde Chrome. Geen
+  // Claude-/Veo-kosten via de pipeline; alleen je Flow-credits. Vereist dat de
+  // agent draait én Chrome aan staat met --remote-debugging-port=9222, ingelogd
+  // in Flow. De knop praat met een ANDERE origin (localhost:9223), dus rauwe
+  // fetch i.p.v. api.post; de agent laat CORS voor localhost:8080 toe.
+  items.push(actionItem("▶ Genereer in Flow", "",
+    "Laat de lokale Flow-agent de scène-clips van deze aflevering in Google Flow genereren " +
+    "(korte actie-prompts + cast-referenties). Vereist: 'node server.mjs' draait op poort 9223 " +
+    "én Chrome staat aan met remote-debugging, ingelogd in Flow. Kost je Flow-credits, geen Claude-credits.",
+    async () => {
+      const AGENT = "http://localhost:9223";
+      let r;
+      try {
+        r = await fetch(`${AGENT}/generate/${id}`, { method: "POST" });
+      } catch (e) {
+        throw new Error("Flow-agent niet bereikbaar op " + AGENT + " — draait 'node server.mjs'?");
+      }
+      if (r.status === 409) { toast("Flow-agent is al bezig met een aflevering.", "warn"); return; }
+      if (!r.ok) throw new Error("Flow-agent gaf status " + r.status);
+      toast("Flow-generatie gestart — volg de voortgang in Google Flow.", "info", 8000);
+    }));
   // Re-assemble only makes sense once the scene images + voice exist (i.e. the
   // job has passed asset generation). Hidden on early stages where there's
   // nothing to assemble.
@@ -2518,7 +2541,42 @@ function reelTrim(s, video, tBadge, holder) {
     });
   splitBtn.style.cssText += ";margin-top:2px";
 
-  box.append(read, apply, splitBtn);
+  // ▶ Speel de KNIP: speelt alleen het in→uit-venster in een lus af (mét geluid) zo
+  // dat je direct hoort/ziet of de inkorting klopt. Gebruikt de live inV/outV, dus
+  // na het verslepen van een handvat speelt 'ie meteen het nieuwe stuk. Toggle = stop.
+  let trimLooping = false;
+  const onTrimTU = () => {
+    if (!video) return;
+    if (video.currentTime >= outV - 0.03 || video.currentTime < inV - 0.05) {
+      try { video.currentTime = inV; } catch (e) {}
+    }
+    if (tBadge) { tBadge.style.display = "block"; tBadge.textContent = fmt(video.currentTime) + "s"; }
+  };
+  const stopTrimPlay = () => {
+    trimLooping = false;
+    if (video) {
+      video.pause();
+      video.muted = true;
+      video.removeEventListener("timeupdate", onTrimTU);
+    }
+    if (tBadge) tBadge.style.display = "none";
+    playBtn.textContent = "▶ Speel knip";
+  };
+  const playBtn = sceneBtn("▶ Speel knip",
+    "Speelt alleen het ingekorte stuk (in→uit) in een lus af, mét geluid, zodat je kunt checken of de knip klopt. Nogmaals klikken = stop.",
+    () => {
+      if (!video) return;
+      if (trimLooping) { stopTrimPlay(); return; }
+      trimLooping = true;
+      playBtn.textContent = "⏸ Stop";
+      try { video.currentTime = inV; } catch (e) {}
+      video.muted = false;
+      video.addEventListener("timeupdate", onTrimTU);
+      video.play().catch(() => { stopTrimPlay(); });
+    });
+  playBtn.style.cssText += ";margin-top:2px";
+
+  box.append(read, playBtn, apply, splitBtn);
   return box;
 }
 

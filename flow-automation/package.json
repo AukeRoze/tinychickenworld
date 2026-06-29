@@ -1,0 +1,16 @@
+{
+  "name": "flow-automation",
+  "version": "1.0.0",
+  "description": "Genereert TinyChickenWorld-clips in Google Flow **automatisch**, aangestuurd vanuit je eigen ingelogde Chrome. Je draait dit **zelf, lokaal** — dus het kost **geen Claude-credits**.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}
